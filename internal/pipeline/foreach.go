@@ -915,9 +915,19 @@ func knownSubstitutionNamespace(root string) bool {
 }
 
 func foreachMaxConcurrent(config *ForeachConfig, limits LimitsConfig) int {
-	maxConcurrent := limits.MaxConcurrentForeach
+	// bd-pwxh1: per-step foreach.max_concurrent is bounded by the global
+	// settings.limits.max_concurrent_foreach cap. Treating it as an
+	// override let a workflow set a low global safety cap and then put a
+	// huge per-step value on a single foreach, which spawned goroutines
+	// and shell/agent work far beyond the configured cap and defeated
+	// the resource-limit contract for runaway pipelines.
+	globalCap := limits.MaxConcurrentForeach
+	maxConcurrent := globalCap
 	if config.MaxConcurrent > 0 {
 		maxConcurrent = config.MaxConcurrent
+		if globalCap > 0 && maxConcurrent > globalCap {
+			maxConcurrent = globalCap
+		}
 	}
 	if maxConcurrent <= 0 {
 		maxConcurrent = 1
