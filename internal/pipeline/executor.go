@@ -2166,6 +2166,39 @@ func resolveErrorAction(stepOnError, workflowOnError ErrorAction) ErrorAction {
 	return ErrorActionFail
 }
 
+// resolvePaneExpr substitutes PaneSpec.Expr against the executor's variable
+// layer and parses the result as a 1-based pane index, populating
+// step.Pane.Index in place. No-op when Expr is empty or Index is already set
+// (foreach materialization fills Index from per-iteration assignments and
+// substituteForeachStepFields zeroes Expr after resolving, so a populated
+// Index means the value is already authoritative).
+//
+// A non-int substitution result surfaces a clear error rather than silently
+// dispatching to the wrong pane. The substitution uses the strict
+// substitutor so unresolved ${defaults.X} / ${vars.X} references fail
+// loudly at this seam (bd-6lkqr.4).
+func (e *Executor) resolvePaneExpr(step *Step) error {
+	if step == nil || step.Pane.Expr == "" || step.Pane.Index != 0 {
+		return nil
+	}
+	resolved, err := e.substituteVariablesStrict(step.Pane.Expr)
+	if err != nil {
+		return fmt.Errorf("resolve pane expression %q: %w", step.Pane.Expr, err)
+	}
+	resolved = strings.TrimSpace(resolved)
+	idx, err := strconv.Atoi(resolved)
+	if err != nil {
+		return fmt.Errorf("pane expression %q resolved to %q which is not an integer pane index: %w",
+			step.Pane.Expr, resolved, err)
+	}
+	if idx <= 0 {
+		return fmt.Errorf("pane expression %q resolved to %d; pane indices are 1-based", step.Pane.Expr, idx)
+	}
+	step.Pane.Index = idx
+	step.Pane.Expr = ""
+	return nil
+}
+
 // selectAndMarkPane selects a pane for a step and marks it as used atomically.
 // This prevents race conditions where multiple parallel steps select the same agent.
 func (e *Executor) selectAndMarkPane(step *Step, usedPanes map[string]bool, panesMu *sync.Mutex) (paneID string, agentType string, err error) {
@@ -2174,13 +2207,12 @@ func (e *Executor) selectAndMarkPane(step *Step, usedPanes map[string]bool, pane
 		return "dry-run-pane", "dry-run-agent", nil
 	}
 
-	// Explicit pane selection bypasses exclusion. Pane.Expr (template form
-	// like ${defaults.triage_pane}) requires variable substitution before
-	// resolution; the executor's variable layer expands it elsewhere and
-	// fills Pane.Index. If we reach this path with a non-empty Expr but
-	// Index still 0, surface a clear error.
-	if step.Pane.Expr != "" && step.Pane.Index == 0 {
-		return "", "", fmt.Errorf("pane expression %q not yet resolved at pane-selection time", step.Pane.Expr)
+	// bd-6lkqr.4: resolve PaneSpec.Expr (template form like
+	// ${defaults.triage_pane}) into PaneSpec.Index before looking up the
+	// pane. Foreach materialization handles its own pane assignment; this
+	// path covers normal step dispatch.
+	if err := e.resolvePaneExpr(step); err != nil {
+		return "", "", err
 	}
 	if step.Pane.Index > 0 {
 		panes, err := e.tmuxClient().GetPanes(e.config.Session)
@@ -2279,11 +2311,12 @@ func (e *Executor) selectPane(step *Step) (paneID string, agentType string, err 
 		return "dry-run-pane", "dry-run-agent", nil
 	}
 
-	// Explicit pane selection. Pane.Expr (template form) needs variable
-	// substitution before this path; surface a clear error if we got here
-	// with an unresolved expression.
-	if step.Pane.Expr != "" && step.Pane.Index == 0 {
-		return "", "", fmt.Errorf("pane expression %q not yet resolved at pane-selection time", step.Pane.Expr)
+	// bd-6lkqr.4: resolve PaneSpec.Expr (template form like
+	// ${defaults.triage_pane}) into PaneSpec.Index before looking up the
+	// pane. Mirrors selectAndMarkPane so both single and parallel dispatch
+	// paths accept dynamic pane references.
+	if err := e.resolvePaneExpr(step); err != nil {
+		return "", "", err
 	}
 	if step.Pane.Index > 0 {
 		panes, err := e.tmuxClient().GetPanes(e.config.Session)
