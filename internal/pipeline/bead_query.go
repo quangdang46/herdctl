@@ -314,7 +314,12 @@ func matchBeadFilterClause(record BeadRecord, rawClause string) (bool, error) {
 		return false, fmt.Errorf("unsupported filter clause %q", clause)
 	}
 
-	field := strings.TrimSpace(parts[0])
+	// bd-6uylc: beadRecordField lowercases the field internally, so the
+	// label/labels list-membership branch must compare against the same
+	// canonical form. Otherwise "Label==alpha" returned the comma-joined
+	// label string, mismatched the user's value, and silently excluded
+	// records that should match.
+	field := strings.ToLower(strings.TrimSpace(parts[0]))
 	want := trimFilterValue(parts[1])
 	got, ok := beadRecordField(record, field)
 	if !ok {

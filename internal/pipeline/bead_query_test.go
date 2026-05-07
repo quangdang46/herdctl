@@ -326,3 +326,40 @@ func TestBeadQueryBrErrorFailsStep(t *testing.T) {
 		t.Fatalf("step error = %#v, want bead_query error", got)
 	}
 }
+
+// TestMatchBeadFilterClause_LabelCaseInsensitive covers bd-6uylc: the
+// `label`/`labels` list-membership branch was case-sensitive on the field
+// name, so `Label==alpha` silently returned false even when the record had
+// `alpha` in record.Labels (because beadRecordField returned the joined
+// string and the special-case branch didn't fire). Field name comparison
+// is now case-insensitive, matching beadRecordField.
+func TestMatchBeadFilterClause_LabelCaseInsensitive(t *testing.T) {
+	record := BeadRecord{
+		ID:     "bd-test",
+		Labels: []string{"alpha", "beta", "gamma"},
+	}
+	cases := []struct {
+		clause string
+		want   bool
+	}{
+		{"label==alpha", true},
+		{"Label==alpha", true},
+		{"LABEL==alpha", true},
+		{"labels==beta", true},
+		{"Labels==beta", true},
+		{"label==zeta", false},
+		{"Label!=alpha", false},
+		{"Label!=zeta", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.clause, func(t *testing.T) {
+			got, err := matchBeadFilterClause(record, tc.clause)
+			if err != nil {
+				t.Fatalf("matchBeadFilterClause(%q) err = %v", tc.clause, err)
+			}
+			if got != tc.want {
+				t.Errorf("matchBeadFilterClause(%q) = %v, want %v", tc.clause, got, tc.want)
+			}
+		})
+	}
+}
