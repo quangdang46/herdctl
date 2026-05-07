@@ -134,6 +134,141 @@ func TestResumeRestartFailedRerunsFailedStepOnly(t *testing.T) {
 	}
 }
 
+func TestResumeRestartFailedPreservesStateWhenKeepStateOmitted(t *testing.T) {
+	// bd-uyjdn: callers that pass a partial ResumeOptions (e.g. only Mode)
+	// without explicitly setting KeepState=true should still preserve
+	// completed step state. Previously normalizeResumeOptions left KeepState
+	// at the Go zero-value (false) for any non-zero options struct, which
+	// caused applyResumeOptions to call resetResumeState and silently rerun
+	// completed dependencies.
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "resume.log")
+	workflow := &Workflow{
+		SchemaVersion: SchemaVersion,
+		Name:          "resume-failed-partial-opts",
+		Settings:      DefaultWorkflowSettings(),
+		Steps: []Step{
+			{ID: "done", Command: "printf done >> " + strconv.Quote(logPath)},
+			{ID: "flaky", Command: "printf flaky >> " + strconv.Quote(logPath), DependsOn: []string{"done"}},
+		},
+	}
+	prior := &ExecutionState{
+		RunID:      "restart-failed-partial",
+		WorkflowID: workflow.Name,
+		Session:    "resume-session",
+		Status:     StatusFailed,
+		StartedAt:  time.Date(2026, 5, 7, 10, 0, 0, 0, time.UTC),
+		UpdatedAt:  time.Date(2026, 5, 7, 10, 1, 0, 0, time.UTC),
+		Steps: map[string]StepResult{
+			"done":  {StepID: "done", Status: StatusCompleted, Output: "prior"},
+			"flaky": {StepID: "flaky", Status: StatusFailed, Error: &StepError{Type: "command", Message: "exit 7", Timestamp: time.Date(2026, 5, 7, 10, 1, 0, 0, time.UTC)}},
+		},
+		Variables: map[string]interface{}{},
+	}
+
+	cfg := DefaultExecutorConfig("resume-session")
+	cfg.ProjectDir = tmpDir
+	cfg.DefaultTimeout = 2 * time.Second
+	executor := NewExecutor(cfg)
+	final, err := executor.ResumeWithOptions(context.Background(), workflow, prior, ResumeOptions{
+		Mode: ResumeModeRestartFailed,
+	}, nil)
+	if err != nil {
+		t.Fatalf("ResumeWithOptions() error: %v", err)
+	}
+	if final.Status != StatusCompleted {
+		t.Fatalf("final.Status = %s, want completed", final.Status)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if got := string(data); got != "flaky" {
+		t.Fatalf("log = %q, want only failed step to rerun (completed dependency 'done' must not re-execute)", got)
+	}
+}
+
+func TestResumeResetOptInClearsCompletedSteps(t *testing.T) {
+	// bd-uyjdn: explicit Reset=true reproduces the legacy KeepState=false
+	// behavior — prior step state is cleared and the workflow runs from the
+	// beginning.
+	tmpDir := t.TempDir()
+	logPath := filepath.Join(tmpDir, "reset.log")
+	workflow := &Workflow{
+		SchemaVersion: SchemaVersion,
+		Name:          "resume-reset-optin",
+		Settings:      DefaultWorkflowSettings(),
+		Steps: []Step{
+			{ID: "first", Command: "printf first >> " + strconv.Quote(logPath)},
+		},
+	}
+	prior := &ExecutionState{
+		RunID:      "reset-optin",
+		WorkflowID: workflow.Name,
+		Session:    "reset-session",
+		Status:     StatusFailed,
+		StartedAt:  time.Date(2026, 5, 7, 10, 0, 0, 0, time.UTC),
+		UpdatedAt:  time.Date(2026, 5, 7, 10, 1, 0, 0, time.UTC),
+		Steps: map[string]StepResult{
+			"first": {StepID: "first", Status: StatusCompleted, Output: "prior"},
+		},
+		Variables: map[string]interface{}{},
+	}
+
+	cfg := DefaultExecutorConfig("reset-session")
+	cfg.ProjectDir = tmpDir
+	cfg.DefaultTimeout = 2 * time.Second
+	executor := NewExecutor(cfg)
+	final, err := executor.ResumeWithOptions(context.Background(), workflow, prior, ResumeOptions{
+		Mode:  ResumeModeContinue,
+		Reset: true,
+	}, nil)
+	if err != nil {
+		t.Fatalf("ResumeWithOptions() error: %v", err)
+	}
+	if final.Status != StatusCompleted {
+		t.Fatalf("final.Status = %s, want completed", final.Status)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("read log: %v", err)
+	}
+	if got := string(data); got != "first" {
+		t.Fatalf("log = %q, want completed step to rerun under Reset=true", got)
+	}
+}
+
+func TestNormalizeResumeOptionsDefaultsKeepStateOnNonZero(t *testing.T) {
+	// bd-uyjdn: every non-zero ResumeOptions normalizes to KeepState=true
+	// unless Reset=true is set explicitly.
+	tests := []struct {
+		name   string
+		opts   ResumeOptions
+		want   bool
+		reset  bool
+		errMsg string
+	}{
+		{name: "mode only", opts: ResumeOptions{Mode: ResumeModeRestartFailed}, want: true},
+		{name: "max age only", opts: ResumeOptions{MaxResumeAge: time.Hour}, want: true},
+		{name: "explicit reset", opts: ResumeOptions{Mode: ResumeModeContinue, Reset: true}, want: false, reset: true},
+		{name: "legacy KeepState=true survives", opts: ResumeOptions{Mode: ResumeModeContinue, KeepState: true}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := normalizeResumeOptions(tt.opts)
+			if err != nil {
+				t.Fatalf("normalizeResumeOptions() error: %v", err)
+			}
+			if got.KeepState != tt.want {
+				t.Fatalf("KeepState = %v, want %v", got.KeepState, tt.want)
+			}
+			if got.Reset != tt.reset {
+				t.Fatalf("Reset = %v, want %v", got.Reset, tt.reset)
+			}
+		})
+	}
+}
+
 func TestResumeRosterChangeAbort(t *testing.T) {
 	workflow := &Workflow{
 		SchemaVersion: SchemaVersion,

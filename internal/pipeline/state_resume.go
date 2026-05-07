@@ -26,12 +26,25 @@ const (
 	ResumeRosterProceed ResumeRosterChangePolicy = "proceed"
 )
 
-// ResumeOptions configures Executor.Resume. KeepState preserves completed
-// step outputs; setting it false clears prior step outputs and re-runs the
-// workflow from the beginning while retaining non-step input variables.
+// ResumeOptions configures Executor.Resume. By default completed step
+// outputs are preserved; set Reset=true to clear prior step outputs and
+// re-run the workflow from the beginning while retaining non-step input
+// variables. KeepState is the historical alias and remains honored, but new
+// callers should rely on the default-keep semantics. After
+// normalizeResumeOptions, KeepState reflects the effective value.
 type ResumeOptions struct {
-	Mode           ResumeMode               `json:"mode,omitempty"`
-	KeepState      bool                     `json:"keep_state,omitempty"`
+	Mode ResumeMode `json:"mode,omitempty"`
+	// KeepState preserves completed step outputs across resume. When the
+	// caller passes a non-zero options struct without setting KeepState=true,
+	// normalizeResumeOptions still defaults to keep-state unless Reset=true
+	// is set explicitly (bd-uyjdn). The field stays exported so existing
+	// JSON-serialized state continues to round-trip and CLI callers that
+	// already wire --keep-state continue to work unchanged.
+	KeepState bool `json:"keep_state,omitempty"`
+	// Reset, when true, opts the caller into the legacy KeepState=false
+	// behavior: completed Steps, durable foreach/parallel state, and step
+	// variables are cleared before resume.
+	Reset          bool                     `json:"reset,omitempty"`
 	MaxResumeAge   time.Duration            `json:"max_resume_age,omitempty"`
 	OnRosterChange ResumeRosterChangePolicy `json:"on_roster_change,omitempty"`
 	StepID         string                   `json:"step_id,omitempty"`
@@ -97,6 +110,11 @@ func normalizeResumeOptions(opts ResumeOptions) (ResumeOptions, error) {
 	if opts.OnRosterChange == "" {
 		opts.OnRosterChange = ResumeRosterAbort
 	}
+	// bd-uyjdn: a non-zero ResumeOptions that omits KeepState used to leave
+	// it at the Go zero value (false), silently disabling keep-state for
+	// callers that only set Mode or MaxResumeAge. Default to keep-state
+	// here; callers must opt into reset via Reset=true.
+	opts.KeepState = !opts.Reset
 
 	switch opts.Mode {
 	case ResumeModeContinue, ResumeModeRestartFailed:
