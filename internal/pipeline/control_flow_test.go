@@ -331,6 +331,35 @@ func TestExecuteBranch_DryRun(t *testing.T) {
 	}
 }
 
+func TestExecuteBranch_DryRun_RendersDispatchLineWithDescription(t *testing.T) {
+	// Branch dry-run must use the shared dryRunOutput() helper so the
+	// dispatch line "▶ [step.id] description" appears, matching the
+	// prompt/command/template/bead-query dry-run paths (bd-zc034). Without
+	// this, branch steps lack the operator-facing dispatch line.
+	e := newBranchTestExecutor()
+	e.config.DryRun = true
+	step := &Step{
+		ID:          "br-described",
+		Description: "Pick the right path",
+		Branch:      "$(echo hello)",
+		Branches: map[string]interface{}{
+			"hello": map[string]interface{}{"command": "echo should-not-run"},
+		},
+	}
+
+	result := e.executeBranch(context.Background(), step, &Workflow{Name: "test"})
+	if result.Status != StatusCompleted {
+		t.Fatalf("status=%s, want completed", result.Status)
+	}
+	wantDispatch := "▶ [br-described] Pick the right path"
+	if !strings.Contains(result.Output, wantDispatch) {
+		t.Errorf("expected dispatch line %q in output, got: %q", wantDispatch, result.Output)
+	}
+	if !strings.Contains(result.Output, "DRY RUN") {
+		t.Errorf("expected DRY RUN in output, got: %q", result.Output)
+	}
+}
+
 func TestExecuteBranch_ShellFailure(t *testing.T) {
 	e := newBranchTestExecutor()
 	step := &Step{

@@ -114,7 +114,7 @@ func (e *Executor) executeBranch(ctx context.Context, step *Step, workflow *Work
 
 	if e.config.DryRun {
 		result.Status = StatusCompleted
-		result.Output = fmt.Sprintf("[DRY RUN] Would evaluate branch predicate: %s", truncatePrompt(step.Branch, 80))
+		result.Output = dryRunOutput(step, "Would evaluate branch predicate: "+truncatePrompt(step.Branch, 80))
 		result.FinishedAt = time.Now()
 		return result
 	}
