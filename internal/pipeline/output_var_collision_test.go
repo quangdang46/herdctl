@@ -131,6 +131,61 @@ func TestExecuteParallelDuplicateOutputVarCollectsByStepID(t *testing.T) {
 	}
 }
 
+func TestStoreParallelOutputVarsAggregatePreservesParsedAlignment(t *testing.T) {
+	// bd-iw5bw: aggregate output_var must keep vars.<name> and
+	// vars.<name>_parsed positionally aligned. Previously the parsed
+	// slice only grew when a child had ParsedData, so a later parsed
+	// sibling shifted up the parsed slice and downstream
+	// ${vars.shared.N} / ${vars.shared_parsed.N} templates correlated
+	// to the wrong child or hit out-of-bounds.
+	parent := &Step{
+		ID: "fanout",
+		Parallel: ParallelSpec{Steps: []Step{
+			{ID: "left", OutputVar: "shared"},
+			{ID: "middle", OutputVar: "shared"},
+			{ID: "right", OutputVar: "shared"},
+		}},
+	}
+	results := []StepResult{
+		{StepID: "left", Status: StatusCompleted, Output: "left raw"},
+		{StepID: "middle", Status: StatusCompleted, Output: "middle raw", ParsedData: map[string]interface{}{"value": 2}},
+		{StepID: "right", Status: StatusCompleted, Output: "right raw", ParsedData: map[string]interface{}{"value": 3}},
+	}
+
+	e := &Executor{
+		state: &ExecutionState{
+			RunID:     "iw5bw-run",
+			Variables: make(map[string]interface{}),
+		},
+	}
+	e.storeParallelOutputVars(parent, results, []string{"left", "middle", "right"})
+
+	got, ok := e.state.Variables["shared"].([]string)
+	if !ok {
+		t.Fatalf("shared = %T, want []string (%#v)", e.state.Variables["shared"], e.state.Variables["shared"])
+	}
+	if len(got) != 3 || got[0] != "left raw" || got[1] != "middle raw" || got[2] != "right raw" {
+		t.Fatalf("shared = %#v, want declaration-order outputs", got)
+	}
+
+	parsed, ok := e.state.Variables["shared_parsed"].([]interface{})
+	if !ok {
+		t.Fatalf("shared_parsed = %T, want []interface{} (%#v)", e.state.Variables["shared_parsed"], e.state.Variables["shared_parsed"])
+	}
+	if len(parsed) != 3 {
+		t.Fatalf("len(shared_parsed) = %d, want 3 to align with shared", len(parsed))
+	}
+	if parsed[0] != nil {
+		t.Fatalf("shared_parsed[0] = %#v, want nil placeholder for unparsed left sibling", parsed[0])
+	}
+	if m, ok := parsed[1].(map[string]interface{}); !ok || m["value"] != 2 {
+		t.Fatalf("shared_parsed[1] = %#v, want middle parsed payload {value: 2}", parsed[1])
+	}
+	if m, ok := parsed[2].(map[string]interface{}); !ok || m["value"] != 3 {
+		t.Fatalf("shared_parsed[2] = %#v, want right parsed payload {value: 3}", parsed[2])
+	}
+}
+
 func TestExecuteParallelDuplicateOutputVarLastModeLogsDebug(t *testing.T) {
 	var buf bytes.Buffer
 	previous := slog.Default()
