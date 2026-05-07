@@ -114,6 +114,16 @@ func (e *Executor) executeForeach(ctx context.Context, step *Step, workflow *Wor
 	total, dispatched, skipped, failed := countForeachIterations(iterations)
 	result.Output = fmt.Sprintf("Foreach completed: %d/%d dispatched, %d skipped, %d failed", dispatched, total, skipped, failed)
 	result.FinishedAt = time.Now()
+
+	// bd-dg38m: enforce ForeachConfig.OutputVarMode / Step.OutputVarMode now
+	// that all iterations have completed. Per-iteration writes through
+	// storeForeachNestedResult are last-writer-wins, which silently loses
+	// N-1 outputs for aggregate (the default) and collect modes. Replace
+	// parent.OutputVar with the right shape — []string in iteration order
+	// for aggregate, map[string]string keyed by item identity for collect.
+	// Last mode keeps the per-iteration last-writer behavior (declared
+	// non-deterministic for parallel foreach by validateForeachOutputVarMode).
+	e.storeForeachOutputVars(step, config, plans, iterations)
 	if failed > 0 {
 		result.Error = aggregateForeachErrors(iterations, step.ID, total)
 		if onError != ErrorActionContinue {
@@ -706,6 +716,171 @@ func (e *Executor) executeForeachNestedStepOnce(ctx context.Context, step *Step,
 	default:
 		return e.executeStepOnce(ctx, step, workflow)
 	}
+}
+
+// storeForeachOutputVars aggregates per-iteration outputs into parent.OutputVar
+// according to the effective output_var_mode (Step.OutputVarMode falls back to
+// ForeachConfig.OutputVarMode falls back to aggregate). Called once after all
+// iterations finish so the final state of parent.OutputVar matches the
+// declared shape rather than whatever per-iteration write happened to land
+// last under varMu (bd-dg38m).
+//
+//   - aggregate (default): []string in iteration order, []interface{} parsed
+//     output if any iteration produced ParsedData.
+//   - collect: map[string]string keyed by foreachIterationKey(iter), with
+//     parent.OutputVar+"_parsed" mirror when any iteration has parsed data.
+//   - last: keep per-iteration last-writer-wins (sequential foreach: the
+//     final iteration; parallel: completion-order last, declared
+//     non-deterministic by validateForeachOutputVarMode).
+//
+// Iterations whose body step at the matching index didn't reach
+// StatusCompleted (skipped, failed, cancelled) contribute no entry — their
+// output is intentionally absent from the aggregate so consumers can
+// distinguish "no result" from "empty result".
+func (e *Executor) storeForeachOutputVars(parent *Step, config *ForeachConfig, plans []foreachIterationPlan, iterations []foreachIterationResult) {
+	if e == nil || e.state == nil || parent == nil || parent.OutputVar == "" {
+		return
+	}
+	if config == nil {
+		return
+	}
+
+	mode := effectiveForeachOutputVarMode(parent, config)
+	if mode == OutputVarModeLast {
+		// Last mode: leave whatever per-iteration storeForeachNestedResult
+		// wrote last. Sequential foreach lands on the final iteration's
+		// output deterministically; parallel foreach lands on completion-
+		// order last (validation already warns this is non-deterministic).
+		return
+	}
+
+	type collected struct {
+		Iteration  int
+		ItemKey    string
+		Output     string
+		ParsedData interface{}
+	}
+	items := make([]collected, 0, len(iterations))
+	for i, iter := range iterations {
+		if iter.Skipped || iter.Error != "" {
+			continue
+		}
+		idx := matchingForeachBodyResultIndex(plans, i, parent.OutputVar)
+		if idx < 0 || idx >= len(iter.Results) {
+			continue
+		}
+		res := iter.Results[idx]
+		if res.Status != StatusCompleted {
+			continue
+		}
+		items = append(items, collected{
+			Iteration:  iter.Index,
+			ItemKey:    foreachIterationKey(iter),
+			Output:     res.Output,
+			ParsedData: res.ParsedData,
+		})
+	}
+
+	e.varMu.Lock()
+	defer e.varMu.Unlock()
+	if e.state.Variables == nil {
+		e.state.Variables = make(map[string]interface{})
+	}
+
+	switch mode {
+	case OutputVarModeCollect:
+		outputs := make(map[string]string, len(items))
+		parsed := make(map[string]interface{}, len(items))
+		hasParsed := false
+		for _, it := range items {
+			outputs[it.ItemKey] = it.Output
+			if it.ParsedData != nil {
+				parsed[it.ItemKey] = it.ParsedData
+				hasParsed = true
+			}
+		}
+		e.state.Variables[parent.OutputVar] = outputs
+		if hasParsed {
+			e.state.Variables[parent.OutputVar+"_parsed"] = parsed
+		}
+	default: // aggregate
+		outputs := make([]string, 0, len(items))
+		parsed := make([]interface{}, 0, len(items))
+		hasParsed := false
+		for _, it := range items {
+			outputs = append(outputs, it.Output)
+			parsed = append(parsed, it.ParsedData)
+			if it.ParsedData != nil {
+				hasParsed = true
+			}
+		}
+		e.state.Variables[parent.OutputVar] = outputs
+		if hasParsed {
+			e.state.Variables[parent.OutputVar+"_parsed"] = parsed
+		}
+	}
+}
+
+// effectiveForeachOutputVarMode resolves the cascade Step.OutputVarMode →
+// ForeachConfig.OutputVarMode → OutputVarModeAggregate.
+func effectiveForeachOutputVarMode(parent *Step, config *ForeachConfig) OutputVarMode {
+	if parent != nil && parent.OutputVarMode != "" {
+		return normalizeOutputVarMode(parent.OutputVarMode)
+	}
+	if config != nil && config.OutputVarMode != "" {
+		return normalizeOutputVarMode(config.OutputVarMode)
+	}
+	return OutputVarModeAggregate
+}
+
+// matchingForeachBodyResultIndex finds the first body step in plans[planIdx]
+// whose declared OutputVar matches the foreach parent's OutputVar. Returns
+// -1 when no body step writes to that variable (the parent's OutputVar is
+// either set without a corresponding body step write, or unset).
+//
+// The materialized body step IDs end with "_<originalID>", so we match
+// against the raw body step's OutputVar via the iteration plan, which still
+// holds the substituted body steps.
+func matchingForeachBodyResultIndex(plans []foreachIterationPlan, planIdx int, outputVar string) int {
+	if planIdx < 0 || planIdx >= len(plans) {
+		return -1
+	}
+	for i, step := range plans[planIdx].Steps {
+		if step.OutputVar == outputVar {
+			return i
+		}
+	}
+	return -1
+}
+
+// foreachIterationKey derives a stable identity for an iteration suitable
+// for keying into a collect-mode map. Prefers structured fields ("id",
+// "key", "name") on map items; falls back to the raw string item; final
+// fallback is "iter_<index>" so keys stay distinct even for opaque items.
+func foreachIterationKey(iter foreachIterationResult) string {
+	switch v := iter.Item.(type) {
+	case map[string]interface{}:
+		for _, key := range []string{"id", "key", "name"} {
+			if val, ok := v[key]; ok {
+				if s := fmt.Sprintf("%v", val); s != "" {
+					return s
+				}
+			}
+		}
+	case map[interface{}]interface{}:
+		for _, key := range []string{"id", "key", "name"} {
+			if val, ok := v[key]; ok {
+				if s := fmt.Sprintf("%v", val); s != "" {
+					return s
+				}
+			}
+		}
+	case string:
+		if v != "" {
+			return v
+		}
+	}
+	return fmt.Sprintf("iter_%d", iter.Index)
 }
 
 func (e *Executor) storeForeachNestedResult(step *Step, result StepResult) {
