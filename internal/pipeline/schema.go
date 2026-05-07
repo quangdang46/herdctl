@@ -346,6 +346,12 @@ type Step struct {
 	// behavior is identical to the agent-prompt path.
 	Command string `yaml:"command,omitempty" toml:"command,omitempty" json:"command,omitempty"`
 
+	// Stdin is piped to the command's stdin when set. ${X} placeholders are
+	// substituted before piping. Intended for small inline data (<1MB);
+	// large payloads should be passed via file paths to avoid bloating the
+	// in-memory step definition (bd-zfdjd.7).
+	Stdin string `yaml:"stdin,omitempty" toml:"stdin,omitempty" json:"stdin,omitempty"`
+
 	// Args is a key-value bag whose meaning depends on the step kind:
 	//   - For Command steps: each entry becomes an environment variable.
 	//   - For Template steps: each entry becomes a template-substitution param.

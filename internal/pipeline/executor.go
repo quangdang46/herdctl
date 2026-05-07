@@ -1136,6 +1136,19 @@ func (e *Executor) executeCommand(ctx context.Context, step *Step, workflow *Wor
 		return result
 	}
 
+	// bd-zfdjd.7: substitute ${X} placeholders in Stdin before piping. The
+	// expanded payload is set on cmd.Stdin below, after cmd is constructed.
+	expandedStdin, stdinErr := e.substituteVariablesStrict(step.Stdin)
+	if stdinErr != nil {
+		result.Status = StatusFailed
+		result.Error = stepRuntimeError(step, "command", "substitution",
+			fmt.Sprintf("failed to substitute variables in stdin: %v", stdinErr),
+			"check that every ${var}, ${env.X}, ${steps.X.output}, and ${defaults.X} reference in stdin is defined",
+			stdinErr.Error())
+		result.FinishedAt = time.Now()
+		return result
+	}
+
 	// bd-6xlxl: run pipeline substitution over Args string values so
 	// `${vars.x}`, `${env.X}`, `${steps.s.output}`, etc. resolve before they
 	// are exported as environment variables. Without this, args:
@@ -1208,6 +1221,15 @@ func (e *Executor) executeCommand(ctx context.Context, step *Step, workflow *Wor
 	} else {
 		cmd.Stdout = stdoutBuf
 		cmd.Stderr = stdoutBuf
+	}
+
+	// bd-zfdjd.7: pipe expanded Stdin to the command. strings.NewReader
+	// writes the bytes once and EOFs, which is what shells like `cat` and
+	// `jq` expect for inline data. Keep the byte cap implicit — Step.Stdin
+	// is bounded by workflow file size; large payloads should use file
+	// paths per the schema doc.
+	if expandedStdin != "" {
+		cmd.Stdin = strings.NewReader(expandedStdin)
 	}
 
 	waitCondition := step.Wait

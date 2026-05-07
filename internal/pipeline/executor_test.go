@@ -3295,6 +3295,48 @@ func TestExecuteCommand_DryRunRejectsInvalidArgEnvName(t *testing.T) {
 	}
 }
 
+// TestExecuteCommand_StdinPipesPayload covers bd-zfdjd.7: a command step
+// with Stdin set should receive the substituted payload on its standard
+// input. cat is the natural test target — its stdout is exactly its stdin,
+// so we can assert the captured Output round-trips the value.
+func TestExecuteCommand_StdinPipesPayload(t *testing.T) {
+	e := newCommandTestExecutor(t)
+	e.state.Variables["greeting"] = "world"
+
+	step := &Step{
+		ID:      "stdin-cat",
+		Command: "cat",
+		Stdin:   "hello ${vars.greeting}",
+	}
+	result := e.executeCommand(context.Background(), step, &Workflow{Name: "test"})
+
+	if result.Status != StatusCompleted {
+		t.Fatalf("Status = %q, want %q; error = %+v", result.Status, StatusCompleted, result.Error)
+	}
+	if result.Output != "hello world" {
+		t.Fatalf("Output = %q, want %q (stdin should round-trip with ${vars.greeting} substituted)", result.Output, "hello world")
+	}
+}
+
+// TestExecuteCommand_StdinEmptyPreservesNoStdin asserts that a step with no
+// Stdin set leaves cmd.Stdin alone (commands like `cat </dev/null` should
+// hit EOF immediately and produce empty output rather than blocking).
+func TestExecuteCommand_StdinEmptyPreservesNoStdin(t *testing.T) {
+	e := newCommandTestExecutor(t)
+	step := &Step{
+		ID:      "no-stdin",
+		Command: "cat </dev/null",
+	}
+	result := e.executeCommand(context.Background(), step, &Workflow{Name: "test"})
+
+	if result.Status != StatusCompleted {
+		t.Fatalf("Status = %q, want %q (Stdin unset should not block); error = %+v", result.Status, StatusCompleted, result.Error)
+	}
+	if result.Output != "" {
+		t.Fatalf("Output = %q, want empty (no stdin payload)", result.Output)
+	}
+}
+
 func TestExecuteCommand_WaitNone(t *testing.T) {
 	e := newCommandTestExecutor(t)
 	step := &Step{
