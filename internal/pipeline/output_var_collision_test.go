@@ -113,6 +113,22 @@ func TestExecuteParallelDuplicateOutputVarCollectsByStepID(t *testing.T) {
 	if !strings.Contains(got["left"], "[left]") || !strings.Contains(got["right"], "[right]") {
 		t.Fatalf("shared outputs = %#v, want entries keyed by step id", got)
 	}
+
+	// Regression: the documented nested-variable mechanism must support keyed
+	// access into collect-mode outputs (bd-rdzch). Previously navigateNested
+	// rejected map[string]string with "cannot access field on type".
+	sub := NewSubstitutor(e.state, "", workflow.Name)
+	resolved, err := sub.Substitute("${vars.shared.left}")
+	if err != nil {
+		t.Fatalf("Substitute(${vars.shared.left}) error = %v", err)
+	}
+	if !strings.Contains(resolved, "[left]") {
+		t.Fatalf("Substitute(${vars.shared.left}) = %q, want substring [left]", resolved)
+	}
+
+	if _, err := sub.Substitute("${vars.shared.missing}"); err == nil {
+		t.Fatalf("Substitute(${vars.shared.missing}) succeeded, want missing-key error")
+	}
 }
 
 func TestExecuteParallelDuplicateOutputVarLastModeLogsDebug(t *testing.T) {

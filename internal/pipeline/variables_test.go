@@ -925,6 +925,23 @@ func TestNavigateNested_EdgeCases(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "map[string]string - parallel collect output",
+			value: map[string]string{
+				"left":  "left output",
+				"right": "right output",
+			},
+			parts: []string{"left"},
+			want:  "left output",
+		},
+		{
+			name: "map[string]string - missing key",
+			value: map[string]string{
+				"left": "left output",
+			},
+			parts:   []string{"missing"},
+			wantErr: true,
+		},
+		{
 			name:    "[]interface{} array - negative index",
 			value:   []interface{}{"a", "b"},
 			parts:   []string{"-1"},
