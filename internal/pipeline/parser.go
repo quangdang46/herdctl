@@ -619,6 +619,27 @@ func validateStep(step *Step, stepField string, stepIDs map[string]bool, result 
 		validateStep(&pStep, fmt.Sprintf("%s.parallel[%d]", stepField, j), stepIDs, result)
 	}
 
+	// bd-ytp3e: loop_control:break inside a parallel foreach cannot
+	// reliably stop later iterations because the dispatcher launches all
+	// non-filtered iterations concurrently and only learns about break
+	// after one of them returns. Late iterations can complete (with side
+	// effects) before the cancellation reaches them. Reject the
+	// combination at validation time.
+	for _, fc := range []*ForeachConfig{step.Foreach, step.ForeachPane} {
+		if fc == nil || !fc.Parallel {
+			continue
+		}
+		for j, body := range foreachBodyStepsForValidation(fc) {
+			if body.LoopControl == LoopControlBreak {
+				result.addError(ParseError{
+					Field:   fmt.Sprintf("%s.foreach.steps[%d].loop_control", stepField, j),
+					Message: "loop_control: break is not supported inside a parallel foreach",
+					Hint:    "Use sequential foreach (parallel: false) when iterations need to short-circuit, or switch break to continue if you only want to skip the current iteration.",
+				})
+			}
+		}
+	}
+
 	// Validate loop configuration
 	if step.Loop != nil {
 		if step.Loop.Items == "" && step.Loop.While == "" && step.Loop.Until == "" && step.Loop.Times <= 0 {
@@ -837,4 +858,18 @@ func LoadAndValidate(path string) (*Workflow, ValidationResult, error) {
 
 	result := Validate(workflow)
 	return workflow, result, nil
+}
+
+// foreachBodyStepsForValidation returns the effective body steps for a
+// ForeachConfig regardless of whether the YAML used the canonical Steps
+// field or the convenience Body alias. Used by parallel-foreach
+// validation in bd-ytp3e.
+func foreachBodyStepsForValidation(fc *ForeachConfig) []Step {
+	if fc == nil {
+		return nil
+	}
+	if len(fc.Steps) > 0 {
+		return fc.Steps
+	}
+	return fc.Body
 }

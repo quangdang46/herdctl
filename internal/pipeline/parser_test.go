@@ -392,6 +392,41 @@ func TestValidate_StepKindMutualExclusivityAndRequiredWork(t *testing.T) {
 			wantValid: true,
 		},
 		{
+			// bd-ytp3e: parallel foreach launches every iteration
+			// concurrently, so loop_control: break inside the body cannot
+			// reliably stop later iterations from completing with side
+			// effects. Lint must reject the combination.
+			name: "parallel foreach with loop_control break is invalid",
+			step: Step{
+				ID: "fanout",
+				Foreach: &ForeachConfig{
+					Items:    `["a","b"]`,
+					Parallel: true,
+					Steps: []Step{
+						{ID: "break_now", LoopControl: LoopControlBreak, When: `${item} == "a"`},
+						{ID: "work", Command: "echo ${item}"},
+					},
+				},
+			},
+			wantErrSubstr: "loop_control: break is not supported inside a parallel foreach",
+		},
+		{
+			// bd-ytp3e: sequential foreach is fine — break can short-circuit
+			// the per-iteration loop deterministically.
+			name: "sequential foreach with loop_control break is valid",
+			step: Step{
+				ID: "fanout",
+				Foreach: &ForeachConfig{
+					Items: `["a","b"]`,
+					Steps: []Step{
+						{ID: "break_now", LoopControl: LoopControlBreak, When: `${item} == "a"`},
+						{ID: "work", Command: "echo ${item}"},
+					},
+				},
+			},
+			wantValid: true,
+		},
+		{
 			// bd-nz63w: a branches map alone has no predicate so the runtime
 			// cannot pick a branch; lint must reject it instead of silently
 			// passing and failing later with a missing-prompt error.
