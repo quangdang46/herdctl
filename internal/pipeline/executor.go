@@ -3,7 +3,6 @@
 package pipeline
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -1001,13 +1000,20 @@ func (e *Executor) executeCommand(ctx context.Context, step *Step, workflow *Wor
 	env := append(os.Environ(), argEnv...)
 	cmd.Env = env
 
-	var stdoutBuf, stderrBuf bytes.Buffer
+	// bd-g7cu9: bound stdout/stderr writes proactively so stderr-heavy
+	// commands cannot accumulate unbounded memory while the command runs.
+	// MaxCommandStderrBytes only matters when output_parse routes stderr to
+	// a separate buffer; in the merged case both streams land in stdoutBuf
+	// and the stdout cap covers them together.
+	stdoutBuf := newCappedWriter(e.limits.MaxCommandStdoutBytes)
+	var stderrBuf *cappedWriter
 	if step.OutputParse.Type != "" && step.OutputParse.Type != "none" {
-		cmd.Stdout = &stdoutBuf
-		cmd.Stderr = &stderrBuf
+		stderrBuf = newCappedWriter(e.limits.MaxCommandStderrBytes)
+		cmd.Stdout = stdoutBuf
+		cmd.Stderr = stderrBuf
 	} else {
-		cmd.Stdout = &stdoutBuf
-		cmd.Stderr = &stdoutBuf
+		cmd.Stdout = stdoutBuf
+		cmd.Stderr = stdoutBuf
 	}
 
 	waitCondition := step.Wait
@@ -1040,7 +1046,7 @@ func (e *Executor) executeCommand(ctx context.Context, step *Step, workflow *Wor
 					"step_id", step.ID,
 					"agent_type", "command",
 					FieldDurationMS, time.Since(result.StartedAt).Milliseconds(),
-					"bytes_captured", len(stdoutBuf.String()),
+					"bytes_captured", stdoutBuf.Len(),
 					FieldSignalSent, cleanup.SignalSent,
 				)
 			}
@@ -1065,18 +1071,26 @@ func (e *Executor) executeCommand(ctx context.Context, step *Step, workflow *Wor
 			"step_id", step.ID,
 			"agent_type", "command",
 			FieldDurationMS, time.Since(result.StartedAt).Milliseconds(),
-			"bytes_captured", len(stdoutBuf.String()),
+			"bytes_captured", stdoutBuf.Len(),
 			FieldSignalSent, cleanup.SignalSent,
 		)
 	}
-	if int64(len(output)) > e.limits.MaxCommandStdoutBytes {
+	if stdoutBuf.Truncated() {
 		slog.Warn("command stdout truncated",
 			"run_id", e.state.RunID,
 			"step_id", step.ID,
-			"bytes_captured", len(output),
+			"bytes_total", stdoutBuf.Total(),
 			"limit", e.limits.MaxCommandStdoutBytes,
 		)
-		output = output[:e.limits.MaxCommandStdoutBytes] + fmt.Sprintf("\n[TRUNCATED at %d bytes]", e.limits.MaxCommandStdoutBytes)
+		output += fmt.Sprintf("\n[TRUNCATED at %d bytes]", e.limits.MaxCommandStdoutBytes)
+	}
+	if stderrBuf != nil && stderrBuf.Truncated() {
+		slog.Warn("command stderr truncated",
+			"run_id", e.state.RunID,
+			"step_id", step.ID,
+			"bytes_total", stderrBuf.Total(),
+			"limit", e.limits.MaxCommandStderrBytes,
+		)
 	}
 	result.Output = output
 

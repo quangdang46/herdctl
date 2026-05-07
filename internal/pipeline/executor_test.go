@@ -3530,6 +3530,127 @@ func TestExecuteCommand_StdoutUnderLimit(t *testing.T) {
 	}
 }
 
+// bd-g7cu9: a stderr-heavy command with output_parse enabled (so stderr
+// goes to its own buffer) must not consume unbounded memory. The cappedWriter
+// drops bytes past MaxCommandStderrBytes during execution rather than after
+// cmd.Wait() has buffered everything.
+func TestExecuteCommand_StderrCappedWhenOutputParseEnabled(t *testing.T) {
+	e := newCommandTestExecutor(t)
+	e.limits = LimitsConfig{
+		MaxCommandStdoutBytes: 1000,
+		MaxCommandStderrBytes: 100,
+	}.EffectiveLimits()
+
+	step := &Step{
+		ID:          "noisy-stderr",
+		Command:     "head -c 5000 /dev/zero | tr '\\0' 'E' >&2; echo done",
+		OutputParse: OutputParse{Type: "lines"},
+	}
+
+	result := e.executeCommand(context.Background(), step, &Workflow{Name: "test"})
+	if result.Status != StatusCompleted {
+		t.Fatalf("status=%s, want completed; error=%v", result.Status, result.Error)
+	}
+	// stdout should still contain the small "done" line — stderr did not bleed
+	// into stdout because output_parse routes them separately.
+	if !strings.Contains(result.Output, "done") {
+		t.Fatalf("stdout missing expected 'done' line: %q", result.Output)
+	}
+	// stderr-side truncation does not surface in result.Output (which is
+	// stdout). Successful completion + a small stdout proves the cap held —
+	// without the cap the command's 5KB stderr would still be buffered.
+}
+
+// bd-g7cu9: when output_parse is disabled stdout and stderr share the
+// stdoutBuf cappedWriter; the existing stdout cap covers both streams and
+// the [TRUNCATED] marker still surfaces.
+func TestExecuteCommand_MergedStdoutStderrTruncatedAtStdoutCap(t *testing.T) {
+	e := newCommandTestExecutor(t)
+	e.limits = LimitsConfig{MaxCommandStdoutBytes: 50}.EffectiveLimits()
+
+	step := &Step{
+		ID:      "merged-streams",
+		Command: "head -c 200 /dev/zero | tr '\\0' '-' >&2",
+	}
+
+	result := e.executeCommand(context.Background(), step, &Workflow{Name: "test"})
+	if result.Status != StatusCompleted {
+		t.Fatalf("status=%s, want completed; error=%v", result.Status, result.Error)
+	}
+	if !strings.Contains(result.Output, "[TRUNCATED at 50 bytes]") {
+		t.Errorf("expected truncation marker for merged stderr->stdout, got: %q", result.Output)
+	}
+}
+
+// bd-g7cu9 (unit): cappedWriter drops bytes past the cap and reports
+// total/truncated state regardless of whether the cap is hit by a single
+// large write or accumulated across many small writes.
+func TestCappedWriter_TruncationContract(t *testing.T) {
+	t.Run("single large write past cap", func(t *testing.T) {
+		w := newCappedWriter(10)
+		n, err := w.Write([]byte("0123456789ABCDEF"))
+		if err != nil {
+			t.Fatalf("Write err: %v", err)
+		}
+		if n != 16 {
+			t.Fatalf("Write returned %d, want 16 (full input length even when truncated)", n)
+		}
+		if w.Len() != 10 {
+			t.Fatalf("Len = %d, want 10", w.Len())
+		}
+		if !w.Truncated() {
+			t.Fatal("Truncated = false, want true")
+		}
+		if w.Total() != 16 {
+			t.Fatalf("Total = %d, want 16", w.Total())
+		}
+		if got := w.String(); got != "0123456789" {
+			t.Fatalf("String = %q, want first 10 bytes", got)
+		}
+	})
+
+	t.Run("accumulated writes past cap", func(t *testing.T) {
+		w := newCappedWriter(10)
+		for i := 0; i < 5; i++ {
+			if _, err := w.Write([]byte("ABCDE")); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if w.Total() != 25 {
+			t.Fatalf("Total = %d, want 25", w.Total())
+		}
+		if w.Len() != 10 {
+			t.Fatalf("Len = %d, want 10", w.Len())
+		}
+		if !w.Truncated() {
+			t.Fatal("Truncated = false, want true")
+		}
+	})
+
+	t.Run("under cap not truncated", func(t *testing.T) {
+		w := newCappedWriter(100)
+		_, _ = w.Write([]byte("hello"))
+		if w.Truncated() {
+			t.Fatal("Truncated = true, want false")
+		}
+		if w.String() != "hello" {
+			t.Fatalf("String = %q, want hello", w.String())
+		}
+	})
+
+	t.Run("non-positive cap is unbounded", func(t *testing.T) {
+		w := newCappedWriter(0)
+		payload := strings.Repeat("X", 10000)
+		_, _ = w.Write([]byte(payload))
+		if w.Truncated() {
+			t.Fatal("non-positive cap should disable truncation")
+		}
+		if w.Len() != 10000 {
+			t.Fatalf("Len = %d, want 10000", w.Len())
+		}
+	})
+}
+
 func TestExecuteTemplate_SizeLimitExceeded(t *testing.T) {
 	tmpDir := t.TempDir()
 	bigContent := strings.Repeat("X", 1024)
