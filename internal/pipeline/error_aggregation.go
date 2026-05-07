@@ -62,13 +62,30 @@ func aggregateForeachErrors(iterations []foreachIterationResult, stepID string, 
 }
 
 func foreachIterationFailureError(iteration foreachIterationResult) (StepError, bool) {
+	// bd-5f60g: collect every failed body step in this iteration, not just
+	// the first one. With on_error=continue the iteration may record
+	// several failed StepResults, but the original code returned after the
+	// first match so later failures disappeared from result.Error.Aggregated
+	// and the JSON summary in result.Error.Details. Surface every failure
+	// so incident reports stay complete.
+	var failures []StepError
 	for _, result := range iteration.Results {
 		if result.Status != StatusFailed {
 			continue
 		}
 		entry := stepResultAggregatedError(result)
 		entry.Message = fmt.Sprintf("iter-%d: %s", iteration.Index, entry.Message)
-		return entry, true
+		failures = append(failures, entry)
+	}
+	if len(failures) > 0 {
+		first := failures[0]
+		if len(failures) == 1 {
+			return first, true
+		}
+		summary := first
+		summary.Message = fmt.Sprintf("%s (+%d more failed steps in iter-%d)", first.Message, len(failures)-1, iteration.Index)
+		summary.Aggregated = failures
+		return summary, true
 	}
 	if iteration.Error == "" || len(iteration.Results) > 0 {
 		return StepError{}, false

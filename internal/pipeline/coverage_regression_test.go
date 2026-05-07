@@ -74,6 +74,56 @@ func TestCoverageAggregateForeachErrorsCancelledAndFallbacks(t *testing.T) {
 	}
 }
 
+func TestForeachIterationAggregatesAllFailedBodySteps(t *testing.T) {
+	// bd-5f60g: with on_error=continue, a foreach iteration may record
+	// multiple failed body steps. The aggregator must surface all of them
+	// in result.Error.Aggregated and result.Error.Details, not just the
+	// first one — incident reports lose real failures otherwise.
+	iteration := foreachIterationResult{
+		Index: 0,
+		Results: []StepResult{
+			{
+				StepID: "iter0_lint",
+				Status: StatusFailed,
+				Error:  &StepError{Type: "command", Message: "exit 7"},
+			},
+			{
+				StepID: "iter0_format",
+				Status: StatusCompleted,
+			},
+			{
+				StepID: "iter0_test",
+				Status: StatusFailed,
+				Error:  &StepError{Type: "command", Message: "exit 1"},
+			},
+		},
+	}
+
+	got := aggregateForeachErrors([]foreachIterationResult{iteration}, "fanout", 1)
+	if got == nil {
+		t.Fatal("aggregateForeachErrors() = nil, want aggregate from two failed body steps")
+	}
+	if len(got.Aggregated) != 1 {
+		t.Fatalf("len(Aggregated) = %d, want 1 outer iteration entry", len(got.Aggregated))
+	}
+	outer := got.Aggregated[0]
+	if !strings.Contains(outer.Message, "iter-0:") {
+		t.Fatalf("outer message = %q, want iter-0 prefix", outer.Message)
+	}
+	if !strings.Contains(outer.Message, "+1 more failed steps in iter-0") {
+		t.Fatalf("outer message = %q, want '+1 more failed steps' suffix", outer.Message)
+	}
+	if len(outer.Aggregated) != 2 {
+		t.Fatalf("outer.Aggregated len = %d, want 2 nested failures", len(outer.Aggregated))
+	}
+	wantMessages := []string{"iter-0: exit 7", "iter-0: exit 1"}
+	for i, want := range wantMessages {
+		if outer.Aggregated[i].Message != want {
+			t.Errorf("outer.Aggregated[%d].Message = %q, want %q", i, outer.Aggregated[i].Message, want)
+		}
+	}
+}
+
 func TestCoverageStepResultAggregatedErrorClonesNestedErrors(t *testing.T) {
 	original := StepError{
 		Type: "command",
