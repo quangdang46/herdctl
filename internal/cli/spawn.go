@@ -720,6 +720,7 @@ type RecoveryCheckpoint struct {
 	CreatedAt   time.Time                  `json:"created_at"`
 	PaneCount   int                        `json:"pane_count"`
 	HasGitPatch bool                       `json:"has_git_patch"`
+	WorkingDir  string                     `json:"working_dir,omitempty"`
 	Assignments *RecoveryAssignmentSummary `json:"assignments_summary,omitempty"`
 	BVSummary   *RecoveryBVSummary         `json:"bv_summary,omitempty"`
 }
@@ -3169,11 +3170,13 @@ func buildRecoveryContext(ctx context.Context, sessionName, workingDir string, r
 		}()
 	}
 
-	// Load latest checkpoint if available
+	// Load latest checkpoint if available. Pass the spawn working directory
+	// so a session-name collision across repos cannot surface a checkpoint
+	// recorded against a different working directory (#131).
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		cp, err := loadRecoveryCheckpoint(sessionName)
+		cp, err := loadRecoveryCheckpoint(sessionName, workingDir)
 		mu.Lock()
 		defer mu.Unlock()
 		if err != nil {
@@ -3504,8 +3507,18 @@ func loadRecoveryCMMemories(ctx context.Context, workingDir string) (*RecoveryCM
 	return memories, nil
 }
 
-// loadRecoveryCheckpoint loads the latest checkpoint for a session.
-func loadRecoveryCheckpoint(sessionName string) (*RecoveryCheckpoint, error) {
+// loadRecoveryCheckpoint loads the latest checkpoint for a session, but only
+// when the checkpoint's recorded working directory matches the spawn's current
+// working directory. This prevents a session-name collision across repos from
+// cross-contaminating recovery context (#131).
+//
+// Working-dir matching rules:
+//   - Both empty (legacy data): accept the checkpoint.
+//   - Checkpoint has empty working_dir, current spawn has one: accept (legacy).
+//   - Both non-empty: accept iff cleaned absolute paths are equal.
+//   - Checkpoint has working_dir, current spawn has none: accept (caller did
+//     not supply enough context to reject; they will be opting into trust).
+func loadRecoveryCheckpoint(sessionName, workingDir string) (*RecoveryCheckpoint, error) {
 	storage := checkpoint.NewStorage()
 	cp, err := storage.GetLatest(sessionName)
 	if err != nil {
@@ -3515,6 +3528,12 @@ func loadRecoveryCheckpoint(sessionName string) (*RecoveryCheckpoint, error) {
 		return nil, err
 	}
 	if cp == nil {
+		return nil, nil
+	}
+
+	if !checkpointWorkingDirMatches(cp.WorkingDir, workingDir) {
+		// Recorded working dir disagrees with the spawn directory — refuse to
+		// surface the checkpoint as recovery context for a different repo.
 		return nil, nil
 	}
 
@@ -3538,9 +3557,31 @@ func loadRecoveryCheckpoint(sessionName string) (*RecoveryCheckpoint, error) {
 		CreatedAt:   cp.CreatedAt,
 		PaneCount:   cp.PaneCount,
 		HasGitPatch: cp.HasGitPatch(),
+		WorkingDir:  cp.WorkingDir,
 		Assignments: assignSummary,
 		BVSummary:   bvSummary,
 	}, nil
+}
+
+// checkpointWorkingDirMatches returns true when the checkpoint's recorded
+// working directory is compatible with the current spawn working directory.
+// Empty values on either side are treated as a legacy match — only two
+// non-empty paths that disagree are rejected.
+func checkpointWorkingDirMatches(checkpointDir, spawnDir string) bool {
+	checkpointDir = strings.TrimSpace(checkpointDir)
+	spawnDir = strings.TrimSpace(spawnDir)
+	if checkpointDir == "" || spawnDir == "" {
+		return true
+	}
+
+	canonical := func(p string) string {
+		if abs, err := filepath.Abs(p); err == nil {
+			return filepath.Clean(abs)
+		}
+		return filepath.Clean(p)
+	}
+
+	return canonical(checkpointDir) == canonical(spawnDir)
 }
 
 func summarizeCheckpointAssignments(assignments []checkpoint.AssignmentSnapshot) *RecoveryAssignmentSummary {
