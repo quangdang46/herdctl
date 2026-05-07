@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -795,6 +796,146 @@ func TestForeachMaxConcurrentZeroGlobalAllowsPerStep(t *testing.T) {
 	if got := foreachMaxConcurrent(&ForeachConfig{}, limits); got != 1 {
 		t.Fatalf("foreachMaxConcurrent(unbounded global, no per-step) = %d, want 1", got)
 	}
+}
+
+// bd-2ubxp.19: foreachProgressInterval picks the smaller of (every 10%) and
+// (every 5 iterations) so very large fan-outs don't drown the log and very
+// small fan-outs still emit at least one tick.
+func TestForeachProgressIntervalPicksFewerIterationsBetween(t *testing.T) {
+	cases := []struct {
+		total int
+		want  int
+	}{
+		{total: 0, want: 1},   // degenerate guard
+		{total: 1, want: 1},   // single-item -> one tick
+		{total: 5, want: 1},   // 10% rounds up to 1, smaller than 5
+		{total: 20, want: 2},  // 10% = 2, smaller than 5
+		{total: 50, want: 5},  // 10% = 5 ties with the 5-iteration cap
+		{total: 100, want: 5}, // 10% = 10, capped at 5
+		{total: 47, want: 5},  // 10% rounds up to 5, equals cap
+		{total: 41, want: 5},  // 10% rounds up to 5
+	}
+	for _, tc := range cases {
+		if got := foreachProgressInterval(tc.total); got != tc.want {
+			t.Errorf("foreachProgressInterval(%d) = %d, want %d", tc.total, got, tc.want)
+		}
+	}
+}
+
+// bd-2ubxp.19: per-iteration progress events let operators monitor long
+// foreach runs. A 5-iteration foreach should emit exactly 5 starts, 5
+// completes (carrying duration_ms + status), and at least one aggregate
+// progress event with completed/total/elapsed_ms.
+func TestExecuteForeachEmitsPerIterationProgressEvents(t *testing.T) {
+	var logs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, &slog.HandlerOptions{Level: slog.LevelInfo})))
+	defer slog.SetDefault(previousLogger)
+
+	workflow := &Workflow{
+		SchemaVersion: SchemaVersion,
+		Name:          "foreach-progress-events",
+		Settings:      DefaultWorkflowSettings(),
+	}
+	step := &Step{
+		ID: "fanout",
+		Foreach: &ForeachConfig{
+			Items: `["a","b","c","d","e"]`,
+			Steps: []Step{{
+				ID:      "echo",
+				Command: `printf '%s' '${item}'`,
+			}},
+		},
+	}
+	workflow.Steps = []Step{*step}
+	e := createForeachTestExecutor(t, workflow)
+
+	result := e.executeForeach(context.Background(), step, workflow)
+
+	if result.Status != StatusCompleted {
+		t.Fatalf("foreach status = %s, error = %#v", result.Status, result.Error)
+	}
+	starts, completes, progress, completedFields, statusFields := countForeachIterationEvents(t, &logs, "fanout")
+	if starts != 5 {
+		t.Errorf("foreach iteration starting events = %d, want 5", starts)
+	}
+	if completes != 5 {
+		t.Errorf("foreach iteration completed events = %d, want 5", completes)
+	}
+	if progress < 1 {
+		t.Errorf("foreach progress events = %d, want >= 1", progress)
+	}
+	for _, status := range statusFields {
+		if status != "completed" {
+			t.Errorf("iteration completed event status = %q, want %q", status, "completed")
+		}
+	}
+	if got := completedFields[len(completedFields)-1]; got != 5 {
+		t.Errorf("final foreach progress completed = %d, want 5", got)
+	}
+}
+
+func countForeachIterationEvents(t *testing.T, logs *bytes.Buffer, stepID string) (starts, completes, progress int, progressCompleted []int, completeStatuses []string) {
+	t.Helper()
+	for _, line := range strings.Split(logs.String(), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if !strings.Contains(line, `"step_id":"`+stepID+`"`) {
+			continue
+		}
+		switch {
+		case strings.Contains(line, `"msg":"foreach iteration starting"`):
+			starts++
+		case strings.Contains(line, `"msg":"foreach iteration completed"`):
+			completes++
+			if status := extractJSONStringField(line, "status"); status != "" {
+				completeStatuses = append(completeStatuses, status)
+			}
+		case strings.Contains(line, `"msg":"foreach progress"`):
+			progress++
+			if completed := extractJSONIntField(line, "completed"); completed > 0 {
+				progressCompleted = append(progressCompleted, completed)
+			}
+		}
+	}
+	return
+}
+
+func extractJSONStringField(line, key string) string {
+	needle := `"` + key + `":"`
+	idx := strings.Index(line, needle)
+	if idx < 0 {
+		return ""
+	}
+	rest := line[idx+len(needle):]
+	end := strings.Index(rest, `"`)
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+func extractJSONIntField(line, key string) int {
+	needle := `"` + key + `":`
+	idx := strings.Index(line, needle)
+	if idx < 0 {
+		return 0
+	}
+	rest := line[idx+len(needle):]
+	end := 0
+	for end < len(rest) && (rest[end] == '-' || (rest[end] >= '0' && rest[end] <= '9')) {
+		end++
+	}
+	if end == 0 {
+		return 0
+	}
+	n, err := strconv.Atoi(rest[:end])
+	if err != nil {
+		return 0
+	}
+	return n
 }
 
 // bd-2ubxp.13: foreach_pane treats the panes themselves as the iteration set,

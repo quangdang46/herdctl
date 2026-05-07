@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -334,15 +335,109 @@ func (e *Executor) popForeachVars(scope VariableScope) {
 	scope.Restore(e.state.Variables)
 }
 
+// bd-2ubxp.19: foreachProgressTracker emits aggregate `foreach progress`
+// events as iterations complete, giving operators visibility into long-running
+// fan-outs without watching individual step events. The tracker is safe for
+// concurrent use so the parallel runner can call iterationFinished() from
+// goroutines.
+type foreachProgressTracker struct {
+	e        *Executor
+	workflow *Workflow
+	parent   *Step
+	total    int
+	interval int
+	start    time.Time
+	count    atomic.Int64
+}
+
+func newForeachProgressTracker(e *Executor, workflow *Workflow, parent *Step, total int) *foreachProgressTracker {
+	return &foreachProgressTracker{
+		e:        e,
+		workflow: workflow,
+		parent:   parent,
+		total:    total,
+		interval: foreachProgressInterval(total),
+		start:    time.Now(),
+	}
+}
+
+// foreachProgressInterval returns the iteration count between progress events.
+// Spec: emit every 10% or every 5 iterations, whichever produces more frequent
+// updates (i.e. the smaller interval). Floor at 1 so even tiny foreach steps
+// emit at least one progress tick.
+func foreachProgressInterval(total int) int {
+	if total <= 0 {
+		return 1
+	}
+	tenth := total / 10
+	if total%10 != 0 {
+		tenth++
+	}
+	if tenth < 1 {
+		tenth = 1
+	}
+	interval := tenth
+	if interval > 5 {
+		interval = 5
+	}
+	return interval
+}
+
+func (p *foreachProgressTracker) iterationFinished() {
+	if p == nil || p.total == 0 {
+		return
+	}
+	completed := int(p.count.Add(1))
+	due := completed%p.interval == 0 || completed == p.total
+	if !due {
+		return
+	}
+	slog.Info("foreach progress",
+		"run_id", p.e.state.RunID,
+		"workflow", p.workflow.Name,
+		"step_id", p.parent.ID,
+		"agent_type", "foreach",
+		"completed", completed,
+		"total", p.total,
+		"elapsed_ms", time.Since(p.start).Milliseconds(),
+	)
+}
+
+// foreachIterationStatusLabel summarizes an iteration outcome for log
+// aggregation. Order matters: explicit loop control wins over the
+// completion status because it captures the reason the iteration ended
+// even when its body steps succeeded.
+func foreachIterationStatusLabel(result foreachIterationResult) string {
+	switch result.Control {
+	case LoopControlBreak:
+		return "break"
+	case LoopControlContinue:
+		return "continue"
+	}
+	if result.Error != "" {
+		return "failed"
+	}
+	if result.Skipped {
+		return "skipped"
+	}
+	if foreachIterationCancelled(result) {
+		return "cancelled"
+	}
+	return "completed"
+}
+
 func (e *Executor) executeForeachIterationsSequential(ctx context.Context, parent *Step, workflow *Workflow, plans []foreachIterationPlan, onError ErrorAction) []foreachIterationResult {
 	results := make([]foreachIterationResult, 0, len(plans))
+	progress := newForeachProgressTracker(e, workflow, parent, len(plans))
 	for i, plan := range plans {
 		if plan.Skipped {
 			results = append(results, skippedForeachIteration(plan))
+			progress.iterationFinished()
 			continue
 		}
 		iterResult := e.executeForeachIteration(ctx, parent, workflow, plan)
 		results = append(results, iterResult)
+		progress.iterationFinished()
 		if iterResult.Control == LoopControlBreak {
 			for _, remaining := range plans[i+1:] {
 				results = append(results, foreachBreakSkippedIteration(remaining))
@@ -374,6 +469,7 @@ func (e *Executor) executeForeachIterationsParallel(ctx context.Context, parent 
 	var wg sync.WaitGroup
 	var controlMu sync.Mutex
 	breakSeen := false
+	progress := newForeachProgressTracker(e, workflow, parent, len(plans))
 
 	markBreak := func() {
 		controlMu.Lock()
@@ -390,11 +486,13 @@ func (e *Executor) executeForeachIterationsParallel(ctx context.Context, parent 
 	for i, plan := range plans {
 		if plan.Skipped {
 			results[i] = skippedForeachIteration(plan)
+			progress.iterationFinished()
 			continue
 		}
 		wg.Add(1)
 		go func(i int, plan foreachIterationPlan) {
 			defer wg.Done()
+			defer progress.iterationFinished()
 			select {
 			case sem <- struct{}{}:
 				defer func() { <-sem }()
@@ -426,8 +524,8 @@ func (e *Executor) executeForeachIterationsParallel(ctx context.Context, parent 
 	return results
 }
 
-func (e *Executor) executeForeachIteration(ctx context.Context, parent *Step, workflow *Workflow, plan foreachIterationPlan) foreachIterationResult {
-	iterResult := foreachIterationResult{
+func (e *Executor) executeForeachIteration(ctx context.Context, parent *Step, workflow *Workflow, plan foreachIterationPlan) (iterResult foreachIterationResult) {
+	iterResult = foreachIterationResult{
 		Index:   plan.Index,
 		Item:    plan.Item,
 		Pane:    cloneInterfaceMap(plan.PaneVars),
@@ -442,6 +540,24 @@ func (e *Executor) executeForeachIteration(ctx context.Context, parent *Step, wo
 		"iteration", plan.Index,
 		"pane_id", plan.PaneID,
 	)
+	// bd-2ubxp.19: emit per-iteration completion event with duration + status
+	// so operators can track long-running foreach steps without inferring
+	// progress from per-step events. Status reflects the iteration outcome
+	// (completed / failed / skipped / cancelled / break / continue) so log
+	// pipelines can aggregate.
+	iterStart := time.Now()
+	defer func() {
+		slog.Info("foreach iteration completed",
+			"run_id", e.state.RunID,
+			"workflow", workflow.Name,
+			"step_id", parent.ID,
+			"agent_type", "foreach",
+			"iteration", plan.Index,
+			"pane_id", plan.PaneID,
+			"duration_ms", time.Since(iterStart).Milliseconds(),
+			"status", foreachIterationStatusLabel(iterResult),
+		)
+	}()
 
 	for i := range plan.Steps {
 		select {
