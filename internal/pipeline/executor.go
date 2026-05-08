@@ -2303,11 +2303,15 @@ func (e *Executor) executeParallelStep(ctx context.Context, step *Step, workflow
 
 		// Dry run mode. bd-g40ad: sanitize before truncate — same attack
 		// class as bd-82zsc, mirrored here for parallel sub-step retries.
+		// bd-2g48y: fall through to HANDLE_RESULT instead of return so the
+		// OnSuccess hook fires for dry-run completions too; otherwise an
+		// on_success chain attached to a parallel substep would be skipped
+		// during dry-run validation, hiding contract violations.
 		if e.config.DryRun {
 			result.Status = StatusCompleted
 			result.Output = dryRunOutput(step, "Would execute: "+truncatePrompt(SanitizeDescriptionForTerminal(prompt), 100))
 			result.FinishedAt = time.Now()
-			return result
+			goto HANDLE_RESULT
 		}
 
 		// Capture state before sending

@@ -948,6 +948,94 @@ func TestOnSuccessSkipsForFailedTopLevelParallel(t *testing.T) {
 	}
 }
 
+// TestOnSuccessFiresForBranchBodyChild covers bd-2g48y: a branch body
+// step reaches its dispatcher via executeBranch -> executeStepOnce, which
+// bypasses the executeStep retry-loop OnSuccess hook at line 847. Without
+// the bd-2g48y seam, an on_success chain attached to a branch body step
+// was schema-accepted and silently skipped. Mirrors the bd-0fkcn fix for
+// the foreach body case.
+func TestOnSuccessFiresForBranchBodyChild(t *testing.T) {
+	executor := newBranchTestExecutor()
+	step := &Step{
+		ID:     "router",
+		Branch: "primary",
+		Branches: map[string]interface{}{
+			"primary": map[string]interface{}{
+				"id":      "register_mail",
+				"command": "echo registered",
+				"on_success": []interface{}{
+					map[string]interface{}{"id": "notify", "command": "echo notified"},
+				},
+			},
+		},
+	}
+	workflow := &Workflow{Name: "branch-on-success-child", Steps: []Step{*step}}
+	executor.graph = NewDependencyGraph(workflow)
+
+	result := executor.executeBranch(context.Background(), step, workflow)
+	if result.Status != StatusCompleted {
+		t.Fatalf("branch status = %s, want completed; error=%v", result.Status, result.Error)
+	}
+
+	branchChildID := "router_register_mail"
+	if got, ok := executor.state.Steps[branchChildID]; !ok || got.Status != StatusCompleted {
+		t.Fatalf("state.Steps[%q] = %+v, want completed branch child", branchChildID, got)
+	}
+
+	onSuccessID := branchChildID + "_on_success_notify"
+	got, ok := executor.state.Steps[onSuccessID]
+	if !ok {
+		t.Fatalf("state.Steps[%q] missing: branch body step skipped its on_success chain (bd-2g48y regression)", onSuccessID)
+	}
+	if got.Status != StatusCompleted {
+		t.Fatalf("on_success child status = %q, want completed (error=%+v)", got.Status, got.Error)
+	}
+}
+
+// TestOnSuccessFiresForParallelSubstep covers bd-2g48y for the parallel
+// case: parallel substeps run through executeParallelStep (an inlined
+// retry+exec loop), not through the executeStep retry loop, so the
+// OnSuccess hook at line 847 was never fired for an on_success chain
+// attached to a parallel substep. DryRun lets the substep dispatch
+// short-circuit before pane selection, the same fixture used by
+// TestOnSuccessFiresForTopLevelParallel.
+func TestOnSuccessFiresForParallelSubstep(t *testing.T) {
+	cfg := DefaultExecutorConfig("parallel-substep-on-success")
+	cfg.DryRun = true
+	executor := NewExecutor(cfg)
+
+	workflow := &Workflow{
+		SchemaVersion: SchemaVersion,
+		Name:          "parallel-substep-on-success-workflow",
+		Settings:      DefaultWorkflowSettings(),
+		Steps: []Step{{
+			ID: "fan",
+			Parallel: ParallelSpec{Steps: []Step{{
+				ID:     "child_a",
+				Prompt: "do work",
+				OnSuccess: []Step{
+					{ID: "notify", Command: "echo notified"},
+				},
+			}}},
+		}},
+	}
+
+	state, err := executor.Run(context.Background(), workflow, nil, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+	if got := state.Steps["fan_child_a"]; got.Status != StatusCompleted {
+		t.Fatalf("parallel substep status = %q, want %q", got.Status, StatusCompleted)
+	}
+	got, ok := state.Steps["fan_child_a_on_success_notify"]
+	if !ok {
+		t.Fatalf("state.Steps[fan_child_a_on_success_notify] missing: parallel substep skipped its on_success chain (bd-2g48y regression)")
+	}
+	if got.Status != StatusCompleted {
+		t.Fatalf("on_success child status = %q, want completed (error=%+v)", got.Status, got.Error)
+	}
+}
+
 // TestOnSuccessFiresForTopLevelLoop covers bd-h8lc4 for the Loop dispatch
 // — same shape as the Parallel case. executeLoop early-returns from
 // executeStep before the retry-loop OnSuccess hook, so the bd-h8lc4 seam
