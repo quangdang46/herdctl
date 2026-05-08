@@ -1240,6 +1240,14 @@ type LoopContext struct {
 // DefaultMaxIterations is the default safety limit for loops
 const DefaultMaxIterations = 100
 
+// DefaultMaxRounds is the upper safety cap for foreach.max_rounds (bd-ltghx).
+// It mirrors DefaultMaxIterations: a misconfigured workflow that resolves
+// max_rounds from an expression (e.g. ${vars.from_external}) cannot drive
+// the body loop unbounded — the resolver clamps and emits a Warn-level
+// slog.Warn so misuse surfaces loudly rather than silently chewing through
+// rounds.
+const DefaultMaxRounds = 100
+
 // ExecutionStatus represents the current state of workflow execution
 type ExecutionStatus string
 

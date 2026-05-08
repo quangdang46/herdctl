@@ -640,6 +640,27 @@ func validateStep(step *Step, stepField string, stepIDs map[string]bool, result 
 		}
 	}
 
+	// bd-ltghx: validate foreach.max_rounds. The runtime resolver in
+	// foreach_max_rounds.go silently defaults `<= 0` literals to 1 round, so
+	// `max_rounds: -5` would otherwise compile clean and surface no
+	// diagnostic. Mirror the loop.max_iterations contract: reject negative
+	// literals at parse time. Zero is left alone because IntOrExpr has no
+	// IsSet flag — `MaxRounds.Value == 0` is the default zero value when
+	// max_rounds is omitted entirely, so we can't distinguish "explicitly
+	// typed 0" from "not set".
+	for _, fc := range []*ForeachConfig{step.Foreach, step.ForeachPane} {
+		if fc == nil {
+			continue
+		}
+		if fc.MaxRounds.Expr == "" && fc.MaxRounds.Value < 0 {
+			result.addError(ParseError{
+				Field:   stepField + ".foreach.max_rounds",
+				Message: "max_rounds cannot be negative",
+				Hint:    "Omit max_rounds for the historical single-round default, or set a positive integer to repeat the iteration body N times.",
+			})
+		}
+	}
+
 	// Validate loop configuration
 	if step.Loop != nil {
 		if step.Loop.Items == "" && step.Loop.While == "" && step.Loop.Until == "" && step.Loop.Times <= 0 {

@@ -265,6 +265,93 @@ func TestForeachMaxRounds_NestedForeachKeepsRoundUnique(t *testing.T) {
 	}
 }
 
+// TestForeachMaxRounds_NegativeLiteralRejectedAtParse covers bd-ltghx
+// acceptance #1: a literal `max_rounds: -N` must surface a clear parse
+// error pointing at the offending field, not silently degrade to a single
+// round at runtime.
+func TestForeachMaxRounds_NegativeLiteralRejectedAtParse(t *testing.T) {
+	workflow := &Workflow{
+		SchemaVersion: SchemaVersion,
+		Name:          "neg-rounds",
+		Settings:      DefaultWorkflowSettings(),
+		Steps: []Step{{
+			ID: "fanout",
+			Foreach: &ForeachConfig{
+				Items:     `["only"]`,
+				As:        "item",
+				MaxRounds: IntOrExpr{Value: -1},
+				Steps: []Step{{
+					ID:      "noop",
+					Command: "true",
+				}},
+			},
+		}},
+	}
+
+	result := Validate(workflow)
+	if result.Valid {
+		t.Fatalf("ValidateWorkflow accepted negative max_rounds; want parse error")
+	}
+	found := false
+	for _, e := range result.Errors {
+		if strings.Contains(e.Field, "foreach.max_rounds") &&
+			strings.Contains(e.Message, "negative") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("expected parse error pointing at foreach.max_rounds for negative value; got %+v", result.Errors)
+	}
+}
+
+// TestForeachMaxRounds_ExprResolvedAboveCapClampsToDefault covers bd-ltghx
+// acceptance #3: an expression that resolves to a value above
+// DefaultMaxRounds is clamped at runtime so a misconfigured external
+// value cannot drive the body loop unbounded. Literal values are not
+// clamped (parser already rejected the dangerous shapes).
+func TestForeachMaxRounds_ExprResolvedAboveCapClampsToDefault(t *testing.T) {
+	executor := NewExecutor(DefaultExecutorConfig("max-rounds-cap"))
+
+	workflow := &Workflow{
+		SchemaVersion: SchemaVersion,
+		Name:          "max-rounds-cap-workflow",
+		Settings:      DefaultWorkflowSettings(),
+		Defaults: map[string]interface{}{
+			"hard_caps": map[string]interface{}{
+				"crazy_rounds": 999999,
+			},
+		},
+		Steps: []Step{{
+			ID: "fanout",
+			Foreach: &ForeachConfig{
+				Items:     `["only"]`,
+				As:        "item",
+				MaxRounds: IntOrExpr{Expr: "${defaults.hard_caps.crazy_rounds}"},
+				Steps: []Step{{
+					ID:      "noop",
+					Command: "true",
+				}},
+			},
+		}},
+	}
+
+	state, err := executor.Run(context.Background(), workflow, nil, nil)
+	if err != nil {
+		t.Fatalf("Run() error = %v, want nil", err)
+	}
+
+	// One step result per round; if not clamped, we'd see DefaultMaxRounds+1.
+	rounds := 0
+	for k := range state.Steps {
+		if strings.HasPrefix(k, "fanout_iter0_noop_round") {
+			rounds++
+		}
+	}
+	if rounds != DefaultMaxRounds {
+		t.Fatalf("body ran %d rounds, want %d (clamped to DefaultMaxRounds)", rounds, DefaultMaxRounds)
+	}
+}
+
 // buildExpectedRoundStepID returns the state.Steps key for round N's
 // echo_round body step in the single-iteration max_rounds test fixtures
 // (parent=fanout, iter=0, body step=echo_round).
