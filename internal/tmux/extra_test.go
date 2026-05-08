@@ -108,7 +108,7 @@ func TestClassifyCommandError(t *testing.T) {
 		{
 			name: "no tmux server",
 			err:  fmt.Errorf("tmux list-sessions: %w: no server running on /tmp/tmux-1000/default", exit1),
-			want: CommandErrorClass{Kind: CommandErrorNoServer},
+			want: CommandErrorClass{Kind: CommandErrorNoServer, Infrastructure: true, Retryable: true},
 		},
 		{
 			name: "remote unavailable",
@@ -118,7 +118,7 @@ func TestClassifyCommandError(t *testing.T) {
 		{
 			name: "malformed output",
 			err:  errors.New("unexpected session format"),
-			want: CommandErrorClass{Kind: CommandErrorMalformedOutput},
+			want: CommandErrorClass{Kind: CommandErrorMalformedOutput, Infrastructure: true, Retryable: true},
 		},
 		{
 			name: "ordinary tmux command failure",

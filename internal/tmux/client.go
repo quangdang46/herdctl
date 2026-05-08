@@ -242,12 +242,12 @@ func ClassifyCommandError(err error) CommandErrorClass {
 	if strings.Contains(msg, "no server running") ||
 		strings.Contains(msg, "error connecting to") ||
 		strings.Contains(msg, "no sessions") {
-		return CommandErrorClass{Kind: CommandErrorNoServer}
+		return CommandErrorClass{Kind: CommandErrorNoServer, Infrastructure: true, Retryable: true}
 	}
 	if strings.Contains(msg, "unexpected session format") ||
 		strings.Contains(msg, "malformed tmux output") ||
 		strings.Contains(msg, "malformed output") {
-		return CommandErrorClass{Kind: CommandErrorMalformedOutput}
+		return CommandErrorClass{Kind: CommandErrorMalformedOutput, Infrastructure: true, Retryable: true}
 	}
 	if strings.Contains(msg, "permission denied") {
 		return CommandErrorClass{Kind: CommandErrorPermissionDenied, Infrastructure: true}
