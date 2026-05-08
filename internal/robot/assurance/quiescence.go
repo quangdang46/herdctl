@@ -112,8 +112,18 @@ func quiescenceUnsafeReasons(input QuiescenceInput) []ReasonCode {
 	if input.ReadyCount > 0 || input.ActionableCount > 0 {
 		reasons = append(reasons, ReasonQuiescenceReadyWork)
 	}
-	if input.UrgentMailCount > 0 || input.PendingAckCount > 0 {
+	// bd-zy2c1: emit each mail-attention reason code only when its
+	// corresponding input field is non-zero. Pre-fix the function
+	// collapsed both UrgentMailCount and PendingAckCount under
+	// ReasonQuiescenceUrgentMail, masking a pending-ack-only state
+	// as 'urgent_mail' for downstream consumers routing on the
+	// reason_codes field. Both can fire simultaneously when both
+	// input counts are non-zero.
+	if input.UrgentMailCount > 0 {
 		reasons = append(reasons, ReasonQuiescenceUrgentMail)
+	}
+	if input.PendingAckCount > 0 {
+		reasons = append(reasons, ReasonQuiescencePendingAckMail)
 	}
 	if input.TrackerNeedsFlush {
 		reasons = append(reasons, ReasonQuiescenceTrackerDirty)

@@ -107,6 +107,7 @@ const (
 	ReasonQuiescenceReadyWork       ReasonCode = "quiescence.ready_work"
 	ReasonQuiescenceInProgressWork  ReasonCode = "quiescence.in_progress_work"
 	ReasonQuiescenceUrgentMail      ReasonCode = "quiescence.urgent_mail"
+	ReasonQuiescencePendingAckMail  ReasonCode = "quiescence.pending_ack_mail"
 	ReasonQuiescenceTrackerDirty    ReasonCode = "quiescence.tracker_dirty"
 	ReasonQuiescenceDirtyWorktree   ReasonCode = "quiescence.dirty_worktree"
 	ReasonQuiescenceReviewSaturated ReasonCode = "quiescence.review_saturated"
@@ -257,6 +258,7 @@ var allReasonCodes = []ReasonCode{
 	ReasonQuiescenceReadyWork,
 	ReasonQuiescenceInProgressWork,
 	ReasonQuiescenceUrgentMail,
+	ReasonQuiescencePendingAckMail,
 	ReasonQuiescenceTrackerDirty,
 	ReasonQuiescenceDirtyWorktree,
 	ReasonQuiescenceReviewSaturated,

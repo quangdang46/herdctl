@@ -131,6 +131,36 @@ func TestEvaluateQuiescenceUnsafeUrgentMail(t *testing.T) {
 	assertReasonCodes(t, got.ReasonCodes, []ReasonCode{ReasonQuiescenceUrgentMail})
 }
 
+// bd-zy2c1: a swarm with PendingAckCount>0 and UrgentMailCount=0 must
+// surface ReasonQuiescencePendingAckMail (not ReasonQuiescenceUrgentMail).
+// Pre-fix the two were collapsed under the urgent code, mis-labeling
+// non-urgent ack-required mail as urgent for downstream consumers.
+func TestEvaluateQuiescenceUnsafePendingAckMailGetsDistinctReason(t *testing.T) {
+	got := EvaluateQuiescence(QuiescenceInput{
+		PendingAckCount: 3,
+	})
+	if got.State != QuiescenceUnsafeToStandDown {
+		t.Fatalf("State = %q, want %q", got.State, QuiescenceUnsafeToStandDown)
+	}
+	assertReasonCodes(t, got.ReasonCodes, []ReasonCode{ReasonQuiescencePendingAckMail})
+}
+
+// bd-zy2c1: when both counts are non-zero, both reason codes must
+// fire so a consumer can route on the urgency boundary independently.
+func TestEvaluateQuiescenceUnsafeBothMailReasonsFireWhenBothCountsNonZero(t *testing.T) {
+	got := EvaluateQuiescence(QuiescenceInput{
+		UrgentMailCount: 2,
+		PendingAckCount: 5,
+	})
+	if got.State != QuiescenceUnsafeToStandDown {
+		t.Fatalf("State = %q, want %q", got.State, QuiescenceUnsafeToStandDown)
+	}
+	assertReasonCodes(t, got.ReasonCodes, []ReasonCode{
+		ReasonQuiescenceUrgentMail,
+		ReasonQuiescencePendingAckMail,
+	})
+}
+
 func TestEvaluateQuiescenceUnsafeDirtyTracker(t *testing.T) {
 	got := EvaluateQuiescence(QuiescenceInput{
 		TrackerNeedsFlush: true,
