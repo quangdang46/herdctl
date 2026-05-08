@@ -859,6 +859,8 @@ type QueueDryRecipe struct {
 	Purpose string `json:"purpose"`
 }
 
+const queueDryReservationTimeout = 2 * time.Second
+
 func runWorkQueueDry(format string, staleHours, commitLimit, syncLagMinutes, maxStaleEntries int) error {
 	dir, err := os.Getwd()
 	if err != nil {
@@ -935,6 +937,7 @@ func collectQueueDryReport(dir string, now time.Time, staleThreshold time.Durati
 
 	report.Evidence.Sync = evaluateQueueDrySync(dir, syncLagThreshold)
 	report.Evidence.Reservations = collectQueueDryReservations(dir)
+	appendQueueDryReservationWarning(&report)
 
 	commits := getRecentGitCommits(commitLimit)
 	for _, c := range commits {
@@ -1043,7 +1046,7 @@ func collectQueueDryReservations(projectDir string) QueueDryReservations {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), queueDryReservationTimeout)
 	defer cancel()
 
 	reservations, err := fetchActiveReservations(ctx, client, projectDir, "", true)
@@ -1073,6 +1076,17 @@ func collectQueueDryReservations(projectDir string) QueueDryReservations {
 		Count:     len(reservations),
 		Holders:   holders,
 	}
+}
+
+func appendQueueDryReservationWarning(report *QueueDryResponse) {
+	if report == nil || report.Evidence.Reservations.Available {
+		return
+	}
+	errText := strings.TrimSpace(report.Evidence.Reservations.Error)
+	if errText == "" {
+		errText = "unknown error"
+	}
+	report.Warnings = append(report.Warnings, "reservations_unavailable: "+errText)
 }
 
 func buildQueueDryRecommendations(report QueueDryResponse) []QueueDryRecommendation {
