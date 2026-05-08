@@ -756,7 +756,16 @@ func (le *LoopExecutor) resolveItems(ctx context.Context, expr string) ([]interf
 	// Substitute variables in the expression (ctx so round overlay applies).
 	resolved := le.executor.substituteVariablesCtx(ctx, expr)
 
-	// Check if it's a direct array in Variables
+	// bd-6vp7y: hoist stateMu acquisition to the top so the order is
+	// stateMu → varMu, matching the canonical convention bd-8wo27 and
+	// bd-eslpu established. Pre-fix this site held varMu for the whole
+	// function and briefly took stateMu mid-flight (around the
+	// Substitute call), the same AB-BA pattern bd-eslpu fixed in
+	// substituteIntExpr. Holding both for the function's duration is
+	// slightly longer-held than before but eliminates the inverted
+	// nesting; the cost is minimal because the function is short.
+	le.executor.stateMu.RLock()
+	defer le.executor.stateMu.RUnlock()
 	le.executor.varMu.RLock()
 	defer le.executor.varMu.RUnlock()
 
@@ -779,11 +788,9 @@ func (le *LoopExecutor) resolveItems(ctx context.Context, expr string) ([]interf
 		return toInterfaceSlice(val)
 	}
 
-	// Try to resolve through substitutor. This may read from state.Steps, so acquire stateMu.
-	le.executor.stateMu.RLock()
+	// Try to resolve through substitutor. May read from state.Steps;
+	// stateMu is already held above.
 	val, err := sub.Substitute(expr)
-	le.executor.stateMu.RUnlock()
-
 	if err != nil {
 		return nil, err
 	}

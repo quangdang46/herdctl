@@ -2790,10 +2790,12 @@ func (e *Executor) substituteVariablesStrict(s string) (string, error) {
 // values resolve from the call's ctx instead of shared state.Variables.
 // A context without round overrides is equivalent to no overrides.
 func (e *Executor) substituteVariablesStrictCtx(ctx context.Context, s string) (string, error) {
-	e.varMu.RLock()
-	defer e.varMu.RUnlock()
+	// bd-6vp7y: canonical lock order is stateMu before varMu (matches
+	// the bd-8wo27 / bd-eslpu convention).
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
+	e.varMu.RLock()
+	defer e.varMu.RUnlock()
 	sub := NewSubstitutor(e.state, e.config.Session, e.state.WorkflowID)
 	sub.SetDefaults(e.defaults)
 	sub.SetMaxDepth(e.limits.MaxSubstitutionDepth)
@@ -2884,10 +2886,12 @@ func (e *Executor) evaluateCondition(condition string) (bool, error) {
 // caller's per-iteration round value, not whatever value happens to be in
 // state.Variables when the parallel goroutine runs.
 func (e *Executor) evaluateConditionCtx(ctx context.Context, condition string) (bool, error) {
-	e.varMu.RLock()
-	defer e.varMu.RUnlock()
+	// bd-6vp7y: canonical lock order is stateMu before varMu (matches
+	// the bd-8wo27 / bd-eslpu convention).
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
+	e.varMu.RLock()
+	defer e.varMu.RUnlock()
 	sub := NewSubstitutor(e.state, e.config.Session, e.state.WorkflowID)
 	sub.SetDefaults(e.defaults)
 	sub.SetMaxDepth(e.limits.MaxSubstitutionDepth)
@@ -3359,11 +3363,17 @@ func (e *Executor) clearStepVariables(stepID string) {
 func (e *Executor) snapshotState() *ExecutionState {
 	// Hold both varMu and stateMu across the struct copy: `snapshot := *e.state`
 	// reads every field in one shot, including the Variables / ScopeStack
-	// fields protected by varMu. Acquiring varMu first matches the convention
-	// in substituteVariablesStrict (bd-xuxev: legacy executeForEach race).
+	// fields protected by varMu. The bd-xuxev race fix required varMu to be
+	// HELD across the struct copy — not that it be acquired first.
+	// bd-6vp7y aligns the acquisition order to stateMu-first, matching the
+	// canonical convention bd-8wo27 / bd-eslpu enforce across the rest of
+	// the executor. stateMu releases mid-function (after the state-protected
+	// copies); varMu is held until function return via defer so the
+	// var-protected copies below the stateMu.RUnlock() still see a
+	// consistent Variables / ScopeStack snapshot.
+	e.stateMu.RLock()
 	e.varMu.RLock()
 	defer e.varMu.RUnlock()
-	e.stateMu.RLock()
 	if e.state == nil {
 		e.stateMu.RUnlock()
 		return nil

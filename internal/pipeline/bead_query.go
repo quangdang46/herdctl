@@ -199,10 +199,14 @@ func (e *Executor) substituteBeadQueryFields(in *BeadQueryStep) (BeadQueryStep, 
 // stack and returns an error when any reference cannot be resolved. Mirrors
 // substituteVariables but propagates errors so callers can fail closed.
 func (e *Executor) substituteStrict(s string) (string, error) {
-	e.varMu.RLock()
-	defer e.varMu.RUnlock()
+	// bd-6vp7y: canonical lock order is stateMu before varMu (matches
+	// the bd-8wo27 / bd-eslpu convention). Pre-fix this site held
+	// varMu first, presenting the same AB-BA risk against any
+	// goroutine using the canonical order.
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
+	e.varMu.RLock()
+	defer e.varMu.RUnlock()
 	sub := NewSubstitutor(e.state, e.config.Session, e.state.WorkflowID)
 	sub.SetDefaults(e.defaults)
 	sub.SetMaxDepth(e.limits.MaxSubstitutionDepth)

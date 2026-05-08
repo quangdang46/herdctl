@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -103,6 +104,124 @@ func TestLockOrder_StateMuVarMuCanonicalOrder(t *testing.T) {
 					t.Errorf("resolveForeachMaxRounds: %v", err)
 					return
 				}
+			}
+		}()
+	}
+
+	wg.Wait()
+}
+
+// TestLockOrder_AuditedCallSitesAllRespectCanonicalOrder is the
+// bd-6vp7y regression test. bd-eslpu's defer-aware audit surfaced
+// four more inverted-order call sites (substituteStrict,
+// substituteVariablesStrictCtx, evaluateConditionCtx, snapshotState)
+// plus loops.go::resolveItems. This test runs all five readers in
+// parallel against the canonical stateMu→varMu writer pattern; if any
+// of them is flipped back to varMu→stateMu, the AB-BA edge fires and
+// the 15s deadlock-watchdog catches it.
+//
+// Run with `go test -race -run TestLockOrder_AuditedCallSites`.
+func TestLockOrder_AuditedCallSitesAllRespectCanonicalOrder(t *testing.T) {
+	t.Parallel()
+
+	cfg := DefaultExecutorConfig("session")
+	executor := NewExecutor(cfg)
+	executor.state = &ExecutionState{
+		RunID:      "lock-order-6vp7y-run",
+		WorkflowID: "audited",
+		Status:     StatusRunning,
+		Steps:      map[string]StepResult{},
+		Variables:  map[string]interface{}{"name": "ok", "items_var": []interface{}{1, 2, 3}},
+	}
+	executor.graph = NewDependencyGraph(&Workflow{Name: "lock-order-6vp7y", Steps: []Step{{ID: "noop"}}})
+	executor.defaults = nil
+	executor.limits = LimitsConfig{}.EffectiveLimits()
+
+	le := &LoopExecutor{executor: executor}
+
+	const iterations = 200
+	const writers = 4
+	const readers = 4 // per call site (4 × 5 sites)
+
+	timeout := time.AfterFunc(15*time.Second, func() {
+		t.Errorf("bd-6vp7y regression: lock-order test deadlocked; goroutines did not finish within 15s")
+	})
+	defer timeout.Stop()
+
+	var wg sync.WaitGroup
+
+	// Writers mirror applyStartFrom's canonical stateMu→varMu pattern.
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			key := "w-6vp7y-" + intToString(id)
+			for j := 0; j < iterations; j++ {
+				executor.stateMu.Lock()
+				executor.varMu.Lock()
+				executor.state.Steps[key] = StepResult{StepID: key, Status: StatusCompleted}
+				executor.state.Variables[key] = j
+				executor.varMu.Unlock()
+				executor.stateMu.Unlock()
+			}
+		}(w)
+	}
+
+	// substituteStrict (bead_query.go) — flipped by bd-6vp7y.
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_, _ = executor.substituteStrict("${vars.name}")
+			}
+		}()
+	}
+
+	// substituteVariablesStrictCtx (executor.go) — flipped by bd-6vp7y.
+	ctx := context.Background()
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_, _ = executor.substituteVariablesStrictCtx(ctx, "${vars.name}")
+			}
+		}()
+	}
+
+	// evaluateConditionCtx (executor.go) — flipped by bd-6vp7y.
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_, _ = executor.evaluateConditionCtx(ctx, "${vars.name} == 'ok'")
+			}
+		}()
+	}
+
+	// snapshotState (executor.go) — flipped by bd-6vp7y while
+	// preserving the bd-xuxev "varMu held across struct copy" fix.
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_ = executor.snapshotState()
+			}
+		}()
+	}
+
+	// resolveItems (loops.go) — flipped by bd-6vp7y. Hold both locks
+	// for the function body to eliminate the inverted mid-flight
+	// stateMu acquisition.
+	for r := 0; r < readers; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < iterations; j++ {
+				_, _ = le.resolveItems(ctx, "${vars.items_var}")
 			}
 		}()
 	}
