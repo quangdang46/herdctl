@@ -394,24 +394,41 @@ func newForeachProgressTracker(e *Executor, workflow *Workflow, parent *Step, to
 	}
 }
 
-// foreachProgressInterval returns the iteration count between progress events.
-// Spec: emit every 10% or every 5 iterations, whichever produces more frequent
-// updates (i.e. the smaller interval). Floor at 1 so even tiny foreach steps
-// emit at least one progress tick.
+// maxForeachProgressTicks bounds the number of `foreach progress`
+// slog events emitted per fan-out so a massive run (50-bead
+// investigation, etc.) cannot drown the log. Pre-bd-s9ptg the
+// interval was clamped at 5, which produced ~total/5 ticks — i.e.,
+// 2000 events for a 10000-iteration run, the exact log-drowning
+// outcome the original cap-at-5 comment claimed to prevent.
+const maxForeachProgressTicks = 20
+
+// foreachProgressInterval returns the iteration count between progress
+// events. Bounds total tick count at maxForeachProgressTicks (~20) for
+// any fan-out size so log volume scales with operator attention rather
+// than fan-out size:
+//
+//	total ≤ 20   → interval=1  (every iteration ticks; tiny fan-outs
+//	                            still produce a useful tick stream)
+//	total > 20   → interval=ceil(total/20) (≈20 ticks total)
+//
+// Worked examples:
+//
+//	total=20    → interval=1   → 20 ticks
+//	total=100   → interval=5   → 20 ticks
+//	total=1000  → interval=50  → 20 ticks
+//	total=10000 → interval=500 → 20 ticks
+//
+// See bd-s9ptg.
 func foreachProgressInterval(total int) int {
 	if total <= 0 {
 		return 1
 	}
-	tenth := total / 10
-	if total%10 != 0 {
-		tenth++
+	if total <= maxForeachProgressTicks {
+		return 1
 	}
-	if tenth < 1 {
-		tenth = 1
-	}
-	interval := tenth
-	if interval > 5 {
-		interval = 5
+	interval := total / maxForeachProgressTicks
+	if total%maxForeachProgressTicks != 0 {
+		interval++
 	}
 	return interval
 }

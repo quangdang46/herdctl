@@ -851,26 +851,55 @@ func TestForeachMaxConcurrentZeroGlobalAllowsPerStep(t *testing.T) {
 	}
 }
 
-// bd-2ubxp.19: foreachProgressInterval picks the smaller of (every 10%) and
-// (every 5 iterations) so very large fan-outs don't drown the log and very
-// small fan-outs still emit at least one tick.
-func TestForeachProgressIntervalPicksFewerIterationsBetween(t *testing.T) {
+// bd-s9ptg: foreachProgressInterval bounds total tick count at
+// maxForeachProgressTicks (≈20) for any fan-out size. Pre-fix this
+// function used a "cap at 5 iterations between events" rule that
+// produced ~total/5 ticks — the opposite of the documented intent
+// for very large fan-outs. The new contract: small fan-outs (≤20)
+// tick on every iteration; larger fan-outs use ceil(total/20) so the
+// emitted event count stays bounded.
+func TestForeachProgressIntervalBoundsTotalTickCount(t *testing.T) {
 	cases := []struct {
 		total int
 		want  int
 	}{
-		{total: 0, want: 1},   // degenerate guard
-		{total: 1, want: 1},   // single-item -> one tick
-		{total: 5, want: 1},   // 10% rounds up to 1, smaller than 5
-		{total: 20, want: 2},  // 10% = 2, smaller than 5
-		{total: 50, want: 5},  // 10% = 5 ties with the 5-iteration cap
-		{total: 100, want: 5}, // 10% = 10, capped at 5
-		{total: 47, want: 5},  // 10% rounds up to 5, equals cap
-		{total: 41, want: 5},  // 10% rounds up to 5
+		{total: 0, want: 1},    // degenerate guard
+		{total: 1, want: 1},    // single-item -> one tick
+		{total: 5, want: 1},    // total <= 20 → tick every iteration
+		{total: 20, want: 1},   // boundary: total == maxTicks
+		{total: 21, want: 2},   // 21/20 = 1, +1 (round up) = 2
+		{total: 41, want: 3},   // 41/20 = 2, +1 = 3
+		{total: 47, want: 3},   // 47/20 = 2, +1 = 3
+		{total: 50, want: 3},   // 50/20 = 2, +1 = 3
+		{total: 100, want: 5},  // 100/20 = 5 (no remainder)
+		{total: 200, want: 10}, // 200/20 = 10
+		{total: 500, want: 25}, // 500/20 = 25
 	}
 	for _, tc := range cases {
 		if got := foreachProgressInterval(tc.total); got != tc.want {
 			t.Errorf("foreachProgressInterval(%d) = %d, want %d", tc.total, got, tc.want)
+		}
+	}
+}
+
+// bd-s9ptg: across a wide range of fan-out sizes, the tick count
+// produced by foreachProgressInterval must never exceed
+// maxForeachProgressTicks. Pre-fix this assertion would fire for
+// every total ≥ 100 (where the cap-at-5 produced total/5 ticks).
+func TestForeachProgressIntervalCapsTickCountAcrossSizes(t *testing.T) {
+	for _, total := range []int{50, 100, 500, 1000, 5000, 10000, 100000} {
+		interval := foreachProgressInterval(total)
+		if interval <= 0 {
+			t.Errorf("foreachProgressInterval(%d) = %d, want > 0", total, interval)
+			continue
+		}
+		ticks := total / interval
+		if total%interval != 0 {
+			ticks++
+		}
+		if ticks > maxForeachProgressTicks {
+			t.Errorf("foreachProgressInterval(%d) → interval=%d → %d ticks, exceeds maxForeachProgressTicks=%d",
+				total, interval, ticks, maxForeachProgressTicks)
 		}
 	}
 }
