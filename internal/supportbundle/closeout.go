@@ -260,6 +260,13 @@ func computeResidualRisks(b CloseoutBundle) []ResidualRisk {
 		})
 	}
 
+	// bd-056vx: emit each mail-attention residual risk independently.
+	// Pre-fix the LOW pending_ack_mail risk was suppressed by an
+	// else-if whenever HIGH unacked_urgent_mail fired — but the LOW
+	// risk's description explicitly names itself "non-urgent mail",
+	// so the two signals are orthogonal and both must surface when
+	// both input counts are non-zero. Mirror of bd-zy2c1 fix in
+	// internal/robot/assurance/quiescence.go.
 	if b.Mail.UnackedUrgent > 0 {
 		risks = append(risks, ResidualRisk{
 			Code:        "unacked_urgent_mail",
@@ -267,7 +274,8 @@ func computeResidualRisks(b CloseoutBundle) []ResidualRisk {
 			Description: "ack-required urgent mail was outstanding at closeout",
 			Evidence:    []string{"unacked_urgent=" + itoa(b.Mail.UnackedUrgent)},
 		})
-	} else if b.Mail.PendingAck > 0 {
+	}
+	if b.Mail.PendingAck > 0 {
 		risks = append(risks, ResidualRisk{
 			Code:        "pending_ack_mail",
 			Severity:    RiskSeverityLow,

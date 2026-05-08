@@ -160,15 +160,50 @@ func TestBuildCloseout_UnackedUrgentMailIsHigh(t *testing.T) {
 	t.Parallel()
 	b := BuildCloseout(CloseoutInputs{
 		Now:  closeoutClock(),
-		Mail: MailSnapshot{UnackedUrgent: 2, PendingAck: 5},
+		Mail: MailSnapshot{UnackedUrgent: 2, PendingAck: 0},
 	})
 	codes := riskCodeSet(b.ResidualRisks)
 	if !codes["unacked_urgent_mail"] {
 		t.Fatalf("missing unacked_urgent_mail risk: %+v", b.ResidualRisks)
 	}
-	// PendingAck low-severity must NOT also fire when urgent already does.
 	if codes["pending_ack_mail"] {
-		t.Errorf("pending_ack_mail should be suppressed when urgent already fires")
+		t.Errorf("pending_ack_mail must not fire when only urgent is non-zero: %+v", b.ResidualRisks)
+	}
+}
+
+// bd-056vx: when both UnackedUrgent and PendingAck are non-zero, BOTH
+// residual risks must surface — pending_ack_mail's description names
+// itself as "non-urgent mail", so the two signals are orthogonal and
+// the operator must see both at closeout. Pre-fix an else-if dropped
+// the LOW pending_ack_mail risk whenever HIGH unacked_urgent_mail
+// fired, hiding non-urgent ack-required mail.
+func TestBuildCloseout_BothUrgentAndPendingAckMailFireWhenBothNonZero(t *testing.T) {
+	t.Parallel()
+	b := BuildCloseout(CloseoutInputs{
+		Now:  closeoutClock(),
+		Mail: MailSnapshot{UnackedUrgent: 2, PendingAck: 5},
+	})
+	codes := riskCodeSet(b.ResidualRisks)
+	if !codes["unacked_urgent_mail"] {
+		t.Errorf("missing unacked_urgent_mail risk: %+v", b.ResidualRisks)
+	}
+	if !codes["pending_ack_mail"] {
+		t.Errorf("missing pending_ack_mail risk; both must fire when both counts are non-zero: %+v", b.ResidualRisks)
+	}
+
+	// Severities must remain distinct so the dashboard rolls up
+	// correctly (HIGH urgent vs LOW pending-ack).
+	for _, r := range b.ResidualRisks {
+		switch r.Code {
+		case "unacked_urgent_mail":
+			if r.Severity != RiskSeverityHigh {
+				t.Errorf("unacked_urgent_mail Severity = %s, want high", r.Severity)
+			}
+		case "pending_ack_mail":
+			if r.Severity != RiskSeverityLow {
+				t.Errorf("pending_ack_mail Severity = %s, want low", r.Severity)
+			}
+		}
 	}
 }
 
