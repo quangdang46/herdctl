@@ -101,11 +101,28 @@ func (e *Executor) executeForeach(ctx context.Context, step *Step, workflow *Wor
 		return finishForeachFailure(result, "foreach", err.Error())
 	}
 
+	// bd-gstw3: items-fingerprint drift detection (parity with bd-3awat for
+	// legacy loop:items). CompletedIterationIDs are keyed by integer index,
+	// so resuming against a list whose elements have shifted (resolved from
+	// a dynamic source between runs) would silently apply old completion
+	// records to different items. Fingerprint at start, refuse drifted
+	// resume, record on first-run / clean resume so subsequent resumes of
+	// legacy state files become protected too.
+	itemsForFingerprint := make([]interface{}, 0, len(plans))
+	for _, p := range plans {
+		itemsForFingerprint = append(itemsForFingerprint, p.Item)
+	}
+	itemsFingerprint := computeForeachItemsFingerprint(itemsForFingerprint)
+	if err := e.verifyForeachItemsFingerprint(step.ID, itemsFingerprint); err != nil {
+		return finishForeachFailure(result, "foreach", err.Error())
+	}
+
 	// bd-qeatk: register foreach state so iterations that completed in a
 	// prior run are skipped on resume instead of re-dispatching their bodies.
 	// The cursor returned by beginForeachState is advisory; the per-iteration
 	// CompletedIterationIDs set drives the skip decision below.
 	e.beginForeachState(step.ID, len(plans))
+	e.recordForeachItemsFingerprint(step.ID, itemsFingerprint)
 	completedIters := e.foreachCompletedIterationIDs(step.ID)
 
 	onError := resolveErrorAction(step.OnError, workflow.Settings.OnError)
