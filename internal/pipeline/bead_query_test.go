@@ -377,6 +377,56 @@ func TestMatchBeadFilterClause_OperatorByFirstOccurrence(t *testing.T) {
 // `alpha` in record.Labels (because beadRecordField returned the joined
 // string and the special-case branch didn't fire). Field name comparison
 // is now case-insensitive, matching beadRecordField.
+// TestExecuteBeadQuery_DryRun_SanitizesControlBytes covers bd-g3mfx: the
+// dry-run banner emitted by executeBeadQuery must scrub ANSI/OSC/C0 control
+// bytes from the substituted args. bead_query scalar fields support
+// ${steps.X.output}, so an upstream agent's output can flow into the
+// joined args and reach the operator's terminal during --dry-run unless
+// sanitized first. Same attack class as bd-82zsc (command) and bd-g40ad
+// (agent/parallel/branch). Each control byte must round-trip as '?'.
+func TestExecuteBeadQuery_DryRun_SanitizesControlBytes(t *testing.T) {
+	tmpDir := t.TempDir()
+	cfg := DefaultExecutorConfig("bead-query-dryrun-sanitize")
+	cfg.ProjectDir = tmpDir
+	cfg.DryRun = true
+	e := NewExecutor(cfg)
+	e.state = &ExecutionState{
+		RunID:      "run-bq-sanitize",
+		WorkflowID: "wf",
+		Variables:  map[string]interface{}{},
+		Steps: map[string]StepResult{
+			"evil": {Output: "\x1b[2J\x1b[H\x07payload"},
+		},
+	}
+
+	step := &Step{
+		ID: "dryrun-bq",
+		BeadQuery: &BeadQueryStep{
+			// Status flows into brListArgs via "--status <value>", so the
+			// substituted bytes reach the joined dry-run banner. Filter is
+			// in-memory only and never appears in args, so it would not
+			// exercise the banner sanitization path.
+			Status: "${steps.evil.output}",
+		},
+	}
+	result := e.executeBeadQuery(context.Background(), step, &Workflow{Name: "test"})
+
+	if result.Status != StatusCompleted {
+		t.Fatalf("Status = %q, want %q; error = %+v", result.Status, StatusCompleted, result.Error)
+	}
+	for _, b := range []byte(result.Output) {
+		if b == '\x1b' || b == '\x07' || b == '\x00' {
+			t.Fatalf("dry-run bead_query banner contains unsanitized control byte 0x%02x: %q", b, result.Output)
+		}
+	}
+	if !strings.Contains(result.Output, "payload") {
+		t.Errorf("dry-run bead_query banner dropped the trailing payload after sanitizing controls: %q", result.Output)
+	}
+	if !strings.Contains(result.Output, "Would run br") {
+		t.Errorf("dry-run bead_query banner missing canonical prefix: %q", result.Output)
+	}
+}
+
 func TestMatchBeadFilterClause_LabelCaseInsensitive(t *testing.T) {
 	record := BeadRecord{
 		ID:     "bd-test",

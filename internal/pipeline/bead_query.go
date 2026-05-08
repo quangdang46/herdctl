@@ -61,7 +61,16 @@ func (e *Executor) executeBeadQuery(ctx context.Context, step *Step, workflow *W
 	args := resolvedQuery.brListArgs()
 	if e.config.DryRun {
 		result.Status = StatusCompleted
-		result.Output = dryRunOutput(step, "Would run br "+strings.Join(args, " "))
+		// bd-g3mfx: sanitize the substituted args before joining — upstream
+		// ${steps.X.output} can carry ANSI/OSC/C0 bytes into bead_query
+		// scalar fields, and the dry-run banner would otherwise reach the
+		// operator's terminal with control sequences intact. Same attack
+		// class bd-82zsc / bd-g40ad close for command/agent/parallel/branch.
+		sanitized := make([]string, len(args))
+		for i, a := range args {
+			sanitized[i] = SanitizeDescriptionForTerminal(a)
+		}
+		result.Output = dryRunOutput(step, "Would run br "+strings.Join(sanitized, " "))
 		result.FinishedAt = time.Now()
 		return result
 	}
