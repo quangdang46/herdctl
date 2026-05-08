@@ -101,9 +101,15 @@ const (
 	ReasonCoordinationLeaderUnstable ReasonCode = "coordination.leader_unstable"
 
 	// quiescence_candidate
-	ReasonQuiescenceNoActiveAgents ReasonCode = "quiescence.no_active_agents"
-	ReasonQuiescenceQueueDry       ReasonCode = "quiescence.queue_dry"
-	ReasonQuiescencePendingWork    ReasonCode = "quiescence.pending_work"
+	ReasonQuiescenceNoActiveAgents  ReasonCode = "quiescence.no_active_agents"
+	ReasonQuiescenceQueueDry        ReasonCode = "quiescence.queue_dry"
+	ReasonQuiescencePendingWork     ReasonCode = "quiescence.pending_work"
+	ReasonQuiescenceReadyWork       ReasonCode = "quiescence.ready_work"
+	ReasonQuiescenceInProgressWork  ReasonCode = "quiescence.in_progress_work"
+	ReasonQuiescenceUrgentMail      ReasonCode = "quiescence.urgent_mail"
+	ReasonQuiescenceTrackerDirty    ReasonCode = "quiescence.tracker_dirty"
+	ReasonQuiescenceDirtyWorktree   ReasonCode = "quiescence.dirty_worktree"
+	ReasonQuiescenceReviewSaturated ReasonCode = "quiescence.review_saturated"
 
 	// provider_degraded
 	ReasonProviderRateLimited ReasonCode = "provider.rate_limited"
@@ -248,6 +254,12 @@ var allReasonCodes = []ReasonCode{
 	ReasonQuiescenceNoActiveAgents,
 	ReasonQuiescenceQueueDry,
 	ReasonQuiescencePendingWork,
+	ReasonQuiescenceReadyWork,
+	ReasonQuiescenceInProgressWork,
+	ReasonQuiescenceUrgentMail,
+	ReasonQuiescenceTrackerDirty,
+	ReasonQuiescenceDirtyWorktree,
+	ReasonQuiescenceReviewSaturated,
 
 	ReasonProviderRateLimited,
 	ReasonProviderTimeout,

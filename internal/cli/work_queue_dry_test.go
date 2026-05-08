@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
+	"github.com/Dicklesworthstone/ntm/internal/robot/assurance"
 )
 
 func TestEvaluateQueueDrySyncInSync(t *testing.T) {
@@ -130,6 +131,91 @@ func TestBuildQueueDryRecommendationsActionable(t *testing.T) {
 	}
 }
 
+func TestEvaluateQueueDryQuiescenceQueueDry(t *testing.T) {
+	report := QueueDryResponse{
+		QueueDry: true,
+		Evidence: QueueDryEvidence{
+			ActionableCount: 0,
+			ReadyCount:      0,
+			Sync: QueueDrySyncStatus{
+				Status: "in_sync",
+			},
+			Reservations: QueueDryReservations{
+				Available: true,
+			},
+		},
+	}
+
+	got := evaluateQueueDryQuiescence(report)
+	if got.State != assurance.QuiescenceQueueDry {
+		t.Fatalf("State = %q, want %q", got.State, assurance.QuiescenceQueueDry)
+	}
+	if !got.SafeToStandDown {
+		t.Fatalf("SafeToStandDown = false, want true")
+	}
+}
+
+func TestEvaluateQueueDryQuiescenceBlockedByPeer(t *testing.T) {
+	report := QueueDryResponse{
+		QueueDry: true,
+		Evidence: QueueDryEvidence{
+			InProgressCount: 1,
+			Reservations: QueueDryReservations{
+				Available: true,
+				Count:     1,
+			},
+		},
+	}
+
+	got := evaluateQueueDryQuiescence(report)
+	if got.State != assurance.QuiescenceBlockedByPeer {
+		t.Fatalf("State = %q, want %q", got.State, assurance.QuiescenceBlockedByPeer)
+	}
+	if got.SafeToStandDown {
+		t.Fatalf("SafeToStandDown = true, want false")
+	}
+	if !containsReasonCode(got.ReasonCodes, assurance.ReasonQuiescenceInProgressWork) {
+		t.Fatalf("reason codes = %v, want in-progress marker", got.ReasonCodes)
+	}
+}
+
+func TestEvaluateQueueDryQuiescenceUnsafeReadyWork(t *testing.T) {
+	report := QueueDryResponse{
+		QueueDry: false,
+		Evidence: QueueDryEvidence{
+			ActionableCount: 1,
+			ReadyCount:      1,
+		},
+	}
+
+	got := evaluateQueueDryQuiescence(report)
+	if got.State != assurance.QuiescenceUnsafeToStandDown {
+		t.Fatalf("State = %q, want %q", got.State, assurance.QuiescenceUnsafeToStandDown)
+	}
+	if !containsReasonCode(got.ReasonCodes, assurance.ReasonQuiescenceReadyWork) {
+		t.Fatalf("reason codes = %v, want ready-work marker", got.ReasonCodes)
+	}
+}
+
+func TestEvaluateQueueDryQuiescenceUnsafeDirtyTracker(t *testing.T) {
+	report := QueueDryResponse{
+		QueueDry: true,
+		Evidence: QueueDryEvidence{
+			Sync: QueueDrySyncStatus{
+				NeedsFlush: true,
+			},
+		},
+	}
+
+	got := evaluateQueueDryQuiescence(report)
+	if got.State != assurance.QuiescenceUnsafeToStandDown {
+		t.Fatalf("State = %q, want %q", got.State, assurance.QuiescenceUnsafeToStandDown)
+	}
+	if !containsReasonCode(got.ReasonCodes, assurance.ReasonQuiescenceTrackerDirty) {
+		t.Fatalf("reason codes = %v, want tracker marker", got.ReasonCodes)
+	}
+}
+
 func TestQueueDryReservationTimeoutIsInteractive(t *testing.T) {
 	// queue-dry is interactive — the operator runs `ntm work queue-dry`
 	// and expects sub-second feedback. Guard the *intent* rather than
@@ -190,6 +276,15 @@ func mustChtimes(t *testing.T, path string, atime, mtime time.Time) {
 }
 
 func containsStringSlice(items []string, target string) bool {
+	for _, item := range items {
+		if item == target {
+			return true
+		}
+	}
+	return false
+}
+
+func containsReasonCode(items []assurance.ReasonCode, target assurance.ReasonCode) bool {
 	for _, item := range items {
 		if item == target {
 			return true

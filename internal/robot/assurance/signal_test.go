@@ -125,8 +125,8 @@ func TestSignalTypeRegistryIsStableAndCopied(t *testing.T) {
 
 func TestReasonCodeRegistryIsStableUniqueAndCopied(t *testing.T) {
 	codes := AllReasonCodes()
-	if len(codes) != 21 {
-		t.Fatalf("AllReasonCodes length = %d, want 21", len(codes))
+	if len(codes) != 27 {
+		t.Fatalf("AllReasonCodes length = %d, want 27", len(codes))
 	}
 	if codes[0] != ReasonClassifierLowSampleSize {
 		t.Fatalf("first reason code = %q, want %q", codes[0], ReasonClassifierLowSampleSize)

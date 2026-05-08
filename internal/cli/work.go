@@ -17,6 +17,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/output"
+	"github.com/Dicklesworthstone/ntm/internal/robot/assurance"
 	"github.com/Dicklesworthstone/ntm/internal/tools"
 )
 
@@ -783,14 +784,15 @@ func runWorkNext() error {
 // QueueDryResponse captures queue-dry diagnostic data.
 type QueueDryResponse struct {
 	output.TimestampedResponse
-	Success         bool                     `json:"success"`
-	Project         string                   `json:"project"`
-	QueueDry        bool                     `json:"queue_dry"`
-	Evidence        QueueDryEvidence         `json:"evidence"`
-	Recommendations []QueueDryRecommendation `json:"recommendations"`
-	Recipes         []QueueDryRecipe         `json:"recipes"`
-	Warnings        []string                 `json:"warnings,omitempty"`
-	Errors          []string                 `json:"errors,omitempty"`
+	Success         bool                           `json:"success"`
+	Project         string                         `json:"project"`
+	QueueDry        bool                           `json:"queue_dry"`
+	Evidence        QueueDryEvidence               `json:"evidence"`
+	Quiescence      assurance.QuiescenceAssessment `json:"quiescence"`
+	Recommendations []QueueDryRecommendation       `json:"recommendations"`
+	Recipes         []QueueDryRecipe               `json:"recipes"`
+	Warnings        []string                       `json:"warnings,omitempty"`
+	Errors          []string                       `json:"errors,omitempty"`
 }
 
 // QueueDryEvidence stores collected evidence for queue-dry analysis.
@@ -952,10 +954,21 @@ func collectQueueDryReport(dir string, now time.Time, staleThreshold time.Durati
 	}
 
 	report.QueueDry = report.Evidence.ActionableCount == 0 && report.Evidence.ReadyCount == 0
+	report.Quiescence = evaluateQueueDryQuiescence(report)
 	report.Recommendations = buildQueueDryRecommendations(report)
 	report.Recipes = queueDryRecipes()
 
 	return report
+}
+
+func evaluateQueueDryQuiescence(report QueueDryResponse) assurance.QuiescenceAssessment {
+	return assurance.EvaluateQuiescence(assurance.QuiescenceInput{
+		ReadyCount:             report.Evidence.ReadyCount,
+		ActionableCount:        report.Evidence.ActionableCount,
+		InProgressCount:        report.Evidence.InProgressCount,
+		ActiveReservationCount: report.Evidence.Reservations.Count,
+		TrackerNeedsFlush:      report.Evidence.Sync.NeedsFlush,
+	})
 }
 
 func findStaleInProgress(items []bv.BeadInProgress, now time.Time, threshold time.Duration, limit int) []QueueDryStaleIssue {
@@ -1212,6 +1225,21 @@ func renderQueueDry(report QueueDryResponse) error {
 
 	if len(report.Evidence.TriageTopIDs) > 0 {
 		fmt.Printf("  Top triage IDs: %s\n", strings.Join(report.Evidence.TriageTopIDs, ", "))
+	}
+
+	if report.Quiescence.State != "" {
+		standDown := "no"
+		if report.Quiescence.SafeToStandDown {
+			standDown = "yes"
+		}
+		fmt.Printf("  Quiescence: %s (safe_to_stand_down=%s)\n", report.Quiescence.State, standDown)
+		if len(report.Quiescence.ReasonCodes) > 0 {
+			reasons := make([]string, 0, len(report.Quiescence.ReasonCodes))
+			for _, code := range report.Quiescence.ReasonCodes {
+				reasons = append(reasons, string(code))
+			}
+			fmt.Printf("    Reasons: %s\n", strings.Join(reasons, ", "))
+		}
 	}
 
 	fmt.Printf("  Sync: %s\n", report.Evidence.Sync.Status)
