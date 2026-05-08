@@ -16,7 +16,15 @@
 // per-token cost models or relevance scoring on top of the same
 // PlanReport shape.
 //
-// See bd-fxj4f.11.
+// Required candidates are system-level headers (agent identity, run
+// metadata) that must always reach the agent. They bypass every gate
+// except duplicate-ID — i.e., the EstimatedTokens<=0, source-disabled,
+// agent-type-filter, and budget gates are all skipped for Required.
+// A Required candidate whose ID has already been emitted is still
+// recorded as ReasonOmittedDuplicate so the report reflects the
+// final emitted set.
+//
+// See bd-fxj4f.11, bd-njp52.
 package dispatchplan
 
 import (
@@ -60,15 +68,21 @@ const (
 // EstimatedTokens. Callers that have a tokenizer should populate
 // EstimatedTokens from it; tests use a fixed-cost-per-line proxy.
 type Candidate struct {
-	ID                string   // dedupe key; if empty, not deduped
-	Source            Source
-	Priority          int      // lower = more important
-	EstimatedTokens   int      // > 0
-	Required          bool     // included before any budget check
-	AgentTypeFilter   []string // when non-empty, candidate is only included if AgentType ∈ filter
-	Body              string   // opaque; not inspected by the planner
-	Description       string   // short label rendered in the report
-	CreatedAt         time.Time // tiebreaker for equal-priority candidates
+	ID              string // dedupe key; if empty, not deduped
+	Source          Source
+	Priority        int  // lower = more important
+	EstimatedTokens int  // > 0
+	// Required marks a system-level header that always lands in the
+	// dispatch prompt regardless of caller-side gating. Required
+	// candidates bypass the EstimatedTokens<=0, source-disabled,
+	// agent-type-filter, AND budget gates; they still respect the
+	// duplicate-ID gate (a Required candidate whose ID was already
+	// emitted is recorded as ReasonOmittedDuplicate) (bd-njp52).
+	Required        bool     // bypasses every gate except duplicate-ID — see Reason mapping
+	AgentTypeFilter []string // when non-empty, non-Required candidates are only included if AgentType ∈ filter
+	Body            string   // opaque; not inspected by the planner
+	Description     string   // short label rendered in the report
+	CreatedAt       time.Time // tiebreaker for equal-priority candidates
 }
 
 // Inputs configures one Plan call.

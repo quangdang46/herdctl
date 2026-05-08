@@ -251,3 +251,61 @@ func TestPlan_SummaryHasCounts(t *testing.T) {
 		}
 	}
 }
+
+// bd-njp52: Required candidates bypass every gate except duplicate-ID.
+// This test pins the FULL bypass scope that the godoc now promises —
+// budget, source-disabled, agent-type-filter, and empty-tokens are all
+// skipped for Required, so a future code refactor that re-narrows the
+// bypass cannot land without flipping this test.
+//
+// The duplicate-ID gate IS still respected: a Required candidate whose
+// ID has already been emitted is recorded as ReasonOmittedDuplicate.
+func TestPlan_RequiredBypassesEveryGateExceptDuplicateID(t *testing.T) {
+	t.Parallel()
+	r := Plan(Inputs{
+		AgentType:       "cc",
+		BudgetTokens:    1, // tiny, so non-required would overflow
+		DisabledSources: []Source{SourceCASS},
+		Now:             clock(),
+		Candidates: []Candidate{
+			// Required + EstimatedTokens=0 → bypasses the empty-tokens gate.
+			{ID: "hdr-empty", Source: SourceBead, Priority: 0, EstimatedTokens: 0, Required: true, Description: "empty-tokens"},
+			// Required + source-disabled (CASS) → bypasses the source-disabled gate.
+			{ID: "hdr-disabled", Source: SourceCASS, Priority: 0, EstimatedTokens: 5, Required: true, Description: "from-disabled-source"},
+			// Required + AgentTypeFilter excludes "cc" → bypasses agent-type gate.
+			{ID: "hdr-other-agent", Source: SourceMail, Priority: 0, EstimatedTokens: 5, Required: true, AgentTypeFilter: []string{"cod"}, Description: "other-agent-only"},
+			// Required + huge tokens above tiny budget → bypasses budget gate.
+			{ID: "hdr-big", Source: SourceBead, Priority: 0, EstimatedTokens: 9999, Required: true, Description: "way-over-budget"},
+			// Duplicate of hdr-big — Required, but dedupe still applies.
+			{ID: "hdr-big", Source: SourceBead, Priority: 0, EstimatedTokens: 9999, Required: true, Description: "duplicate-of-hdr-big"},
+		},
+	})
+
+	// Three of the unique-ID Required candidates land as RequiredHeader;
+	// the duplicate must be OmittedDuplicate. Map by ID for the unique
+	// IDs and count by ID for hdr-big.
+	gotByUniqueID := map[string]Reason{}
+	var requiredHits, dupHits int
+	for _, d := range r.Decisions {
+		if d.ID == "hdr-big" {
+			switch d.Reason {
+			case ReasonRequiredHeader:
+				requiredHits++
+			case ReasonOmittedDuplicate:
+				dupHits++
+			}
+			continue
+		}
+		gotByUniqueID[d.ID] = d.Reason
+	}
+	for _, want := range []string{"hdr-empty", "hdr-disabled", "hdr-other-agent"} {
+		if gotByUniqueID[want] != ReasonRequiredHeader {
+			t.Errorf("decision[%s].Reason = %q, want %q (Required must bypass every gate)",
+				want, gotByUniqueID[want], ReasonRequiredHeader)
+		}
+	}
+	if requiredHits != 1 || dupHits != 1 {
+		t.Errorf("duplicate-ID gate must apply even to Required: got %d RequiredHeader + %d OmittedDuplicate for hdr-big, want 1 + 1",
+			requiredHits, dupHits)
+	}
+}
