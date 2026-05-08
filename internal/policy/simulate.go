@@ -159,7 +159,7 @@ func saferAlternatives(command string, match *Match) []string {
 		return []string{
 			"git status",
 			"git diff",
-			"git stash push --include-untracked",
+			"git worktree add /tmp/safety-backup HEAD",
 			"git reset --soft <ref>",
 		}
 	case strings.Contains(lower, "git clean"):
