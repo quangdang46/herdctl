@@ -1069,7 +1069,18 @@ func TestRewriteCheckpointForExport(t *testing.T) {
 			WorkingDir: "/data/projects/myapp",
 			Session: SessionState{
 				Panes: []PaneState{
-					{ID: "%0", ScrollbackFile: "panes/pane__0.txt", ScrollbackLines: 123},
+					{
+						ID:              "%0",
+						ScrollbackFile:  "panes/pane__0.txt",
+						ScrollbackLines: 123,
+						Scrollback: &ScrollbackArtifactSummary{
+							Captured:          true,
+							ArtifactPreserved: true,
+							Compacted:         true,
+							Compression:       scrollbackCompressionGzip,
+							LineCount:         123,
+						},
+					},
 				},
 			},
 			Git: GitState{
@@ -1086,10 +1097,13 @@ func TestRewriteCheckpointForExport(t *testing.T) {
 		if result.Session.Panes[0].ScrollbackFile != "" || result.Session.Panes[0].ScrollbackLines != 0 {
 			t.Fatalf("scrollback metadata = %+v, want cleared", result.Session.Panes[0])
 		}
+		if result.Session.Panes[0].Scrollback != nil {
+			t.Fatalf("scrollback summary = %+v, want cleared", result.Session.Panes[0].Scrollback)
+		}
 		if result.Git.PatchFile != "" {
 			t.Fatalf("Git.PatchFile = %q, want empty", result.Git.PatchFile)
 		}
-		if cp.Session.Panes[0].ScrollbackFile == "" || cp.Git.PatchFile == "" {
+		if cp.Session.Panes[0].ScrollbackFile == "" || cp.Session.Panes[0].Scrollback == nil || cp.Git.PatchFile == "" {
 			t.Fatal("original checkpoint was mutated")
 		}
 	})

@@ -17,6 +17,8 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
+const scrollbackCompressionGzip = "gzip"
+
 // ScrollbackCapture holds the captured scrollback data for a pane.
 type ScrollbackCapture struct {
 	// PaneID is the tmux pane identifier
@@ -146,6 +148,46 @@ func gzipDecompress(data []byte) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(reader, 50<<20))
 }
 
+func scrollbackArtifactSummary(capture *ScrollbackCapture, config ScrollbackConfig, relativePath string) *ScrollbackArtifactSummary {
+	summary := &ScrollbackArtifactSummary{
+		Captured:          !capture.Skipped && relativePath != "",
+		ArtifactPreserved: !capture.Skipped && relativePath != "",
+		Compacted:         len(capture.Compressed) > 0,
+		LineCount:         countLines(capture.Content),
+		RawBytes:          len(capture.Content),
+		StoredBytes:       capture.Size,
+		RequestedLines:    config.Lines,
+		MaxSizeMB:         config.MaxSizeMB,
+		Skipped:           capture.Skipped,
+		Degraded:          capture.Skipped,
+		Reason:            capture.SkipReason,
+	}
+	if summary.Compacted {
+		summary.Compression = scrollbackCompressionGzip
+	}
+	if summary.StoredBytes == 0 && summary.ArtifactPreserved {
+		summary.StoredBytes = int64(summary.RawBytes)
+	}
+	if capture.Skipped {
+		summary.Compacted = false
+		summary.Compression = ""
+		summary.StoredBytes = 0
+	}
+	return summary
+}
+
+func scrollbackFailureSummary(reason string, config ScrollbackConfig) *ScrollbackArtifactSummary {
+	return &ScrollbackArtifactSummary{
+		Captured:          false,
+		ArtifactPreserved: false,
+		Compacted:         false,
+		RequestedLines:    config.Lines,
+		MaxSizeMB:         config.MaxSizeMB,
+		Degraded:          true,
+		Reason:            reason,
+	}
+}
+
 // SaveCompressedScrollback saves compressed scrollback to a file.
 func (s *Storage) SaveCompressedScrollback(sessionName, checkpointID, paneID string, data []byte) (string, error) {
 	dir, err := s.safeCheckpointDir(sessionName, checkpointID)
@@ -238,6 +280,7 @@ func (c *Capturer) captureScrollbackEnhanced(cp *Checkpoint, config ScrollbackCo
 			slog.Warn("failed to capture scrollback", "pane", pane.Index, "error", err)
 			pane.ScrollbackFile = ""
 			pane.ScrollbackLines = 0
+			pane.Scrollback = scrollbackFailureSummary(fmt.Sprintf("capture failed: %v", err), config)
 			continue
 		}
 
@@ -245,6 +288,7 @@ func (c *Capturer) captureScrollbackEnhanced(cp *Checkpoint, config ScrollbackCo
 			slog.Warn("skipped scrollback", "pane", pane.Index, "reason", capture.SkipReason)
 			pane.ScrollbackFile = ""
 			pane.ScrollbackLines = 0
+			pane.Scrollback = scrollbackArtifactSummary(capture, config, "")
 			continue
 		}
 
@@ -262,11 +306,13 @@ func (c *Capturer) captureScrollbackEnhanced(cp *Checkpoint, config ScrollbackCo
 			slog.Warn("failed to save scrollback", "pane", pane.Index, "error", saveErr)
 			pane.ScrollbackFile = ""
 			pane.ScrollbackLines = 0
+			pane.Scrollback = scrollbackFailureSummary(fmt.Sprintf("save failed: %v", saveErr), config)
 			continue
 		}
 
 		pane.ScrollbackFile = relativePath
 		pane.ScrollbackLines = countLines(capture.Content)
+		pane.Scrollback = scrollbackArtifactSummary(capture, config, relativePath)
 	}
 
 	return nil

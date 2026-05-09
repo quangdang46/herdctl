@@ -792,6 +792,7 @@ func rewriteCheckpointForExport(cp *Checkpoint, opts ExportOptions) *Checkpoint 
 		for i := range result.Session.Panes {
 			result.Session.Panes[i].ScrollbackFile = ""
 			result.Session.Panes[i].ScrollbackLines = 0
+			result.Session.Panes[i].Scrollback = nil
 		}
 	}
 	if !opts.IncludeGitPatch {
