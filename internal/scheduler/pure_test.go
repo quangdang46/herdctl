@@ -1841,6 +1841,142 @@ func TestJobQueue_CancelBatch_DecrementsStatsByPriorityAndType(t *testing.T) {
 	}
 }
 
+// bd-bsjrl: cancellation matching and counter decrements must use the
+// queue's snapshotted index fields, not the live mutable SpawnJob fields.
+// Pre-fix, mutating an enqueued pointer in place could make CancelSession
+// miss jobs and leave stale session/batch/stats buckets.
+func TestJobQueue_CancelSession_UsesSnapshottedFieldsOnSamePointerMutation(t *testing.T) {
+	t.Parallel()
+	q := NewJobQueue()
+
+	j1 := NewSpawnJob("j1", JobTypeSession, "s1")
+	j1.Priority = PriorityHigh
+	j1.BatchID = "b1"
+	q.Enqueue(j1)
+
+	j2 := NewSpawnJob("j2", JobTypeSession, "s2")
+	j2.Priority = PriorityNormal
+	j2.BatchID = "b2"
+	q.Enqueue(j2)
+
+	// Mutate in place after enqueue; cancellation must still target the
+	// original snapshotted fields captured in jobIndexByID.
+	j1.SessionName = "mutated-session"
+	j1.BatchID = "mutated-batch"
+	j1.Priority = PriorityUrgent
+	j1.Type = JobTypePaneSplit
+
+	cancelled := q.CancelSession("s1")
+	if len(cancelled) != 1 || cancelled[0].ID != "j1" {
+		t.Fatalf("CancelSession(s1) cancelled %d jobs (%v), want exactly j1", len(cancelled), cancelled)
+	}
+
+	if got := q.Len(); got != 1 {
+		t.Fatalf("Len after CancelSession = %d, want 1", got)
+	}
+	if got := q.CountBySession("s1"); got != 0 {
+		t.Errorf("CountBySession(s1) = %d, want 0", got)
+	}
+	if got := q.CountBySession("s2"); got != 1 {
+		t.Errorf("CountBySession(s2) = %d, want 1", got)
+	}
+	if got := q.CountBySession("mutated-session"); got != 0 {
+		t.Errorf("CountBySession(mutated-session) = %d, want 0", got)
+	}
+	if got := q.CountByBatch("b1"); got != 0 {
+		t.Errorf("CountByBatch(b1) = %d, want 0", got)
+	}
+	if got := q.CountByBatch("b2"); got != 1 {
+		t.Errorf("CountByBatch(b2) = %d, want 1", got)
+	}
+	if got := q.CountByBatch("mutated-batch"); got != 0 {
+		t.Errorf("CountByBatch(mutated-batch) = %d, want 0", got)
+	}
+
+	post := q.Stats()
+	if got := post.ByPriority[PriorityNormal]; got != 1 {
+		t.Errorf("ByPriority[Normal] = %d, want 1", got)
+	}
+	if _, ok := post.ByPriority[PriorityHigh]; ok {
+		t.Errorf("ByPriority[High] should be deleted after cancelling j1")
+	}
+	if _, ok := post.ByPriority[PriorityUrgent]; ok {
+		t.Errorf("ByPriority[Urgent] should be absent (mutated live field must not drive counters)")
+	}
+	if got := post.ByType[JobTypeSession]; got != 1 {
+		t.Errorf("ByType[Session] = %d, want 1", got)
+	}
+	if _, ok := post.ByType[JobTypePaneSplit]; ok {
+		t.Errorf("ByType[PaneSplit] should be absent (mutated live field must not drive counters)")
+	}
+}
+
+func TestJobQueue_CancelBatch_UsesSnapshottedFieldsOnSamePointerMutation(t *testing.T) {
+	t.Parallel()
+	q := NewJobQueue()
+
+	j1 := NewSpawnJob("j1", JobTypeSession, "s1")
+	j1.Priority = PriorityHigh
+	j1.BatchID = "b1"
+	q.Enqueue(j1)
+
+	j2 := NewSpawnJob("j2", JobTypeSession, "s2")
+	j2.Priority = PriorityNormal
+	j2.BatchID = "b2"
+	q.Enqueue(j2)
+
+	// Mutate in place after enqueue; cancellation must still target the
+	// original snapshotted fields captured in jobIndexByID.
+	j1.SessionName = "mutated-session"
+	j1.BatchID = "mutated-batch"
+	j1.Priority = PriorityUrgent
+	j1.Type = JobTypePaneSplit
+
+	cancelled := q.CancelBatch("b1")
+	if len(cancelled) != 1 || cancelled[0].ID != "j1" {
+		t.Fatalf("CancelBatch(b1) cancelled %d jobs (%v), want exactly j1", len(cancelled), cancelled)
+	}
+
+	if got := q.Len(); got != 1 {
+		t.Fatalf("Len after CancelBatch = %d, want 1", got)
+	}
+	if got := q.CountByBatch("b1"); got != 0 {
+		t.Errorf("CountByBatch(b1) = %d, want 0", got)
+	}
+	if got := q.CountByBatch("b2"); got != 1 {
+		t.Errorf("CountByBatch(b2) = %d, want 1", got)
+	}
+	if got := q.CountByBatch("mutated-batch"); got != 0 {
+		t.Errorf("CountByBatch(mutated-batch) = %d, want 0", got)
+	}
+	if got := q.CountBySession("s1"); got != 0 {
+		t.Errorf("CountBySession(s1) = %d, want 0", got)
+	}
+	if got := q.CountBySession("s2"); got != 1 {
+		t.Errorf("CountBySession(s2) = %d, want 1", got)
+	}
+	if got := q.CountBySession("mutated-session"); got != 0 {
+		t.Errorf("CountBySession(mutated-session) = %d, want 0", got)
+	}
+
+	post := q.Stats()
+	if got := post.ByPriority[PriorityNormal]; got != 1 {
+		t.Errorf("ByPriority[Normal] = %d, want 1", got)
+	}
+	if _, ok := post.ByPriority[PriorityHigh]; ok {
+		t.Errorf("ByPriority[High] should be deleted after cancelling j1")
+	}
+	if _, ok := post.ByPriority[PriorityUrgent]; ok {
+		t.Errorf("ByPriority[Urgent] should be absent (mutated live field must not drive counters)")
+	}
+	if got := post.ByType[JobTypeSession]; got != 1 {
+		t.Errorf("ByType[Session] = %d, want 1", got)
+	}
+	if _, ok := post.ByType[JobTypePaneSplit]; ok {
+		t.Errorf("ByType[PaneSplit] should be absent (mutated live field must not drive counters)")
+	}
+}
+
 func TestJobQueue_Clear_ResetsStatsByPriorityAndType(t *testing.T) {
 	t.Parallel()
 	q := NewJobQueue()

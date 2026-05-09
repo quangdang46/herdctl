@@ -420,18 +420,27 @@ func (q *JobQueue) CancelSession(sessionName string) []*SpawnJob {
 	defer q.mu.Unlock()
 
 	var cancelled []*SpawnJob
+	var cancelledFields []jobIndexFields
 	var retained jobHeap
 
-		for _, job := range q.jobs {
-			if job.SessionName == sessionName {
-				job.Cancel()
-				cancelled = append(cancelled, job)
-				delete(q.byID, job.ID)
-				delete(q.jobIndexByID, job.ID)
-			} else {
-				retained = append(retained, job)
-			}
+	for _, job := range q.jobs {
+		fields, ok := q.jobIndexByID[job.ID]
+		if !ok {
+			fields = snapshotJobIndexFields(job)
 		}
+		// bd-bsjrl: use the snapshotted index fields for cancellation
+		// matching and decrementing so in-place pointer mutation cannot
+		// make CancelSession miss jobs or leave stale counters.
+		if fields.SessionName == sessionName {
+			job.Cancel()
+			cancelled = append(cancelled, job)
+			cancelledFields = append(cancelledFields, fields)
+			delete(q.byID, job.ID)
+			delete(q.jobIndexByID, job.ID)
+		} else {
+			retained = append(retained, job)
+		}
+	}
 
 	if len(cancelled) > 0 {
 		q.jobs = retained
@@ -443,20 +452,21 @@ func (q *JobQueue) CancelSession(sessionName string) []*SpawnJob {
 		// bd-o35sn: same for the per-priority and per-type stats
 		// breakdowns Stats() exposes — pre-fix Stats().ByPriority kept
 		// reporting the cancelled jobs.
-		for _, job := range cancelled {
-			if job.BatchID != "" {
-				q.batchCounts[job.BatchID]--
-				if q.batchCounts[job.BatchID] <= 0 {
-					delete(q.batchCounts, job.BatchID)
+		for i := range cancelled {
+			fields := cancelledFields[i]
+			if fields.BatchID != "" {
+				q.batchCounts[fields.BatchID]--
+				if q.batchCounts[fields.BatchID] <= 0 {
+					delete(q.batchCounts, fields.BatchID)
 				}
 			}
-			q.stats.ByPriority[job.Priority]--
-			if q.stats.ByPriority[job.Priority] <= 0 {
-				delete(q.stats.ByPriority, job.Priority)
+			q.stats.ByPriority[fields.Priority]--
+			if q.stats.ByPriority[fields.Priority] <= 0 {
+				delete(q.stats.ByPriority, fields.Priority)
 			}
-			q.stats.ByType[job.Type]--
-			if q.stats.ByType[job.Type] <= 0 {
-				delete(q.stats.ByType, job.Type)
+			q.stats.ByType[fields.Type]--
+			if q.stats.ByType[fields.Type] <= 0 {
+				delete(q.stats.ByType, fields.Type)
 			}
 		}
 		delete(q.sessionCounts, sessionName)
@@ -472,18 +482,27 @@ func (q *JobQueue) CancelBatch(batchID string) []*SpawnJob {
 	defer q.mu.Unlock()
 
 	var cancelled []*SpawnJob
+	var cancelledFields []jobIndexFields
 	var retained jobHeap
 
-		for _, job := range q.jobs {
-			if job.BatchID == batchID {
-				job.Cancel()
-				cancelled = append(cancelled, job)
-				delete(q.byID, job.ID)
-				delete(q.jobIndexByID, job.ID)
-			} else {
-				retained = append(retained, job)
-			}
+	for _, job := range q.jobs {
+		fields, ok := q.jobIndexByID[job.ID]
+		if !ok {
+			fields = snapshotJobIndexFields(job)
 		}
+		// bd-bsjrl: use the snapshotted index fields for cancellation
+		// matching and decrementing so in-place pointer mutation cannot
+		// make CancelBatch miss jobs or leave stale counters.
+		if fields.BatchID == batchID {
+			job.Cancel()
+			cancelled = append(cancelled, job)
+			cancelledFields = append(cancelledFields, fields)
+			delete(q.byID, job.ID)
+			delete(q.jobIndexByID, job.ID)
+		} else {
+			retained = append(retained, job)
+		}
+	}
 
 	if len(cancelled) > 0 {
 		q.jobs = retained
@@ -494,18 +513,19 @@ func (q *JobQueue) CancelBatch(batchID string) []*SpawnJob {
 		// Mirrors the Dequeue/Remove pattern.
 		// bd-o35sn: same for the per-priority and per-type stats
 		// breakdowns Stats() exposes.
-		for _, job := range cancelled {
-			q.sessionCounts[job.SessionName]--
-			if q.sessionCounts[job.SessionName] <= 0 {
-				delete(q.sessionCounts, job.SessionName)
+		for i := range cancelled {
+			fields := cancelledFields[i]
+			q.sessionCounts[fields.SessionName]--
+			if q.sessionCounts[fields.SessionName] <= 0 {
+				delete(q.sessionCounts, fields.SessionName)
 			}
-			q.stats.ByPriority[job.Priority]--
-			if q.stats.ByPriority[job.Priority] <= 0 {
-				delete(q.stats.ByPriority, job.Priority)
+			q.stats.ByPriority[fields.Priority]--
+			if q.stats.ByPriority[fields.Priority] <= 0 {
+				delete(q.stats.ByPriority, fields.Priority)
 			}
-			q.stats.ByType[job.Type]--
-			if q.stats.ByType[job.Type] <= 0 {
-				delete(q.stats.ByType, job.Type)
+			q.stats.ByType[fields.Type]--
+			if q.stats.ByType[fields.Type] <= 0 {
+				delete(q.stats.ByType, fields.Type)
 			}
 		}
 		delete(q.batchCounts, batchID)
