@@ -215,6 +215,167 @@ func TestSyntheticHarnessFeedsHostCapacityCalibration(t *testing.T) {
 	}
 }
 
+func TestSyntheticExperimentRegistryCoversCostClasses(t *testing.T) {
+	scenarios := SyntheticExperimentScenarios()
+	if len(scenarios) < 3 {
+		t.Fatalf("registry has %d scenarios, want at least 3", len(scenarios))
+	}
+
+	gates := make(map[SyntheticExperimentGate]bool)
+	for _, scenario := range scenarios {
+		gates[scenario.Gate] = true
+		if scenario.ID == "" {
+			t.Fatalf("scenario missing ID: %+v", scenario)
+		}
+		if scenario.Budget.Name == "" {
+			t.Fatalf("scenario %s missing budget name", scenario.ID)
+		}
+	}
+	for _, gate := range []SyntheticExperimentGate{SyntheticExperimentGateShort, SyntheticExperimentGateBenchmark, SyntheticExperimentGateLoad} {
+		if !gates[gate] {
+			t.Fatalf("registry missing %s gate: %+v", gate, scenarios)
+		}
+	}
+
+	load, ok := FindSyntheticExperimentScenario("load_100_pane")
+	if !ok {
+		t.Fatal("load_100_pane scenario not found")
+	}
+	if !load.OptIn {
+		t.Fatal("load_100_pane should be opt-in")
+	}
+}
+
+func TestSyntheticExperimentWritesVersionedArtifactsAndLogs(t *testing.T) {
+	scenario, ok := FindSyntheticExperimentScenario("short_smoke")
+	if !ok {
+		t.Fatal("short_smoke scenario not found")
+	}
+	var logs bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logs, nil))
+	now := func() time.Time { return time.Unix(1_700_020_000, 0).UTC() }
+
+	artifact, err := RunSyntheticExperiment(context.Background(), scenario, SyntheticExperimentOptions{
+		Now:          now,
+		Logger:       logger,
+		ArtifactRoot: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("RunSyntheticExperiment returned error: %v", err)
+	}
+
+	if artifact.SchemaVersion != SyntheticExperimentSchemaVersion {
+		t.Fatalf("schema_version = %q, want %q", artifact.SchemaVersion, SyntheticExperimentSchemaVersion)
+	}
+	if artifact.Metrics.PaneCount != scenario.Synthetic.PaneCount {
+		t.Fatalf("pane_count = %d, want %d", artifact.Metrics.PaneCount, scenario.Synthetic.PaneCount)
+	}
+	if artifact.Metrics.EventCount != scenario.Synthetic.PaneCount*scenario.Synthetic.CommandCount {
+		t.Fatalf("event_count = %d, want pane*command", artifact.Metrics.EventCount)
+	}
+	if artifact.Metrics.EventThroughputPerSecond <= 0 {
+		t.Fatalf("event throughput = %.3f, want positive", artifact.Metrics.EventThroughputPerSecond)
+	}
+	if artifact.Backpressure.SchemaVersion != SyntheticExperimentSchemaVersion {
+		t.Fatalf("backpressure schema = %q, want %q", artifact.Backpressure.SchemaVersion, SyntheticExperimentSchemaVersion)
+	}
+	for name, path := range map[string]string{
+		"summary":      artifact.ArtifactPaths.Summary,
+		"latency":      artifact.ArtifactPaths.Latency,
+		"mem":          artifact.ArtifactPaths.Memory,
+		"goroutines":   artifact.ArtifactPaths.Goroutines,
+		"backpressure": artifact.ArtifactPaths.Backpressure,
+	} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s artifact %q: %v", name, path, err)
+		}
+		var decoded map[string]any
+		if err := json.Unmarshal(data, &decoded); err != nil {
+			t.Fatalf("unmarshal %s artifact: %v", name, err)
+		}
+		if decoded["schema_version"] != SyntheticExperimentSchemaVersion {
+			t.Fatalf("%s schema_version = %#v, want %q", name, decoded["schema_version"], SyntheticExperimentSchemaVersion)
+		}
+	}
+
+	logText := logs.String()
+	for _, fragment := range []string{
+		"synthetic_swarm_experiment_complete",
+		"test_run_id=lab-short-smoke",
+		"scenario=short_smoke",
+		"pane_count=6",
+		"command_count=4",
+		"event_count=24",
+		"budget=short",
+		"result=missing_baseline",
+		"artifact_path=",
+	} {
+		if !strings.Contains(logText, fragment) {
+			t.Fatalf("logs missing %q:\n%s", fragment, logText)
+		}
+	}
+}
+
+func TestSyntheticExperimentComparisonCases(t *testing.T) {
+	budget := SyntheticExperimentBudget{
+		Name:                        "test",
+		MaxLatencyP95Micros:         50_000,
+		MaxMemoryGrowthBytes:        10_000,
+		MaxGoroutinesLeaked:         0,
+		MinEventThroughputPerSecond: 10,
+		WarnRegressionRatio:         0.10,
+		FailRegressionRatio:         0.25,
+	}
+	baseline := syntheticExperimentFixture("baseline", 10, 1000, 0, 100)
+
+	better := syntheticExperimentFixture("better", 9, 900, 0, 120)
+	if got := CompareSyntheticExperiment(better, &baseline, budget).Result; got != SyntheticExperimentPass {
+		t.Fatalf("better result = %s, want pass", got)
+	}
+
+	worse := syntheticExperimentFixture("worse", 14, 900, 0, 120)
+	if got := CompareSyntheticExperiment(worse, &baseline, budget).Result; got != SyntheticExperimentFail {
+		t.Fatalf("worse result = %s, want fail", got)
+	}
+
+	if got := CompareSyntheticExperiment(better, nil, budget).Result; got != SyntheticExperimentMissingBaseline {
+		t.Fatalf("missing baseline result = %s, want missing_baseline", got)
+	}
+
+	mismatched := baseline
+	mismatched.SchemaVersion = "ntm.swarm.experiment.v0"
+	if got := CompareSyntheticExperiment(better, &mismatched, budget).Result; got != SyntheticExperimentSchemaMismatch {
+		t.Fatalf("schema mismatch result = %s, want schema_mismatch", got)
+	}
+}
+
+func TestSyntheticExperimentSummaryIsRobotReadable(t *testing.T) {
+	now := func() time.Time { return time.Unix(1_700_030_000, 0).UTC() }
+	pass := syntheticExperimentFixture("pass", 8, 800, 0, 120)
+	pass.ScenarioID = "b"
+	pass.Gate = SyntheticExperimentGateBenchmark
+	pass.Comparison = SyntheticExperimentComparison{Result: SyntheticExperimentPass}
+	missing := syntheticExperimentFixture("missing", 8, 800, 0, 120)
+	missing.ScenarioID = "a"
+	missing.Gate = SyntheticExperimentGateShort
+	missing.Comparison = SyntheticExperimentComparison{Result: SyntheticExperimentMissingBaseline}
+
+	summary := BuildSyntheticExperimentSummary([]SyntheticExperimentArtifact{pass, missing}, now)
+	if !summary.Success {
+		t.Fatalf("summary success = false for missing-baseline warning: %+v", summary)
+	}
+	if want := now().UTC().Format(time.RFC3339Nano); strings.Compare(summary.GeneratedAt, want) != 0 {
+		t.Fatalf("generated_at = %q, want %q", summary.GeneratedAt, want)
+	}
+	if len(summary.Results) != 2 || summary.Results[0].ScenarioID != "a" {
+		t.Fatalf("results not sorted for robot readers: %+v", summary.Results)
+	}
+	if len(summary.Warnings) != 1 || !strings.Contains(summary.Warnings[0], "missing baseline") {
+		t.Fatalf("warnings = %+v, want missing baseline warning", summary.Warnings)
+	}
+}
+
 func TestSyntheticHarnessLargeOptInWritesArtifact(t *testing.T) {
 	if os.Getenv("NTM_SYNTHETIC_SWARM_LOAD") == "" {
 		t.Skip("set NTM_SYNTHETIC_SWARM_LOAD=1 to run the 100-pane synthetic artifact test")
@@ -252,6 +413,47 @@ func TestSyntheticHarnessLargeOptInWritesArtifact(t *testing.T) {
 	}
 	if decoded.Metrics.EventCount != 500 {
 		t.Fatalf("artifact event count = %d, want 500", decoded.Metrics.EventCount)
+	}
+}
+
+func TestSyntheticExperimentLoadScenarioOptInWritesArtifact(t *testing.T) {
+	if os.Getenv("NTM_SYNTHETIC_SWARM_LOAD") == "" {
+		t.Skip("set NTM_SYNTHETIC_SWARM_LOAD=1 to run the 100-pane experiment lab artifact test")
+	}
+	scenario, ok := FindSyntheticExperimentScenario("load_100_pane")
+	if !ok {
+		t.Fatal("load_100_pane scenario not found")
+	}
+	artifact, err := RunSyntheticExperiment(context.Background(), scenario, SyntheticExperimentOptions{
+		Now:          func() time.Time { return time.Unix(1_700_040_000, 0).UTC() },
+		ArtifactRoot: t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("RunSyntheticExperiment returned error: %v", err)
+	}
+	if !artifact.OptIn || artifact.Gate != SyntheticExperimentGateLoad {
+		t.Fatalf("artifact opt-in/gate = %v/%s, want opt-in load", artifact.OptIn, artifact.Gate)
+	}
+	if artifact.Metrics.PaneCount != 100 || artifact.Metrics.EventCount != 500 {
+		t.Fatalf("load artifact metrics = %+v, want 100 panes and 500 events", artifact.Metrics)
+	}
+}
+
+func syntheticExperimentFixture(testRunID string, p95MS float64, memoryGrowth int64, goroutinesLeaked int, throughput float64) SyntheticExperimentArtifact {
+	return SyntheticExperimentArtifact{
+		SchemaVersion: SyntheticExperimentSchemaVersion,
+		TestRunID:     testRunID,
+		ScenarioID:    "fixture",
+		Gate:          SyntheticExperimentGateShort,
+		Metrics: SyntheticExperimentMetrics{
+			PaneCount:                2,
+			CommandCount:             2,
+			LatencyP95MS:             p95MS,
+			MemoryGrowthBytes:        memoryGrowth,
+			GoroutinesLeaked:         goroutinesLeaked,
+			EventCount:               4,
+			EventThroughputPerSecond: throughput,
+		},
 	}
 }
 
