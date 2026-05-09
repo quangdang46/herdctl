@@ -249,3 +249,30 @@ agent_mail_registered_at = "2026-04-01T00:00:00Z"
 		t.Fatalf("expected stale registered_at to be cleared, got:\n%s", content)
 	}
 }
+
+func TestBoolCallWithTimeout_ReturnsValue(t *testing.T) {
+	value, timedOut := boolCallWithTimeout(50*time.Millisecond, func() bool {
+		return true
+	})
+	if timedOut {
+		t.Fatal("expected function to return before timeout")
+	}
+	if !value {
+		t.Fatal("expected true value from callback")
+	}
+}
+
+func TestBoolCallWithTimeout_TimesOut(t *testing.T) {
+	unblock := make(chan struct{})
+	value, timedOut := boolCallWithTimeout(10*time.Millisecond, func() bool {
+		<-unblock
+		return true
+	})
+	close(unblock)
+	if !timedOut {
+		t.Fatal("expected timeout for blocked callback")
+	}
+	if value {
+		t.Fatal("expected false value when timeout occurs")
+	}
+}

@@ -505,7 +505,12 @@ func registerAgentMailProject(projectPath, configPath string) (bool, string, err
 	registered := false
 	warning := ""
 
-	if !client.IsAvailable() {
+	available, timedOut := boolCallWithTimeout(3*time.Second, func() bool {
+		return client.IsAvailable()
+	})
+	if timedOut {
+		warning = "availability check timed out"
+	} else if !available {
 		warning = "server not available"
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
@@ -525,6 +530,23 @@ func registerAgentMailProject(projectPath, configPath string) (bool, string, err
 	}
 
 	return registered, warning, nil
+}
+
+func boolCallWithTimeout(timeout time.Duration, fn func() bool) (value bool, timedOut bool) {
+	resultCh := make(chan bool, 1)
+	go func() {
+		resultCh <- fn()
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case value = <-resultCh:
+		return value, false
+	case <-timer.C:
+		return false, true
+	}
 }
 
 func buildAgentMailProjectUpdates(projectKey string, registered bool, now time.Time) map[string]string {
