@@ -74,6 +74,36 @@ func TestBuildStormInputFromRCHStatusCountsWorkers(t *testing.T) {
 	}
 }
 
+func TestBuildStormInputFromRCHStatusDerivesHealthyFromWorkersWhenSummaryMissing(t *testing.T) {
+	t.Parallel()
+
+	input := BuildStormInputFromRCHStatus(&tools.RCHStatus{
+		Enabled:      true,
+		WorkerCount:  0, // missing in status payload
+		HealthyCount: 0, // missing in status payload
+		Workers: []tools.RCHWorker{
+			{Name: "w1", Available: true, Healthy: true},
+			{Name: "w2", Available: true, Healthy: true, CurrentBuild: "go build"},
+			{Name: "w3", Available: false, Healthy: true},
+		},
+	}, &tools.RCHAvailability{
+		Available:    true,
+		Compatible:   true,
+		WorkerCount:  8, // stale cache shape
+		HealthyCount: 8, // stale cache shape
+	}, RCHBuildStormOptions{})
+
+	if input.WorkerCount != 3 {
+		t.Fatalf("WorkerCount = %d, want worker-derived 3 when status summary is missing", input.WorkerCount)
+	}
+	if input.HealthyWorkers != 2 {
+		t.Fatalf("HealthyWorkers = %d, want worker-derived 2 when status healthy_count is missing", input.HealthyWorkers)
+	}
+	if input.BusyWorkers != 1 {
+		t.Fatalf("BusyWorkers = %d, want 1", input.BusyWorkers)
+	}
+}
+
 func TestEvaluateRCHBuildStormUsesReader(t *testing.T) {
 	t.Parallel()
 

@@ -75,12 +75,20 @@ func BuildStormInputFromRCHStatus(status *tools.RCHStatus, availability *tools.R
 	}
 	if status.WorkerCount > 0 {
 		in.WorkerCount = status.WorkerCount
+	} else if len(status.Workers) > 0 {
+		// When aggregate counts are absent, prefer the current workers payload
+		// over cached availability snapshots.
+		in.WorkerCount = len(status.Workers)
 	}
 	if len(status.Workers) > in.WorkerCount {
 		in.WorkerCount = len(status.Workers)
 	}
 	if status.HealthyCount > 0 {
 		in.HealthyWorkers = status.HealthyCount
+	} else if len(status.Workers) > 0 {
+		// status healthy_count may be omitted in some rch JSON variants. Avoid
+		// retaining stale cached health counts in that case.
+		in.HealthyWorkers = 0
 	}
 
 	busy := 0
