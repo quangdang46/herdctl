@@ -1,6 +1,7 @@
 package coordinator
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"sort"
@@ -26,6 +27,7 @@ type DigestSummary struct {
 
 // AgentDigestStatus summarizes a single agent's status.
 type AgentDigestStatus struct {
+	PaneID       string  `json:"pane_id"`
 	PaneIndex    int     `json:"pane_index"`
 	AgentType    string  `json:"agent_type"`
 	Status       string  `json:"status"`
@@ -57,6 +59,7 @@ func (c *SessionCoordinator) GenerateDigest() DigestSummary {
 
 	for _, agent := range c.agents {
 		status := AgentDigestStatus{
+			PaneID:       agent.PaneID,
 			PaneIndex:    agent.PaneIndex,
 			AgentType:    agent.AgentType,
 			Status:       string(agent.Status),
@@ -92,10 +95,18 @@ func (c *SessionCoordinator) GenerateDigest() DigestSummary {
 	// order, so two GenerateDigest calls against the same state would
 	// otherwise produce different AgentStatuses orderings and
 	// different Alerts sequences. Sort both for byte-stable output —
-	// PaneIndex for AgentStatuses (intuitive for human readers),
-	// alphabetical for Alerts.
+	// PaneIndex for AgentStatuses with PaneID tie-breaker
+	// (PaneIndex alone can collide across windows), alphabetical
+	// for Alerts.
 	sort.Slice(digest.AgentStatuses, func(i, j int) bool {
-		return digest.AgentStatuses[i].PaneIndex < digest.AgentStatuses[j].PaneIndex
+		switch byPaneIndex := cmp.Compare(digest.AgentStatuses[i].PaneIndex, digest.AgentStatuses[j].PaneIndex); {
+		case byPaneIndex < 0:
+			return true
+		case byPaneIndex > 0:
+			return false
+		default:
+			return strings.Compare(digest.AgentStatuses[i].PaneID, digest.AgentStatuses[j].PaneID) < 0
+		}
 	})
 	sort.Strings(digest.Alerts)
 

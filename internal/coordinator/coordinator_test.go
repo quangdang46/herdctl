@@ -869,3 +869,41 @@ func TestGenerateDigest_StableOrderingAcrossCalls(t *testing.T) {
 		}
 	}
 }
+
+// bd-gn576: PaneIndex can collide (e.g. panes in different windows), so
+// sorting by PaneIndex alone still leaves map-order drift across calls.
+// Tie-break by PaneID to keep byte-stable output in collision cases too.
+func TestGenerateDigest_StableOrderingAcrossCalls_PaneIndexCollision(t *testing.T) {
+	c := New("s", "/tmp/test", nil, "Agent")
+	c.mu.Lock()
+	for paneID, paneIndex := range map[string]int{
+		"%4": 1,
+		"%2": 0,
+		"%1": 0,
+		"%3": 1,
+	} {
+		c.agents[paneID] = &AgentState{
+			PaneID:       paneID,
+			PaneIndex:    paneIndex,
+			AgentType:    "cc",
+			Status:       robot.StateError,
+			ContextUsage: 90,
+		}
+	}
+	c.mu.Unlock()
+
+	var prev string
+	const iterations = 50
+	for i := 0; i < iterations; i++ {
+		d := c.GenerateDigest()
+		b, _ := json.Marshal(d.AgentStatuses)
+		current := string(b)
+		if i == 0 {
+			prev = current
+			continue
+		}
+		if current != prev {
+			t.Fatalf("digest drifted on call %d:\nprev: %s\nnow:  %s", i, prev, current)
+		}
+	}
+}
