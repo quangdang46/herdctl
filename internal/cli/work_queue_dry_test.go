@@ -272,9 +272,11 @@ func TestQueueDryReservationTimeoutIsInteractive(t *testing.T) {
 func TestCollectQueueDryReservationsSkipsHealthPreflight(t *testing.T) {
 	oldNewClient := queueDryNewAgentMailClient
 	oldFetchReservations := queueDryFetchActiveReservations
+	oldHealthCheck := queueDryAgentMailHealthCheck
 	t.Cleanup(func() {
 		queueDryNewAgentMailClient = oldNewClient
 		queueDryFetchActiveReservations = oldFetchReservations
+		queueDryAgentMailHealthCheck = oldHealthCheck
 	})
 
 	queueDryNewAgentMailClient = func(projectDir string) *agentmail.Client {
@@ -300,6 +302,10 @@ func TestCollectQueueDryReservationsSkipsHealthPreflight(t *testing.T) {
 			{ID: 42, AgentName: "BlueLake", PathPattern: "internal/cli/work.go"},
 		}, nil
 	}
+	queueDryAgentMailHealthCheck = func(context.Context, *agentmail.Client) (*agentmail.HealthStatus, error) {
+		t.Fatal("health check should only run after reservation lookup fails")
+		return nil, nil
+	}
 
 	got := collectQueueDryReservations("/repo")
 	if !fetchCalled {
@@ -310,6 +316,109 @@ func TestCollectQueueDryReservationsSkipsHealthPreflight(t *testing.T) {
 	}
 	if len(got.Holders) != 1 || got.Holders[0] != "BlueLake" {
 		t.Fatalf("holders=%v, want [BlueLake]", got.Holders)
+	}
+	if got.Status != "available" {
+		t.Fatalf("status=%q, want available", got.Status)
+	}
+}
+
+func TestCollectQueueDryReservationsTimeoutHealthOkExplainsSplit(t *testing.T) {
+	oldNewClient := queueDryNewAgentMailClient
+	oldFetchReservations := queueDryFetchActiveReservations
+	oldHealthCheck := queueDryAgentMailHealthCheck
+	t.Cleanup(func() {
+		queueDryNewAgentMailClient = oldNewClient
+		queueDryFetchActiveReservations = oldFetchReservations
+		queueDryAgentMailHealthCheck = oldHealthCheck
+	})
+
+	queueDryNewAgentMailClient = func(projectDir string) *agentmail.Client {
+		if projectDir != "/repo" {
+			t.Fatalf("projectDir=%q, want /repo", projectDir)
+		}
+		return agentmail.NewClient(agentmail.WithBaseURL("http://127.0.0.1:1/"))
+	}
+	queueDryFetchActiveReservations = func(ctx context.Context, client *agentmail.Client, projectKey, agentName string, allAgents bool) ([]agentmail.FileReservation, error) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("reservation lookup should have a deadline")
+		}
+		return nil, errors.New("listing reservations: agentmail: resources/read failed: request timed out")
+	}
+	queueDryAgentMailHealthCheck = func(ctx context.Context, client *agentmail.Client) (*agentmail.HealthStatus, error) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("health check should have a deadline")
+		}
+		return &agentmail.HealthStatus{
+			Status:      "ok",
+			HealthLevel: "green",
+			Recovery: &agentmail.RecoveryStatus{
+				Mode:       "corrupt",
+				NextAction: "Run am doctor repair --yes",
+			},
+		}, nil
+	}
+
+	got := collectQueueDryReservations("/repo")
+	if got.Available {
+		t.Fatalf("Available=true, want false while reservation listing failed: %+v", got)
+	}
+	if got.Status != "lookup_timeout_health_ok" {
+		t.Fatalf("Status=%q, want lookup_timeout_health_ok", got.Status)
+	}
+	if !got.HealthReachable || got.HealthStatus != "ok" || got.HealthLevel != "green" {
+		t.Fatalf("health fields=%+v, want reachable ok/green", got)
+	}
+	if strings.Compare(got.RecoveryMode, "corrupt") != 0 || !strings.Contains(got.RecoveryNextAction, "doctor repair") {
+		t.Fatalf("recovery fields=%+v, want corrupt recovery guidance", got)
+	}
+	for _, want := range []string{"reservation lookup failed", "status=ok", "recovery mode=corrupt"} {
+		if !containsWarning(got.Diagnostics, want) {
+			t.Fatalf("diagnostics=%v, want %q", got.Diagnostics, want)
+		}
+	}
+
+	report := QueueDryResponse{Evidence: QueueDryEvidence{Reservations: got}}
+	appendQueueDryReservationWarning(&report)
+	warning := strings.Join(report.Warnings, "\n")
+	for _, want := range []string{"status=lookup_timeout_health_ok", "health_check=reachable", "health_status=ok", "health_level=green", "recovery_mode=corrupt"} {
+		if !strings.Contains(warning, want) {
+			t.Fatalf("warning=%q, want %q", warning, want)
+		}
+	}
+}
+
+func TestCollectQueueDryReservationsServerUnavailableHealthFails(t *testing.T) {
+	oldNewClient := queueDryNewAgentMailClient
+	oldFetchReservations := queueDryFetchActiveReservations
+	oldHealthCheck := queueDryAgentMailHealthCheck
+	t.Cleanup(func() {
+		queueDryNewAgentMailClient = oldNewClient
+		queueDryFetchActiveReservations = oldFetchReservations
+		queueDryAgentMailHealthCheck = oldHealthCheck
+	})
+
+	queueDryNewAgentMailClient = func(string) *agentmail.Client {
+		return agentmail.NewClient(agentmail.WithBaseURL("http://127.0.0.1:1/"))
+	}
+	queueDryFetchActiveReservations = func(context.Context, *agentmail.Client, string, string, bool) ([]agentmail.FileReservation, error) {
+		return nil, errors.New("connect: connection refused")
+	}
+	queueDryAgentMailHealthCheck = func(context.Context, *agentmail.Client) (*agentmail.HealthStatus, error) {
+		return nil, errors.New("health_check: connection refused")
+	}
+
+	got := collectQueueDryReservations("/repo")
+	if got.Available {
+		t.Fatalf("Available=true, want false: %+v", got)
+	}
+	if got.Status != "server_unavailable" {
+		t.Fatalf("Status=%q, want server_unavailable", got.Status)
+	}
+	if got.HealthReachable {
+		t.Fatalf("HealthReachable=true, want false")
+	}
+	if !containsWarning(got.Diagnostics, "health_check failed") {
+		t.Fatalf("diagnostics=%v, want health failure", got.Diagnostics)
 	}
 }
 

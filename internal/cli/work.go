@@ -920,10 +920,17 @@ type QueueDrySyncStatus struct {
 
 // QueueDryReservations reports active reservation metadata.
 type QueueDryReservations struct {
-	Available bool     `json:"available"`
-	Count     int      `json:"count"`
-	Holders   []string `json:"holders,omitempty"`
-	Error     string   `json:"error,omitempty"`
+	Available          bool     `json:"available"`
+	Count              int      `json:"count"`
+	Holders            []string `json:"holders,omitempty"`
+	Status             string   `json:"status,omitempty"`
+	Error              string   `json:"error,omitempty"`
+	HealthReachable    bool     `json:"health_reachable,omitempty"`
+	HealthStatus       string   `json:"health_status,omitempty"`
+	HealthLevel        string   `json:"health_level,omitempty"`
+	RecoveryMode       string   `json:"recovery_mode,omitempty"`
+	RecoveryNextAction string   `json:"recovery_next_action,omitempty"`
+	Diagnostics        []string `json:"diagnostics,omitempty"`
 }
 
 // QueueDryCommit stores a compact git commit for operator context.
@@ -1001,8 +1008,9 @@ type CommitReadyMailEvidence struct {
 }
 
 const (
-	queueDryReservationTimeout = 2 * time.Second
-	queueDryTriageTimeout      = 2 * time.Second
+	queueDryReservationTimeout       = 2 * time.Second
+	queueDryReservationHealthTimeout = 1 * time.Second
+	queueDryTriageTimeout            = 2 * time.Second
 )
 
 var queueDryGetTriage = func(dir string) (*bv.TriageResponse, error) {
@@ -1018,6 +1026,10 @@ var queueDryNewAgentMailClient = func(projectDir string) *agentmail.Client {
 }
 
 var queueDryFetchActiveReservations = fetchActiveReservations
+
+var queueDryAgentMailHealthCheck = func(ctx context.Context, client *agentmail.Client) (*agentmail.HealthStatus, error) {
+	return client.HealthCheck(ctx)
+}
 
 func runWorkCommitReady(format string, agentName string, syncLagMinutes int) error {
 	dir, err := os.Getwd()
@@ -1772,10 +1784,7 @@ func collectQueueDryReservations(projectDir string) QueueDryReservations {
 
 	reservations, err := queueDryFetchActiveReservations(ctx, client, projectDir, "", true)
 	if err != nil {
-		return QueueDryReservations{
-			Available: false,
-			Error:     err.Error(),
-		}
+		return collectQueueDryReservationFailure(client, err)
 	}
 
 	holdersSet := make(map[string]struct{})
@@ -1796,7 +1805,85 @@ func collectQueueDryReservations(projectDir string) QueueDryReservations {
 		Available: true,
 		Count:     len(reservations),
 		Holders:   holders,
+		Status:    "available",
 	}
+}
+
+func collectQueueDryReservationFailure(client *agentmail.Client, lookupErr error) QueueDryReservations {
+	status := classifyQueueDryReservationError(lookupErr)
+	errText := strings.TrimSpace(errorString(lookupErr))
+	out := QueueDryReservations{
+		Available:   false,
+		Status:      status,
+		Error:       errText,
+		Diagnostics: []string{"reservation lookup failed: " + errText},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), queueDryReservationHealthTimeout)
+	defer cancel()
+	health, healthErr := queueDryAgentMailHealthCheck(ctx, client)
+	if healthErr != nil {
+		out.Diagnostics = append(out.Diagnostics, "health_check failed: "+strings.TrimSpace(healthErr.Error()))
+		return out
+	}
+
+	out.HealthReachable = true
+	out.HealthStatus = strings.TrimSpace(health.Status)
+	out.HealthLevel = strings.TrimSpace(health.HealthLevel)
+	if out.HealthStatus != "" || out.HealthLevel != "" {
+		out.Diagnostics = append(out.Diagnostics, "health_check "+strings.Join(queueDryKeyValues(map[string]string{
+			"status":       out.HealthStatus,
+			"health_level": out.HealthLevel,
+		}), " "))
+	}
+	if health.Recovery != nil {
+		out.RecoveryMode = strings.TrimSpace(health.Recovery.Mode)
+		out.RecoveryNextAction = strings.TrimSpace(health.Recovery.NextAction)
+		if out.RecoveryMode != "" || out.RecoveryNextAction != "" {
+			out.Diagnostics = append(out.Diagnostics, "recovery "+strings.Join(queueDryKeyValues(map[string]string{
+				"mode":        out.RecoveryMode,
+				"next_action": out.RecoveryNextAction,
+			}), " "))
+		}
+	}
+	if out.HealthReachable {
+		out.Status = status + "_health_ok"
+	}
+	return out
+}
+
+func classifyQueueDryReservationError(err error) string {
+	text := strings.ToLower(strings.TrimSpace(errorString(err)))
+	switch {
+	case text == "":
+		return "lookup_failed"
+	case strings.Contains(text, "timed out") || strings.Contains(text, "timeout") || strings.Contains(text, "deadline exceeded"):
+		return "lookup_timeout"
+	case strings.Contains(text, "connection refused") || strings.Contains(text, "server unavailable") || strings.Contains(text, "no such host"):
+		return "server_unavailable"
+	case strings.Contains(text, "resources/read"):
+		return "resource_read_failed"
+	default:
+		return "lookup_failed"
+	}
+}
+
+func errorString(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
+}
+
+func queueDryKeyValues(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key, value := range values {
+		if strings.TrimSpace(value) != "" {
+			keys = append(keys, key+"="+strings.TrimSpace(value))
+		}
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func appendQueueDryReservationWarning(report *QueueDryResponse) {
@@ -1807,7 +1894,23 @@ func appendQueueDryReservationWarning(report *QueueDryResponse) {
 	if errText == "" {
 		errText = "unknown error"
 	}
-	report.Warnings = append(report.Warnings, "reservations_unavailable: "+errText)
+	parts := []string{"reservations_unavailable: " + errText}
+	if status := strings.TrimSpace(report.Evidence.Reservations.Status); status != "" {
+		parts = append(parts, "status="+status)
+	}
+	if report.Evidence.Reservations.HealthReachable {
+		parts = append(parts, "health_check=reachable")
+		if status := strings.TrimSpace(report.Evidence.Reservations.HealthStatus); status != "" {
+			parts = append(parts, "health_status="+status)
+		}
+		if level := strings.TrimSpace(report.Evidence.Reservations.HealthLevel); level != "" {
+			parts = append(parts, "health_level="+level)
+		}
+	}
+	if mode := strings.TrimSpace(report.Evidence.Reservations.RecoveryMode); mode != "" {
+		parts = append(parts, "recovery_mode="+mode)
+	}
+	report.Warnings = append(report.Warnings, strings.Join(parts, " "))
 }
 
 func buildQueueDryRecommendations(report QueueDryResponse) []QueueDryRecommendation {
