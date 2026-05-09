@@ -121,6 +121,12 @@ func EvaluateBuildStorm(in BuildStormInput) BuildStormReport {
 		out.Decision = BuildStormDefer
 		out.Reason = "rch_workers_busy"
 		out.RetryAfter = "30s"
+	case requested > remoteHeadroom:
+		// bd-mr59k: avoid offloading bursts that already exceed current remote
+		// headroom; queueing those blindly can intensify a build storm.
+		out.Decision = BuildStormDefer
+		out.Reason = "rch_headroom_insufficient"
+		out.RetryAfter = "20s"
 	case localBuilds+requested > maxLocal:
 		out.Decision = BuildStormOffload
 		out.Reason = "local_fallback_risk"

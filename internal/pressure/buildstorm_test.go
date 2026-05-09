@@ -54,6 +54,36 @@ func TestEvaluateBuildStormAllWorkersBusyDefers(t *testing.T) {
 	}
 }
 
+func TestEvaluateBuildStormInsufficientRemoteHeadroomDefers(t *testing.T) {
+	t.Parallel()
+
+	report := EvaluateBuildStorm(BuildStormInput{
+		Now:             fixedClock()(),
+		RCHAvailable:    true,
+		RCHCompatible:   true,
+		WorkerCount:     4,
+		HealthyWorkers:  4,
+		BusyWorkers:     2,
+		QueueDepth:      0,
+		LocalBuildCount: 1,
+		MaxLocalBuilds:  8,
+		RequestedBuilds: 3, // only 2 remote slots are currently free
+	})
+
+	if strings.Compare(string(report.Decision), string(BuildStormDefer)) != 0 {
+		t.Fatalf("Decision = %s, want defer", report.Decision)
+	}
+	if strings.Compare(report.Reason, "rch_headroom_insufficient") != 0 {
+		t.Fatalf("Reason = %q, want rch_headroom_insufficient", report.Reason)
+	}
+	if strings.Compare(report.RetryAfter, "20s") != 0 {
+		t.Fatalf("RetryAfter = %q, want 20s", report.RetryAfter)
+	}
+	if report.RemoteHeadroom != 2 {
+		t.Fatalf("RemoteHeadroom = %d, want 2", report.RemoteHeadroom)
+	}
+}
+
 func TestEvaluateBuildStormLocalFallbackRiskOffloadsWhenRemoteReady(t *testing.T) {
 	t.Parallel()
 
