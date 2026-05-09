@@ -777,6 +777,49 @@ func TestJobQueue_Enqueue_Update_RebucketsStats(t *testing.T) {
 			t.Errorf("CurrentSize = %d, want 1", stats.CurrentSize)
 		}
 	})
+
+	t.Run("same pointer mutation rebuckets against snapshotted old fields", func(t *testing.T) {
+		t.Parallel()
+		q := NewJobQueue()
+
+		j := NewSpawnJob("j1", JobTypeSession, "s1")
+		j.Priority = PriorityNormal
+		j.BatchID = "b1"
+		q.Enqueue(j)
+
+		// Mutate in place before re-enqueueing the same pointer.
+		j.Priority = PriorityUrgent
+		j.Type = JobTypePaneSplit
+		j.SessionName = "s2"
+		j.BatchID = "b2"
+		q.Enqueue(j)
+
+		stats := q.Stats()
+		if got := stats.ByPriority[PriorityUrgent]; got != 1 {
+			t.Errorf("ByPriority[Urgent] = %d, want 1", got)
+		}
+		if _, present := stats.ByPriority[PriorityNormal]; present {
+			t.Errorf("ByPriority[Normal] should be deleted, got = %v", stats.ByPriority)
+		}
+		if got := stats.ByType[JobTypePaneSplit]; got != 1 {
+			t.Errorf("ByType[PaneSplit] = %d, want 1", got)
+		}
+		if _, present := stats.ByType[JobTypeSession]; present {
+			t.Errorf("ByType[Session] should be deleted, got = %v", stats.ByType)
+		}
+		if got := q.CountBySession("s2"); got != 1 {
+			t.Errorf("CountBySession(s2) = %d, want 1", got)
+		}
+		if got := q.CountBySession("s1"); got != 0 {
+			t.Errorf("CountBySession(s1) = %d, want 0", got)
+		}
+		if got := q.CountByBatch("b2"); got != 1 {
+			t.Errorf("CountByBatch(b2) = %d, want 1", got)
+		}
+		if got := q.CountByBatch("b1"); got != 0 {
+			t.Errorf("CountByBatch(b1) = %d, want 0", got)
+		}
+	})
 }
 
 func TestJobQueue_Dequeue_Empty(t *testing.T) {

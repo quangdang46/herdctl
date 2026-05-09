@@ -6,6 +6,22 @@ import (
 	"time"
 )
 
+type jobIndexFields struct {
+	Priority    JobPriority
+	Type        JobType
+	SessionName string
+	BatchID     string
+}
+
+func snapshotJobIndexFields(job *SpawnJob) jobIndexFields {
+	return jobIndexFields{
+		Priority:    job.Priority,
+		Type:        job.Type,
+		SessionName: job.SessionName,
+		BatchID:     job.BatchID,
+	}
+}
+
 // JobQueue is a priority queue for spawn jobs with fairness tracking.
 type JobQueue struct {
 	mu sync.RWMutex
@@ -15,6 +31,10 @@ type JobQueue struct {
 
 	// byID maps job IDs to jobs for O(1) lookup.
 	byID map[string]*SpawnJob
+
+	// jobIndexByID snapshots indexed fields so queue accounting remains
+	// stable even when callers reuse or mutate job pointers.
+	jobIndexByID map[string]jobIndexFields
 
 	// batchCounts tracks jobs per batch for fairness.
 	batchCounts map[string]int
@@ -61,6 +81,7 @@ func NewJobQueue() *JobQueue {
 	return &JobQueue{
 		jobs:          make(jobHeap, 0),
 		byID:          make(map[string]*SpawnJob),
+		jobIndexByID:  make(map[string]jobIndexFields),
 		batchCounts:   make(map[string]int),
 		sessionCounts: make(map[string]int),
 		stats: QueueStats{
@@ -76,6 +97,10 @@ func (q *JobQueue) Enqueue(job *SpawnJob) {
 	defer q.mu.Unlock()
 
 	if old, exists := q.byID[job.ID]; exists {
+		oldFields, ok := q.jobIndexByID[job.ID]
+		if !ok {
+			oldFields = snapshotJobIndexFields(old)
+		}
 		// Job already in queue, update it.
 		// bd-m0n8c: re-bucket the per-priority/per-type stats and the
 		// per-session/per-batch counts when the indexed fields change
@@ -85,32 +110,32 @@ func (q *JobQueue) Enqueue(job *SpawnJob) {
 		// new ones (Stats() reports the wrong distribution). Same
 		// delete-when-zero discipline as the bd-o35sn / bd-s8sex
 		// fixes elsewhere in this file.
-		if old.Priority != job.Priority {
-			q.stats.ByPriority[old.Priority]--
-			if q.stats.ByPriority[old.Priority] <= 0 {
-				delete(q.stats.ByPriority, old.Priority)
+		if oldFields.Priority != job.Priority {
+			q.stats.ByPriority[oldFields.Priority]--
+			if q.stats.ByPriority[oldFields.Priority] <= 0 {
+				delete(q.stats.ByPriority, oldFields.Priority)
 			}
 			q.stats.ByPriority[job.Priority]++
 		}
-		if old.Type != job.Type {
-			q.stats.ByType[old.Type]--
-			if q.stats.ByType[old.Type] <= 0 {
-				delete(q.stats.ByType, old.Type)
+		if oldFields.Type != job.Type {
+			q.stats.ByType[oldFields.Type]--
+			if q.stats.ByType[oldFields.Type] <= 0 {
+				delete(q.stats.ByType, oldFields.Type)
 			}
 			q.stats.ByType[job.Type]++
 		}
-		if old.SessionName != job.SessionName {
-			q.sessionCounts[old.SessionName]--
-			if q.sessionCounts[old.SessionName] <= 0 {
-				delete(q.sessionCounts, old.SessionName)
+		if oldFields.SessionName != job.SessionName {
+			q.sessionCounts[oldFields.SessionName]--
+			if q.sessionCounts[oldFields.SessionName] <= 0 {
+				delete(q.sessionCounts, oldFields.SessionName)
 			}
 			q.sessionCounts[job.SessionName]++
 		}
-		if old.BatchID != job.BatchID {
-			if old.BatchID != "" {
-				q.batchCounts[old.BatchID]--
-				if q.batchCounts[old.BatchID] <= 0 {
-					delete(q.batchCounts, old.BatchID)
+		if oldFields.BatchID != job.BatchID {
+			if oldFields.BatchID != "" {
+				q.batchCounts[oldFields.BatchID]--
+				if q.batchCounts[oldFields.BatchID] <= 0 {
+					delete(q.batchCounts, oldFields.BatchID)
 				}
 			}
 			if job.BatchID != "" {
@@ -118,11 +143,13 @@ func (q *JobQueue) Enqueue(job *SpawnJob) {
 			}
 		}
 		q.updateJobLocked(job)
+		q.jobIndexByID[job.ID] = snapshotJobIndexFields(job)
 		return
 	}
 
 	heap.Push(&q.jobs, job)
 	q.byID[job.ID] = job
+	q.jobIndexByID[job.ID] = snapshotJobIndexFields(job)
 
 	// Track batch and session counts
 	if job.BatchID != "" {
@@ -152,29 +179,35 @@ func (q *JobQueue) Dequeue() *SpawnJob {
 
 	job := heap.Pop(&q.jobs).(*SpawnJob)
 	delete(q.byID, job.ID)
+	fields, ok := q.jobIndexByID[job.ID]
+	if ok {
+		delete(q.jobIndexByID, job.ID)
+	} else {
+		fields = snapshotJobIndexFields(job)
+	}
 
 	// Update counts
-	if job.BatchID != "" {
-		q.batchCounts[job.BatchID]--
-		if q.batchCounts[job.BatchID] <= 0 {
-			delete(q.batchCounts, job.BatchID)
+	if fields.BatchID != "" {
+		q.batchCounts[fields.BatchID]--
+		if q.batchCounts[fields.BatchID] <= 0 {
+			delete(q.batchCounts, fields.BatchID)
 		}
 	}
-	q.sessionCounts[job.SessionName]--
-	if q.sessionCounts[job.SessionName] <= 0 {
-		delete(q.sessionCounts, job.SessionName)
+	q.sessionCounts[fields.SessionName]--
+	if q.sessionCounts[fields.SessionName] <= 0 {
+		delete(q.sessionCounts, fields.SessionName)
 	}
 
 	// Update stats
 	q.stats.TotalDequeued++
 	q.stats.CurrentSize = len(q.jobs)
-	q.stats.ByPriority[job.Priority]--
-	if q.stats.ByPriority[job.Priority] <= 0 {
-		delete(q.stats.ByPriority, job.Priority)
+	q.stats.ByPriority[fields.Priority]--
+	if q.stats.ByPriority[fields.Priority] <= 0 {
+		delete(q.stats.ByPriority, fields.Priority)
 	}
-	q.stats.ByType[job.Type]--
-	if q.stats.ByType[job.Type] <= 0 {
-		delete(q.stats.ByType, job.Type)
+	q.stats.ByType[fields.Type]--
+	if q.stats.ByType[fields.Type] <= 0 {
+		delete(q.stats.ByType, fields.Type)
 	}
 
 	// Track wait time
@@ -227,29 +260,35 @@ func (q *JobQueue) Remove(id string) *SpawnJob {
 	}
 
 	delete(q.byID, id)
+	fields, ok := q.jobIndexByID[id]
+	if ok {
+		delete(q.jobIndexByID, id)
+	} else {
+		fields = snapshotJobIndexFields(job)
+	}
 
 	// Update counts
-	if job.BatchID != "" {
-		q.batchCounts[job.BatchID]--
-		if q.batchCounts[job.BatchID] <= 0 {
-			delete(q.batchCounts, job.BatchID)
+	if fields.BatchID != "" {
+		q.batchCounts[fields.BatchID]--
+		if q.batchCounts[fields.BatchID] <= 0 {
+			delete(q.batchCounts, fields.BatchID)
 		}
 	}
-	q.sessionCounts[job.SessionName]--
-	if q.sessionCounts[job.SessionName] <= 0 {
-		delete(q.sessionCounts, job.SessionName)
+	q.sessionCounts[fields.SessionName]--
+	if q.sessionCounts[fields.SessionName] <= 0 {
+		delete(q.sessionCounts, fields.SessionName)
 	}
 
 	q.stats.CurrentSize = len(q.jobs)
 	// bd-o35sn: mirror Dequeue's delete-when-zero cleanup so removed
 	// priorities/types don't leave dangling 0 entries in Stats() output.
-	q.stats.ByPriority[job.Priority]--
-	if q.stats.ByPriority[job.Priority] <= 0 {
-		delete(q.stats.ByPriority, job.Priority)
+	q.stats.ByPriority[fields.Priority]--
+	if q.stats.ByPriority[fields.Priority] <= 0 {
+		delete(q.stats.ByPriority, fields.Priority)
 	}
-	q.stats.ByType[job.Type]--
-	if q.stats.ByType[job.Type] <= 0 {
-		delete(q.stats.ByType, job.Type)
+	q.stats.ByType[fields.Type]--
+	if q.stats.ByType[fields.Type] <= 0 {
+		delete(q.stats.ByType, fields.Type)
 	}
 
 	return job
@@ -363,6 +402,7 @@ func (q *JobQueue) Clear() []*SpawnJob {
 
 	q.jobs = make(jobHeap, 0)
 	q.byID = make(map[string]*SpawnJob)
+	q.jobIndexByID = make(map[string]jobIndexFields)
 	q.batchCounts = make(map[string]int)
 	q.sessionCounts = make(map[string]int)
 	q.stats.CurrentSize = 0
@@ -382,15 +422,16 @@ func (q *JobQueue) CancelSession(sessionName string) []*SpawnJob {
 	var cancelled []*SpawnJob
 	var retained jobHeap
 
-	for _, job := range q.jobs {
-		if job.SessionName == sessionName {
-			job.Cancel()
-			cancelled = append(cancelled, job)
-			delete(q.byID, job.ID)
-		} else {
-			retained = append(retained, job)
+		for _, job := range q.jobs {
+			if job.SessionName == sessionName {
+				job.Cancel()
+				cancelled = append(cancelled, job)
+				delete(q.byID, job.ID)
+				delete(q.jobIndexByID, job.ID)
+			} else {
+				retained = append(retained, job)
+			}
 		}
-	}
 
 	if len(cancelled) > 0 {
 		q.jobs = retained
@@ -433,15 +474,16 @@ func (q *JobQueue) CancelBatch(batchID string) []*SpawnJob {
 	var cancelled []*SpawnJob
 	var retained jobHeap
 
-	for _, job := range q.jobs {
-		if job.BatchID == batchID {
-			job.Cancel()
-			cancelled = append(cancelled, job)
-			delete(q.byID, job.ID)
-		} else {
-			retained = append(retained, job)
+		for _, job := range q.jobs {
+			if job.BatchID == batchID {
+				job.Cancel()
+				cancelled = append(cancelled, job)
+				delete(q.byID, job.ID)
+				delete(q.jobIndexByID, job.ID)
+			} else {
+				retained = append(retained, job)
+			}
 		}
-	}
 
 	if len(cancelled) > 0 {
 		q.jobs = retained
