@@ -134,6 +134,29 @@ func TestWorktreeManager_ProvisionWorktreeSanitizesAgentName(t *testing.T) {
 	assertStringEqual(t, info.Agent, "evil-type")
 }
 
+func TestWorktreeManager_ProvisionAndList_PreservesSanitizedHyphenatedAgent(t *testing.T) {
+	repo := setupGitRepo(t)
+	wm, err := NewWorktreeManager(repo)
+	if err != nil {
+		t.Fatalf("NewWorktreeManager: %v", err)
+	}
+
+	info, err := wm.ProvisionWorktree(context.Background(), "../evil/type", "sess/one")
+	if err != nil {
+		t.Fatalf("ProvisionWorktree: %v", err)
+	}
+	assertStringEqual(t, info.Agent, "evil-type")
+
+	worktrees, err := wm.ListWorktrees(context.Background())
+	if err != nil {
+		t.Fatalf("ListWorktrees: %v", err)
+	}
+	if len(worktrees) != 1 {
+		t.Fatalf("expected 1 worktree, got %d", len(worktrees))
+	}
+	assertStringEqual(t, worktrees[0].Agent, "evil-type")
+}
+
 func TestWorktreeManager_worktreeExists(t *testing.T) {
 	t.Parallel()
 
@@ -361,12 +384,14 @@ func TestWorktreeManager_parseWorktreeList_AgentNameExtraction(t *testing.T) {
 	tests := []struct {
 		name      string
 		basename  string
+		branchRef string
 		wantAgent string
 	}{
-		{"simple", "agent-cc-12345678", "cc"},
-		{"codex", "agent-cod-abcdefgh", "cod"},
-		{"gemini", "agent-gmi-sessid12", "gmi"},
-		{"no dash after agent", "agent-onlyone", "onlyone"},
+		{"simple fallback", "agent-cc-12345678", "refs/heads/main", "cc"},
+		{"codex fallback", "agent-cod-abcdefgh", "refs/heads/main", "cod"},
+		{"gemini fallback", "agent-gmi-sessid12", "refs/heads/main", "gmi"},
+		{"no dash after agent fallback", "agent-onlyone", "refs/heads/main", "onlyone"},
+		{"hyphenated canonical key from branch", "agent-evil-type-sess-one", "refs/heads/agent/evil-type/sess-one", "evil-type"},
 	}
 
 	for _, tt := range tests {
@@ -379,7 +404,7 @@ func TestWorktreeManager_parseWorktreeList_AgentNameExtraction(t *testing.T) {
 				t.Fatalf("mkdir: %v", err)
 			}
 
-			output := fmt.Sprintf("worktree %s\nHEAD abc123\nbranch refs/heads/agent/x/y\n", agentPath)
+			output := fmt.Sprintf("worktree %s\nHEAD abc123\nbranch %s\n", agentPath, tt.branchRef)
 
 			wm := &WorktreeManager{}
 			worktrees, err := wm.parseWorktreeList(output)

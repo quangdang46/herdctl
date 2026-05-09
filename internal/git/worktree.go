@@ -63,6 +63,28 @@ func canonicalAgentKey(agentName string) string {
 	return canonicalWorktreeKey(agentName, "agent")
 }
 
+func parseBranchAgentKey(branch string) string {
+	if !strings.HasPrefix(branch, "agent/") {
+		return ""
+	}
+	parts := strings.SplitN(strings.TrimPrefix(branch, "agent/"), "/", 2)
+	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" {
+		return ""
+	}
+	return parts[0]
+}
+
+func parseLegacyAgentKeyFromWorktreeName(name string) string {
+	if !strings.HasPrefix(name, "agent-") {
+		return ""
+	}
+	parts := strings.Split(name, "-")
+	if len(parts) < 2 || strings.TrimSpace(parts[1]) == "" {
+		return ""
+	}
+	return parts[1]
+}
+
 // WorktreeManager handles git worktree creation and management for agent isolation
 type WorktreeManager struct {
 	projectDir string
@@ -313,13 +335,15 @@ func (wm *WorktreeManager) getWorktreeInfo(name string) (*WorktreeInfo, error) {
 		return nil, fmt.Errorf("failed to get commit: %w", err)
 	}
 
-	// Extract agent name from worktree name
-	agentName := "unknown"
-	if strings.HasPrefix(name, "agent-") {
-		parts := strings.Split(name, "-")
-		if len(parts) >= 2 {
-			agentName = parts[1]
-		}
+	// Parse agent key from the branch first. Worktree names encode both
+	// agent and session using '-' delimiters and are ambiguous when the
+	// canonical agent key itself contains '-'.
+	agentName := parseBranchAgentKey(branch)
+	if agentName == "" {
+		agentName = parseLegacyAgentKeyFromWorktreeName(name)
+	}
+	if agentName == "" {
+		agentName = "unknown"
 	}
 
 	// Get last modified time of worktree directory as proxy for last used
@@ -368,14 +392,14 @@ func (wm *WorktreeManager) parseWorktreeList(output string) ([]*WorktreeInfo, er
 
 		// Only include agent worktrees
 		if path != "" && strings.Contains(path, "agent-") {
-			// Extract agent name from path
-			agentName := "unknown"
-			basename := filepath.Base(path)
-			if strings.HasPrefix(basename, "agent-") {
-				parts := strings.Split(basename, "-")
-				if len(parts) >= 2 {
-					agentName = parts[1]
-				}
+			// Parse agent key from branch when possible. Fallback to the
+			// legacy basename parser only when branch metadata is missing.
+			agentName := parseBranchAgentKey(branch)
+			if agentName == "" {
+				agentName = parseLegacyAgentKeyFromWorktreeName(filepath.Base(path))
+			}
+			if agentName == "" {
+				agentName = "unknown"
 			}
 
 			// Get last modified time
