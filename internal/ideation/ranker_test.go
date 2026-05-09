@@ -141,6 +141,30 @@ func TestRankCandidatesDemotesLowEvidenceCandidate(t *testing.T) {
 	}
 }
 
+func TestNormalizeRankOptionsHonorsExplicitNextLimitZero(t *testing.T) {
+	snapshot := NewIdeaEvidenceSnapshot("/repo")
+	snapshot.RecordSource(CandidateSource{ID: "br", Kind: SourceBR, Available: true, Evidence: []string{"queue ok"}})
+	snapshot.Candidates = []IdeaCandidate{
+		{ID: "a", Title: "Alpha", Labels: []string{"queue-dry"}, Evidence: []string{"a"}},
+		{ID: "b", Title: "Beta", Labels: []string{"queue-dry"}, Evidence: []string{"b"}},
+		{ID: "c", Title: "Gamma", Labels: []string{"queue-dry"}, Evidence: []string{"c"}},
+		{ID: "d", Title: "Delta", Labels: []string{"queue-dry"}, Evidence: []string{"d"}},
+	}
+
+	zero := RankCandidates(snapshot, RankOptions{TopLimit: 2, NextLimit: 0})
+	if len(zero.Selected) != 2 {
+		t.Fatalf("zero next: selected=%d, want 2", len(zero.Selected))
+	}
+	if len(zero.NextBest) != 0 {
+		t.Fatalf("zero next: next_best=%d, want 0 (caller asked for none)", len(zero.NextBest))
+	}
+
+	negative := RankCandidates(snapshot, RankOptions{TopLimit: 2, NextLimit: -1})
+	if len(negative.NextBest) == 0 {
+		t.Fatalf("negative next: expected default fill, got %d", len(negative.NextBest))
+	}
+}
+
 func TestRankCandidatesAllDuplicatesSuggestsReview(t *testing.T) {
 	snapshot := NewIdeaEvidenceSnapshot("/repo")
 	snapshot.ExistingWork = []ExistingWorkFingerprint{

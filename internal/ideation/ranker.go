@@ -429,10 +429,9 @@ func normalizeRankOptions(opts RankOptions) RankOptions {
 	if opts.TopLimit <= 0 {
 		opts.TopLimit = DefaultRankOptions().TopLimit
 	}
+	// NextLimit < 0 is the only "unset" sentinel; NextLimit == 0 means the
+	// caller explicitly does not want any next-best candidates emitted.
 	if opts.NextLimit < 0 {
-		opts.NextLimit = 0
-	}
-	if opts.NextLimit == 0 {
 		opts.NextLimit = DefaultRankOptions().NextLimit
 	}
 	return opts
