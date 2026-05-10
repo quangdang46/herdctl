@@ -209,18 +209,30 @@ func (s *Storage) Export(sessionName, checkpointID string, destPath string, opts
 	return manifest, nil
 }
 
-func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest, preparedFiles map[string][]byte) error {
+func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest, preparedFiles map[string][]byte) (err error) {
 	f, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing export file: %w", closeErr)
+		}
+	}()
 
 	gw := gzip.NewWriter(f)
-	defer gw.Close()
+	defer func() {
+		if closeErr := gw.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing gzip export stream: %w", closeErr)
+		}
+	}()
 
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
+	defer func() {
+		if closeErr := tw.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing tar export stream: %w", closeErr)
+		}
+	}()
 
 	// Write metadata.json
 	cpJSON, err := json.MarshalIndent(cp, "", "  ")
@@ -300,15 +312,23 @@ func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []st
 	return nil
 }
 
-func (s *Storage) exportZip(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest, preparedFiles map[string][]byte) error {
+func (s *Storage) exportZip(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest, preparedFiles map[string][]byte) (err error) {
 	f, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing export file: %w", closeErr)
+		}
+	}()
 
 	zw := zip.NewWriter(f)
-	defer zw.Close()
+	defer func() {
+		if closeErr := zw.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing zip export stream: %w", closeErr)
+		}
+	}()
 
 	// Write metadata.json
 	cpJSON, err := json.MarshalIndent(cp, "", "  ")
@@ -410,18 +430,28 @@ func (s *Storage) Import(archivePath string, opts ImportOptions) (*Checkpoint, e
 	}
 }
 
-func (s *Storage) importTarGz(archivePath string, opts ImportOptions) (*Checkpoint, error) {
+func (s *Storage) importTarGz(archivePath string, opts ImportOptions) (result *Checkpoint, err error) {
 	f, err := os.Open(archivePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open archive: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if closeErr := f.Close(); err == nil && closeErr != nil {
+			result = nil
+			err = fmt.Errorf("closing archive file: %w", closeErr)
+		}
+	}()
 
 	gr, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create gzip reader: %w", err)
 	}
-	defer gr.Close()
+	defer func() {
+		if closeErr := gr.Close(); err == nil && closeErr != nil {
+			result = nil
+			err = fmt.Errorf("closing gzip archive reader: %w", closeErr)
+		}
+	}()
 
 	tr := tar.NewReader(gr)
 
@@ -565,12 +595,17 @@ func (s *Storage) importTarGz(archivePath string, opts ImportOptions) (*Checkpoi
 	return cp, nil
 }
 
-func (s *Storage) importZip(archivePath string, opts ImportOptions) (*Checkpoint, error) {
+func (s *Storage) importZip(archivePath string, opts ImportOptions) (result *Checkpoint, err error) {
 	zr, err := zip.OpenReader(archivePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open zip archive: %w", err)
 	}
-	defer zr.Close()
+	defer func() {
+		if closeErr := zr.Close(); err == nil && closeErr != nil {
+			result = nil
+			err = fmt.Errorf("closing zip archive: %w", closeErr)
+		}
+	}()
 
 	var manifest *ExportManifest
 	var cp *Checkpoint

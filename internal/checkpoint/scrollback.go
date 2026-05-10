@@ -17,7 +17,10 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
-const scrollbackCompressionGzip = "gzip"
+const (
+	scrollbackCompressionGzip = "gzip"
+	maxGzipDecompressedBytes  = 50 << 20
+)
 
 // ScrollbackCapture holds the captured scrollback data for a pane.
 type ScrollbackCapture struct {
@@ -138,14 +141,34 @@ func gzipCompress(data []byte) ([]byte, error) {
 
 // gzipDecompress decompresses gzip data.
 func gzipDecompress(data []byte) ([]byte, error) {
+	return gzipDecompressLimited(data, maxGzipDecompressedBytes)
+}
+
+func gzipDecompressLimited(data []byte, limit int64) (decompressed []byte, err error) {
+	if limit <= 0 {
+		return nil, fmt.Errorf("gzip decompression limit must be positive: %d", limit)
+	}
+
 	reader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
-	defer reader.Close()
+	defer func() {
+		if closeErr := reader.Close(); err == nil && closeErr != nil {
+			err = fmt.Errorf("closing gzip reader: %w", closeErr)
+		}
+	}()
 
-	// Prevent gzip bomb OOM by limiting read size (50MB is plenty for a scrollback)
-	return io.ReadAll(io.LimitReader(reader, 50<<20))
+	// Prevent gzip bomb OOM and fail closed instead of returning truncated data.
+	limited := &io.LimitedReader{R: reader, N: limit + 1}
+	decompressed, err = io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(decompressed)) > limit {
+		return nil, fmt.Errorf("decompressed scrollback exceeds limit: %d bytes", limit)
+	}
+	return decompressed, nil
 }
 
 func scrollbackArtifactSummary(capture *ScrollbackCapture, config ScrollbackConfig, relativePath string) *ScrollbackArtifactSummary {

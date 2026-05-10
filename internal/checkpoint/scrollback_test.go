@@ -40,6 +40,30 @@ func TestGzipCompressDecompress(t *testing.T) {
 	}
 }
 
+func TestGzipDecompressLimited_RejectsOversizedOutput(t *testing.T) {
+	data := []byte("0123456789")
+	compressed, err := gzipCompress(data)
+	if err != nil {
+		t.Fatalf("gzipCompress failed: %v", err)
+	}
+
+	got, err := gzipDecompressLimited(compressed, int64(len(data)))
+	if err != nil {
+		t.Fatalf("gzipDecompressLimited exact limit failed: %v", err)
+	}
+	if string(got) != string(data) {
+		t.Fatalf("gzipDecompressLimited exact limit = %q, want %q", string(got), string(data))
+	}
+
+	_, err = gzipDecompressLimited(compressed, int64(len(data)-1))
+	if err == nil {
+		t.Fatal("gzipDecompressLimited oversized output error = nil, want failure")
+	}
+	if !strings.Contains(err.Error(), "decompressed scrollback exceeds limit") {
+		t.Fatalf("gzipDecompressLimited oversized output error = %v, want limit failure", err)
+	}
+}
+
 func TestGzipCompressionRatio(t *testing.T) {
 	// Highly compressible data (repeated pattern)
 	data := strings.Repeat("hello world this is a test\n", 1000)
