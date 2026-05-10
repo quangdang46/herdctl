@@ -397,6 +397,119 @@ func TestExport_Zip_WithScrollbackAndRedaction(t *testing.T) {
 	t.Error("Scrollback file not found in zip archive")
 }
 
+func TestExport_Zip_RedactsCompressedScrollback(t *testing.T) {
+	tmpDir := t.TempDir()
+	exportStorage := NewStorageWithDir(filepath.Join(tmpDir, "export"))
+	importStorage := NewStorageWithDir(filepath.Join(tmpDir, "import"))
+
+	sessionName := "test-session"
+	checkpointID := "20251210-143052-zip-redact-gzip"
+	cp := &Checkpoint{
+		Version:     CurrentVersion,
+		ID:          checkpointID,
+		SessionName: sessionName,
+		CreatedAt:   time.Now(),
+		Session: SessionState{
+			Panes: []PaneState{
+				{ID: "%0", Index: 0},
+			},
+		},
+		PaneCount: 1,
+	}
+
+	if err := exportStorage.Save(cp); err != nil {
+		t.Fatalf("Save failed: %v", err)
+	}
+
+	scrollbackContent := "normal output\nAKIAIOSFODNN7EXAMPLE secret in scrollback\nmore output"
+	compressed, err := gzipCompress([]byte(scrollbackContent))
+	if err != nil {
+		t.Fatalf("gzipCompress failed: %v", err)
+	}
+	scrollbackFile, err := exportStorage.SaveCompressedScrollback(sessionName, checkpointID, "%0", compressed)
+	if err != nil {
+		t.Fatalf("SaveCompressedScrollback failed: %v", err)
+	}
+	cp.Session.Panes[0].ScrollbackFile = scrollbackFile
+	cp.Session.Panes[0].ScrollbackLines = countLines(scrollbackContent)
+	cp.Session.Panes[0].Scrollback = &ScrollbackArtifactSummary{
+		Captured:          true,
+		ArtifactPreserved: true,
+		Compacted:         true,
+		Compression:       scrollbackCompressionGzip,
+		LineCount:         countLines(scrollbackContent),
+		RawBytes:          len(scrollbackContent),
+		StoredBytes:       int64(len(compressed)),
+	}
+	if err := exportStorage.Save(cp); err != nil {
+		t.Fatalf("Save with compressed scrollback reference failed: %v", err)
+	}
+
+	SetRedactionConfig(&redaction.Config{Mode: redaction.ModeRedact})
+	t.Cleanup(func() { SetRedactionConfig(nil) })
+
+	outputPath := filepath.Join(tmpDir, "test-export-redact-gzip.zip")
+	opts := DefaultExportOptions()
+	opts.Format = FormatZip
+	opts.RedactSecrets = true
+	if _, err := exportStorage.Export(sessionName, checkpointID, outputPath, opts); err != nil {
+		t.Fatalf("Export failed: %v", err)
+	}
+
+	archivedData := readZipEntry(t, outputPath, scrollbackFile)
+	plainData, err := gzipDecompress(archivedData)
+	if err != nil {
+		t.Fatalf("exported compressed scrollback is not valid gzip: %v", err)
+	}
+	plainText := string(plainData)
+	if strings.Contains(plainText, "AKIAIOSFODNN7EXAMPLE") {
+		t.Fatal("expected AWS key to be redacted in compressed exported scrollback")
+	}
+	if !strings.Contains(plainText, "normal output") {
+		t.Fatal("expected normal output to be preserved in compressed exported scrollback")
+	}
+
+	sessionData := readZipEntry(t, outputPath, SessionFile)
+	var archivedSession SessionState
+	if err := json.Unmarshal(sessionData, &archivedSession); err != nil {
+		t.Fatalf("failed to parse archived session.json: %v", err)
+	}
+	summary := archivedSession.Panes[0].Scrollback
+	if summary == nil {
+		t.Fatal("archived compressed scrollback summary is nil")
+	}
+	if summary.StoredBytes != int64(len(archivedData)) {
+		t.Fatalf("archived summary StoredBytes = %d, want %d", summary.StoredBytes, len(archivedData))
+	}
+	if summary.RawBytes != len(plainData) {
+		t.Fatalf("archived summary RawBytes = %d, want %d", summary.RawBytes, len(plainData))
+	}
+	if summary.LineCount != countLines(plainText) {
+		t.Fatalf("archived summary LineCount = %d, want %d", summary.LineCount, countLines(plainText))
+	}
+	if !summary.Compacted || summary.Compression != scrollbackCompressionGzip {
+		t.Fatalf("archived summary compaction = %v/%q, want gzip", summary.Compacted, summary.Compression)
+	}
+	if cp.Session.Panes[0].Scrollback.StoredBytes != int64(len(compressed)) {
+		t.Fatalf("export mutated original summary StoredBytes = %d, want %d", cp.Session.Panes[0].Scrollback.StoredBytes, len(compressed))
+	}
+
+	imported, err := importStorage.Import(outputPath, ImportOptions{})
+	if err != nil {
+		t.Fatalf("Import failed: %v", err)
+	}
+	loaded, err := importStorage.LoadPaneScrollback(imported.SessionName, imported.ID, imported.Session.Panes[0])
+	if err != nil {
+		t.Fatalf("LoadPaneScrollback imported compressed artifact failed: %v", err)
+	}
+	if strings.Contains(loaded, "AKIAIOSFODNN7EXAMPLE") {
+		t.Fatal("imported compressed scrollback still contains original AWS key")
+	}
+	if !strings.Contains(loaded, "normal output") {
+		t.Fatal("imported compressed scrollback lost normal output")
+	}
+}
+
 func TestExport_TarGz_FailsWhenReferencedScrollbackMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 	storage := NewStorageWithDir(tmpDir)

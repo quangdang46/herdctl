@@ -187,13 +187,17 @@ func (s *Storage) Export(sessionName, checkpointID string, destPath string, opts
 
 	// Prepare checkpoint data (potentially with path rewriting)
 	cpData := rewriteCheckpointForExport(cp, opts)
+	redactedScrollbackFiles, err := prepareRedactedScrollbackArtifacts(cpDir, cpData, opts)
+	if err != nil {
+		return nil, err
+	}
 
 	// Create the archive
 	switch opts.Format {
 	case FormatTarGz:
-		err = s.exportTarGz(destPath, cpDir, cpData, files, opts, manifest)
+		err = s.exportTarGz(destPath, cpDir, cpData, files, opts, manifest, redactedScrollbackFiles)
 	case FormatZip:
-		err = s.exportZip(destPath, cpDir, cpData, files, opts, manifest)
+		err = s.exportZip(destPath, cpDir, cpData, files, opts, manifest, redactedScrollbackFiles)
 	default:
 		return nil, fmt.Errorf("unsupported export format: %s", opts.Format)
 	}
@@ -205,7 +209,7 @@ func (s *Storage) Export(sessionName, checkpointID string, destPath string, opts
 	return manifest, nil
 }
 
-func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest) error {
+func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest, preparedFiles map[string][]byte) error {
 	f, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
@@ -259,18 +263,16 @@ func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []st
 			continue
 		}
 
-		srcPath, err := resolveExistingCheckpointArtifactPath(cpDir, file)
-		if err != nil {
-			return fmt.Errorf("invalid checkpoint file path %s: %w", file, err)
-		}
-		data, err := os.ReadFile(srcPath)
-		if err != nil {
-			return fmt.Errorf("failed to read checkpoint file %s: %w", file, err)
-		}
-
-		// Redact secrets from scrollback files
-		if opts.RedactSecrets && strings.HasPrefix(file, PanesDir+"/") {
-			data = redactSecrets(data)
+		data, prepared := preparedFiles[file]
+		if !prepared {
+			srcPath, err := resolveExistingCheckpointArtifactPath(cpDir, file)
+			if err != nil {
+				return fmt.Errorf("invalid checkpoint file path %s: %w", file, err)
+			}
+			data, err = os.ReadFile(srcPath)
+			if err != nil {
+				return fmt.Errorf("failed to read checkpoint file %s: %w", file, err)
+			}
 		}
 
 		checksum := sha256sum(data)
@@ -298,7 +300,7 @@ func (s *Storage) exportTarGz(destPath, cpDir string, cp *Checkpoint, files []st
 	return nil
 }
 
-func (s *Storage) exportZip(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest) error {
+func (s *Storage) exportZip(destPath, cpDir string, cp *Checkpoint, files []string, opts ExportOptions, manifest *ExportManifest, preparedFiles map[string][]byte) error {
 	f, err := os.Create(destPath)
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
@@ -349,17 +351,16 @@ func (s *Storage) exportZip(destPath, cpDir string, cp *Checkpoint, files []stri
 			continue
 		}
 
-		srcPath, err := resolveExistingCheckpointArtifactPath(cpDir, file)
-		if err != nil {
-			return fmt.Errorf("invalid checkpoint file path %s: %w", file, err)
-		}
-		data, err := os.ReadFile(srcPath)
-		if err != nil {
-			return fmt.Errorf("failed to read checkpoint file %s: %w", file, err)
-		}
-
-		if opts.RedactSecrets && strings.HasPrefix(file, PanesDir+"/") {
-			data = redactSecrets(data)
+		data, prepared := preparedFiles[file]
+		if !prepared {
+			srcPath, err := resolveExistingCheckpointArtifactPath(cpDir, file)
+			if err != nil {
+				return fmt.Errorf("invalid checkpoint file path %s: %w", file, err)
+			}
+			data, err = os.ReadFile(srcPath)
+			if err != nil {
+				return fmt.Errorf("failed to read checkpoint file %s: %w", file, err)
+			}
 		}
 
 		checksum := sha256sum(data)
@@ -762,6 +763,56 @@ func sha256sum(data []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
+type redactedScrollbackArtifact struct {
+	data        []byte
+	raw         []byte
+	compacted   bool
+	compression string
+}
+
+func prepareRedactedScrollbackArtifacts(cpDir string, cp *Checkpoint, opts ExportOptions) (map[string][]byte, error) {
+	if !opts.RedactSecrets || !opts.IncludeScrollback {
+		return nil, nil
+	}
+
+	prepared := make(map[string][]byte)
+	for i := range cp.Session.Panes {
+		pane := &cp.Session.Panes[i]
+		if pane.ScrollbackFile == "" {
+			continue
+		}
+
+		srcPath, err := resolveExistingCheckpointArtifactPath(cpDir, pane.ScrollbackFile)
+		if err != nil {
+			return nil, fmt.Errorf("invalid checkpoint file path %s: %w", pane.ScrollbackFile, err)
+		}
+		data, err := os.ReadFile(srcPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read checkpoint file %s: %w", pane.ScrollbackFile, err)
+		}
+		artifact, err := redactScrollbackArtifact(pane.ScrollbackFile, data)
+		if err != nil {
+			return nil, fmt.Errorf("redacting scrollback file %s: %w", pane.ScrollbackFile, err)
+		}
+
+		prepared[pane.ScrollbackFile] = artifact.data
+		if pane.Scrollback != nil {
+			summary := *pane.Scrollback
+			summary.Captured = true
+			summary.ArtifactPreserved = true
+			summary.Compacted = artifact.compacted
+			summary.Compression = artifact.compression
+			summary.LineCount = countLines(string(artifact.raw))
+			summary.RawBytes = len(artifact.raw)
+			summary.StoredBytes = int64(len(artifact.data))
+			pane.Scrollback = &summary
+		}
+		pane.ScrollbackLines = countLines(string(artifact.raw))
+	}
+
+	return prepared, nil
+}
+
 func redactSecrets(data []byte) []byte {
 	redactionMu.RLock()
 	cfg := redactionConfig
@@ -780,9 +831,36 @@ func redactSecrets(data []byte) []byte {
 	return []byte(result.Output)
 }
 
+func redactScrollbackArtifact(path string, data []byte) (redactedScrollbackArtifact, error) {
+	if filepath.Ext(path) != ".gz" {
+		redacted := redactSecrets(data)
+		return redactedScrollbackArtifact{
+			data: redacted,
+			raw:  redacted,
+		}, nil
+	}
+
+	decompressed, err := gzipDecompress(data)
+	if err != nil {
+		return redactedScrollbackArtifact{}, fmt.Errorf("decompressing compressed scrollback: %w", err)
+	}
+	redacted := redactSecrets(decompressed)
+	recompressed, err := gzipCompress(redacted)
+	if err != nil {
+		return redactedScrollbackArtifact{}, fmt.Errorf("recompressing redacted scrollback: %w", err)
+	}
+	return redactedScrollbackArtifact{
+		data:        recompressed,
+		raw:         redacted,
+		compacted:   true,
+		compression: scrollbackCompressionGzip,
+	}, nil
+}
+
 func rewriteCheckpointForExport(cp *Checkpoint, opts ExportOptions) *Checkpoint {
 	result := *cp
 	result.Session.WindowLayouts = cloneWindowLayouts(cp.Session.WindowLayouts)
+	result.Session.Panes = clonePaneStatesForExport(cp.Session.Panes)
 	if opts.RewritePaths && result.WorkingDir != "" {
 		result.WorkingDir = "${WORKING_DIR}"
 	}
@@ -799,6 +877,22 @@ func rewriteCheckpointForExport(cp *Checkpoint, opts ExportOptions) *Checkpoint 
 		result.Git.PatchFile = ""
 	}
 	return &result
+}
+
+func clonePaneStatesForExport(panes []PaneState) []PaneState {
+	if panes == nil {
+		return nil
+	}
+	cloned := make([]PaneState, len(panes))
+	copy(cloned, panes)
+	for i := range cloned {
+		if cloned[i].Scrollback == nil {
+			continue
+		}
+		summary := *cloned[i].Scrollback
+		cloned[i].Scrollback = &summary
+	}
+	return cloned
 }
 
 func validateImportOverwrite(cpDir string, fileContents map[string][]byte) error {
