@@ -418,6 +418,57 @@ func TestIncrementalCreatorSave_RecordsCompressedDiffSummary(t *testing.T) {
 	assertCompressedDiffSummary(t, loadedChange.DiffSummary, diffContent, newLines)
 }
 
+func TestIncrementalCreatorSave_RejectsDiffPanesSymlink(t *testing.T) {
+	tmpDir := t.TempDir()
+	storage := NewStorageWithDir(tmpDir)
+	creator := NewIncrementalCreatorWithStorage(storage)
+	sessionName := "test-session"
+	incID := "inc-diff-panes-symlink"
+	incDir := filepath.Join(tmpDir, sessionName, "incremental", incID)
+	if err := os.MkdirAll(incDir, 0755); err != nil {
+		t.Fatalf("MkdirAll(incremental dir) failed: %v", err)
+	}
+	outsideDir := filepath.Join(tmpDir, "outside-diffs")
+	if err := os.MkdirAll(outsideDir, 0755); err != nil {
+		t.Fatalf("MkdirAll(outside dir) failed: %v", err)
+	}
+	if err := os.Symlink(outsideDir, filepath.Join(incDir, DiffPanesDir)); err != nil {
+		t.Skipf("cannot create symlink: %v", err)
+	}
+
+	inc := &IncrementalCheckpoint{
+		Version:          IncrementalVersion,
+		ID:               incID,
+		SessionName:      sessionName,
+		BaseCheckpointID: "base",
+		BaseTimestamp:    time.Now().Add(-time.Hour),
+		CreatedAt:        time.Now(),
+		Changes: IncrementalChanges{
+			PaneChanges: map[string]PaneChange{
+				"%0": {
+					NewLines:    1,
+					DiffContent: "new output line\n",
+				},
+			},
+		},
+	}
+
+	err := creator.save(inc, "")
+	if err == nil {
+		t.Fatal("save() error = nil, want diff panes symlink rejection")
+	}
+	if !strings.Contains(err.Error(), "diff panes path must not be a symlink") {
+		t.Fatalf("save() error = %v, want diff panes symlink rejection", err)
+	}
+	entries, err := os.ReadDir(outsideDir)
+	if err != nil {
+		t.Fatalf("ReadDir(outside dir) failed: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("save() wrote %d entries outside checkpoint root via symlink", len(entries))
+	}
+}
+
 func assertCompressedDiffSummary(t *testing.T, summary *ScrollbackArtifactSummary, content string, lines int) {
 	t.Helper()
 

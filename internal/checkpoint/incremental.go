@@ -540,9 +540,9 @@ func (ic *IncrementalCreator) save(inc *IncrementalCheckpoint, repoDir string) e
 	}
 
 	// Save pane diffs
-	diffDir := filepath.Join(dir, DiffPanesDir)
-	if err := os.MkdirAll(diffDir, 0755); err != nil {
-		return fmt.Errorf("creating diff panes directory: %w", err)
+	diffDir, err := ensureCheckpointSubdir(dir, DiffPanesDir, "diff panes")
+	if err != nil {
+		return err
 	}
 
 	for paneID, change := range inc.Changes.PaneChanges {
