@@ -118,12 +118,30 @@ func TestLocksCheckPathMatches_ExactAndPrefixAndGlobs(t *testing.T) {
 		{"recursive_glob_match", "src/auth/handler.rs", "src/**", true},
 		{"recursive_glob_root_match", "src/auth.rs", "src/**", true},
 		{"recursive_glob_unrelated", "tests/auth.rs", "src/**", false},
+		{"recursive_glob_directory_itself", "src", "src/**", true},
+		// Bare ** is the broad catch-all used by reservation tooling.
+		{"bare_recursive_glob", "internal/cli/locks.go", "**", true},
+		{"bare_recursive_glob_absolute", "/data/projects/foo/internal/cli/locks.go", "**", true},
 		// Suffix recursive glob
 		{"suffix_recursive", "src/auth/handler.rs", "**/handler.rs", true},
+		{"suffix_recursive_middle", "internal/cli/locks.go", "internal/**/*.go", true},
+		{"suffix_recursive_middle_unrelated_ext", "internal/cli/locks.txt", "internal/**/*.go", false},
+		{"prefix_recursive_suffix", "internal/cli/locks.go", "**/*.go", true},
 		// Single-char wildcards
 		{"single_segment_glob", "auth.rs", "*.rs", true},
+		{"single_segment_glob_no_slash_crossing", "src/auth.rs", "*.rs", false},
+		{"single_segment_subdir_glob", "src/auth.rs", "src/*.rs", true},
+		{"single_segment_subdir_glob_no_deep_crossing", "src/auth/handler.rs", "src/*.rs", false},
 		// Empty pattern shouldn't match anything
 		{"empty_pattern", "src/auth.rs", "", false},
+		// Regression: empty pattern + absolute path must NOT match.
+		// Without the explicit guard, HasPrefix("/abs/path", ""+"/")
+		// would return true and incorrectly report `blocked` for
+		// every absolute-path query whenever any reservation
+		// somehow ended up with an empty path_pattern. This is the
+		// shape that motivated the empty-pattern guard.
+		{"empty_pattern_absolute_path", "/data/projects/foo", "", false},
+		{"empty_pattern_root", "/", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

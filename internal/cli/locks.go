@@ -18,13 +18,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/worktrees"
 )
 
-// filepathMatchImpl wraps path/filepath.Match so we can swap in a
-// glob matcher with a different semantics later without rewiring
-// every caller. See `filepath_match` in locks.go.
-func filepathMatchImpl(pattern, path string) (bool, error) {
-	return filepath.Match(pattern, path)
-}
-
 func newLocksCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "locks",
@@ -102,12 +95,12 @@ type LocksCheckResult struct {
 // LocksCheckHolder identifies the agent currently holding the path
 // and the metadata downstream coordinators care about.
 type LocksCheckHolder struct {
-	Agent       string `json:"agent"`
-	Reason      string `json:"reason,omitempty"`
-	ExpiresAt   string `json:"expires_at"`
-	Exclusive   bool   `json:"exclusive"`
-	PathPattern string `json:"path_pattern"`
-	ReservationID int  `json:"reservation_id"`
+	Agent         string `json:"agent"`
+	Reason        string `json:"reason,omitempty"`
+	ExpiresAt     string `json:"expires_at"`
+	Exclusive     bool   `json:"exclusive"`
+	PathPattern   string `json:"path_pattern"`
+	ReservationID int    `json:"reservation_id"`
 }
 
 func newLocksCheckCmd() *cobra.Command {
@@ -234,8 +227,18 @@ func runLocksCheck(session, path string, pane int, taskID string) error {
 		return fmt.Errorf("listing reservations: %w", err)
 	}
 
+	// Two-pass match: prefer the caller's own reservation over any
+	// other-agent's. Without this, the loop would break on the first
+	// matching reservation, which may be from another agent who
+	// reserved the path first — incorrectly reporting `blocked` even
+	// when the caller also has a valid matching reservation. The
+	// expected semantics for wrappers (ntm#127) is `held` when the
+	// caller has a matching reservation, regardless of whether
+	// another agent also has one.
 	now := time.Now()
-	var holder *agentmail.FileReservation
+	matchPath := locksComparableReservationPath(path, projectKey)
+	var ownHolder *agentmail.FileReservation
+	var otherHolder *agentmail.FileReservation
 	for i := range allReservations {
 		r := &allReservations[i]
 		if r.ReleasedTS != nil {
@@ -244,14 +247,28 @@ func runLocksCheck(session, path string, pane int, taskID string) error {
 		if !r.ExpiresTS.Time.IsZero() && r.ExpiresTS.Time.Before(now) {
 			continue
 		}
-		if !locksCheckPathMatches(path, r.PathPattern) {
+		matchPattern := locksComparableReservationPath(r.PathPattern, projectKey)
+		if !locksCheckPathMatches(matchPath, matchPattern) {
 			continue
 		}
-		holder = r
-		break
+		if agentName != "" && r.AgentName == agentName {
+			// Caller owns this reservation — definitive `held` result.
+			// Stop here; nothing further can change the verdict.
+			ownHolder = r
+			break
+		}
+		if otherHolder == nil {
+			// First other-agent match. Remember but keep scanning in
+			// case the caller has a later matching reservation.
+			otherHolder = r
+		}
 	}
 
 	result.Success = true
+	holder := ownHolder
+	if holder == nil {
+		holder = otherHolder
+	}
 	if holder == nil {
 		result.State = "free"
 	} else {
@@ -294,18 +311,34 @@ func runLocksCheck(session, path string, pane int, taskID string) error {
 //   - Pattern with no glob meta — exact match OR `path` starts with
 //     `pattern + "/"` (caller asking about a file inside a reserved
 //     directory).
-//   - Pattern with glob meta — delegate to filepath.Match. This is
-//     conservative: `**` recursive globs are not expanded the same
-//     way as the upstream reservation matcher, so a `src/**` pattern
-//     reported by Agent Mail is treated as a literal-with-glob and
-//     may report `blocked` for a path inside `src/` only when the
-//     stdlib matcher accepts it. For tighter contract semantics the
-//     caller can request the path verbatim and check via Agent Mail
-//     directly — this is a wrapper-side convenience, not a security
-//     gate.
+//   - Pattern with glob meta — match by slash-separated path
+//     segments. A single `*` stays within one segment, while `**`
+//     spans zero or more segments, mirroring the reservation patterns
+//     wrappers already use for Agent Mail file reservations.
 func locksCheckPathMatches(path, pattern string) bool {
+	path = locksNormalizeReservationPath(path)
+	pattern = locksNormalizeReservationPath(pattern)
+
+	// Empty pattern: the loop below would compute `pattern+"/"` = "/"
+	// and HasPrefix(absolute_path, "/") would falsely match every
+	// absolute path. An empty pattern is meaningless (no actual
+	// reservation would carry one) but we guard explicitly so a
+	// future data anomaly can't silently flip every check to
+	// `blocked`.
+	if pattern == "" {
+		return false
+	}
 	if path == pattern {
 		return true
+	}
+	if pattern == "**" {
+		return path != ""
+	}
+	if strings.ContainsAny(pattern, "*?[") {
+		return locksMatchPatternSegments(
+			locksSplitPathSegments(pattern),
+			locksSplitPathSegments(path),
+		)
 	}
 	if strings.HasSuffix(pattern, "/") && strings.HasPrefix(path, pattern) {
 		return true
@@ -313,42 +346,68 @@ func locksCheckPathMatches(path, pattern string) bool {
 	if strings.HasPrefix(path, pattern+"/") {
 		return true
 	}
-	if strings.ContainsAny(pattern, "*?[") {
-		if matched, err := filepathMatchAny(pattern, path); err == nil && matched {
-			return true
-		}
-	}
 	return false
 }
 
-// filepathMatchAny is a wrapper around filepath.Match that strips
-// the recursive `**` glob (which stdlib doesn't understand) into a
-// best-effort single-segment match.
-func filepathMatchAny(pattern, path string) (bool, error) {
-	// Handle the common `**` form by converting to a prefix match.
-	if strings.HasSuffix(pattern, "/**") {
-		prefix := strings.TrimSuffix(pattern, "/**")
-		return strings.HasPrefix(path, prefix+"/"), nil
-	}
-	if strings.HasPrefix(pattern, "**/") {
-		suffix := strings.TrimPrefix(pattern, "**/")
-		return strings.HasSuffix(path, "/"+suffix) || path == suffix, nil
-	}
-	// Last resort: stdlib filepath.Match. This is conservative and
-	// may miss matches that the upstream reservation matcher accepts.
-	return filepath_match(pattern, path)
+func locksNormalizeReservationPath(value string) string {
+	value = strings.TrimSpace(value)
+	value = filepath.ToSlash(value)
+	return strings.TrimPrefix(value, "./")
 }
 
-// filepath_match is a thin wrapper renamed to avoid importing
-// `path/filepath` at the top of the file (the rest of locks.go
-// doesn't need it). Keeping the import scoped to a helper makes it
-// easy to swap in a stricter matcher later if Agent Mail exposes
-// one.
-func filepath_match(pattern, path string) (bool, error) {
-	// Lazy import — Go has no built-in lazy import so we just
-	// call the stdlib `path/filepath.Match` here directly.
-	// (Realized at compile time as a normal package reference.)
-	return filepathMatchImpl(pattern, path)
+func locksComparableReservationPath(value, projectKey string) string {
+	value = locksNormalizeReservationPath(value)
+	projectKey = locksNormalizeReservationPath(projectKey)
+	if value == "" || projectKey == "" {
+		return value
+	}
+	if value == projectKey {
+		return "."
+	}
+	if strings.HasPrefix(value, projectKey+"/") {
+		return strings.TrimPrefix(value, projectKey+"/")
+	}
+	return value
+}
+
+func locksSplitPathSegments(value string) []string {
+	parts := strings.Split(value, "/")
+	segments := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		segments = append(segments, part)
+	}
+	return segments
+}
+
+func locksMatchPatternSegments(patternSegs, pathSegs []string) bool {
+	if len(patternSegs) == 0 {
+		return len(pathSegs) == 0
+	}
+
+	if patternSegs[0] == "**" {
+		for i := 0; i <= len(pathSegs); i++ {
+			if locksMatchPatternSegments(patternSegs[1:], pathSegs[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+
+	if len(pathSegs) == 0 {
+		return false
+	}
+	if !locksMatchSegment(patternSegs[0], pathSegs[0]) {
+		return false
+	}
+	return locksMatchPatternSegments(patternSegs[1:], pathSegs[1:])
+}
+
+func locksMatchSegment(pattern, segment string) bool {
+	matched, err := filepath.Match(pattern, segment)
+	return err == nil && matched
 }
 
 // newLocksCheckAuditToken produces an opaque stable identifier for

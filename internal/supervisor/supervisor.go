@@ -685,12 +685,25 @@ func DefaultSpecs() []DaemonSpec {
 			// for the duration of this code path's life. See ntm#137.
 			//
 			// `--no-tui` keeps the supervised process headless (no
-			// curses surface that would conflict with ntm's tmux panes);
+			// curses surface that would conflict with ntm's tmux panes).
+			//
 			// `--host 127.0.0.1` locks the bind to loopback so the
 			// supervised daemon is not exposed beyond the local box.
+			// Without this, `--no-auth` would expose the API to anyone
+			// on the network.
+			//
 			// `--no-auth` matches the canonical args the launchd /
-			// systemd installers `am service install` produce — see
-			// the workaround documented in #137.
+			// systemd installers `am service install` produce. This is
+			// safe for single-user workstations (the bind is loopback)
+			// but is a security trade-off on shared multi-user hosts:
+			// any other user on the same machine can hit the loopback
+			// API. Operators on shared hosts should set
+			// `[agent_mail].supervisor_enabled = false` in
+			// `~/.config/ntm/config.toml` and run `am serve-http`
+			// themselves with an auth-token configuration — ntm will
+			// then skip lifecycle management for the daemon. See
+			// `AgentMailConfig.SupervisorEnabled` for the opt-out
+			// docstring.
 			Name:        "am",
 			Command:     "am",
 			Args:        []string{"serve-http", "--host", "127.0.0.1", "--no-tui", "--no-auth"},
