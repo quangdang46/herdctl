@@ -214,6 +214,13 @@ func TestOpenAPISpecRequiredComponents(t *testing.T) {
 	if _, ok := spec.Components.SecuritySchemes["bearerAuth"]; !ok {
 		t.Error("missing bearerAuth security scheme")
 	}
+	apiKey, ok := spec.Components.SecuritySchemes["apiKey"]
+	if !ok {
+		t.Fatal("missing apiKey security scheme")
+	}
+	if apiKey.Type != "apiKey" || apiKey.Name == "" || apiKey.In == "" {
+		t.Fatalf("apiKey security scheme is incomplete: type=%q name=%q in=%q", apiKey.Type, apiKey.Name, apiKey.In)
+	}
 }
 
 func TestOpenAPIEnvelopeSchemasMatchRuntimeContract(t *testing.T) {

@@ -119,6 +119,8 @@ type SecurityScheme struct {
 	Type         string `json:"type"`
 	Scheme       string `json:"scheme,omitempty"`
 	BearerFormat string `json:"bearerFormat,omitempty"`
+	Name         string `json:"name,omitempty"`
+	In           string `json:"in,omitempty"`
 	Description  string `json:"description,omitempty"`
 }
 
@@ -168,6 +170,8 @@ func GenerateOpenAPISpec(version, serverURL string) *OpenAPISpec {
 				},
 				"apiKey": {
 					Type:        "apiKey",
+					Name:        "X-API-Key",
+					In:          "header",
 					Description: "API key authentication via X-API-Key header",
 				},
 			},
