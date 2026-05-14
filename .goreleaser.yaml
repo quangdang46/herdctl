@@ -146,8 +146,9 @@ release:
     # Homebrew (macOS/Linux)
     brew install dicklesworthstone/tap/ntm
 
-    # Go install
-    go install github.com/Dicklesworthstone/ntm/cmd/ntm@{{ .Tag }}
+    # Source build
+    git clone https://github.com/Dicklesworthstone/ntm.git
+    cd ntm && go install ./cmd/ntm
     ```
 
     ### Shell Integration

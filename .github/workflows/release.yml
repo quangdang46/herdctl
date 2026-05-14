@@ -338,8 +338,9 @@ jobs:
           echo "# Homebrew" >> $GITHUB_STEP_SUMMARY
           echo "brew install dicklesworthstone/tap/ntm" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "# Go install" >> $GITHUB_STEP_SUMMARY
-          echo "go install github.com/Dicklesworthstone/ntm/cmd/ntm@${{ steps.release.outputs.tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "# Source build" >> $GITHUB_STEP_SUMMARY
+          echo "git clone https://github.com/Dicklesworthstone/ntm.git" >> $GITHUB_STEP_SUMMARY
+          echo "cd ntm && go install ./cmd/ntm" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Verification" >> $GITHUB_STEP_SUMMARY

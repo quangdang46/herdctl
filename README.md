@@ -497,12 +497,6 @@ curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install
 brew install dicklesworthstone/tap/ntm
 ```
 
-### Go Install
-
-```bash
-go install github.com/Dicklesworthstone/ntm/cmd/ntm@latest
-```
-
 ### Docker
 
 ```bash
@@ -515,7 +509,7 @@ docker run --rm -it ntm
 ```bash
 git clone https://github.com/Dicklesworthstone/ntm.git
 cd ntm
-go build ./cmd/ntm
+go install ./cmd/ntm
 ```
 
 ## Troubleshooting

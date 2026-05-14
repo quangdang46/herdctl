@@ -2,7 +2,7 @@
 
 Started: 2026-05-14
 
-Target release: v1.15.0
+Target release: v1.15.1
 
 ## Scope
 
@@ -15,6 +15,7 @@ Target release: v1.15.0
 
 - `third_party/bubbletea` intentionally preserves the NTM-local `tea_init.go` behavior that avoids Bubble Tea's eager terminal background probe. The local `/data/projects/charmed_rust/legacy_bubbletea` checkout currently includes that upstream probe again, so this pass does not blindly copy that file over the NTM patch.
 - `chromedp` v0.15.1 requires Go 1.26, so the root module now targets `go 1.26`.
+- NTM keeps a local patched Bubble Tea replacement, so versioned `go install github.com/Dicklesworthstone/ntm/cmd/ntm@...` is not a supported install path. Source-build instructions now clone the repo first and run `go install ./cmd/ntm` inside the checkout.
 - The web app uses TypeScript 5.9.3 and ESLint 9.39.4 rather than the newest majors because `openapi-typescript` 7.13.0 still peers on TypeScript 5.x and the current Next ESLint plugin stack has not declared ESLint 10 support. These are the latest compatible no-peer-warning versions.
 - `next` 16.2.6 bundles a vulnerable PostCSS version for audit purposes, so `web/package.json` overrides PostCSS to 8.5.14.
 
