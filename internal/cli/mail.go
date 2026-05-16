@@ -51,11 +51,12 @@ Examples:
 
 func newMailSendCmd() *cobra.Command {
 	var (
-		to       []string
-		subject  string
-		threadID string
-		all      bool
-		fromFile string
+		to                 []string
+		subject            string
+		threadID           string
+		all                bool
+		fromFile           string
+		preparedRedaction  string
 	)
 
 	cmd := &cobra.Command{
@@ -74,6 +75,11 @@ Use --all to send to all registered agents in the project.
 
 If no message body is provided, opens $EDITOR for composition.
 
+For token-bearing payloads, use the prepare/send handle pattern:
+  handle=$(SENDER_TOKEN=secret ntm redact prepare-mail --sender-token-env=SENDER_TOKEN --json | jq -r .handle)
+  ntm mail send <session> --to <agent> --prepared-redaction "$handle"
+The raw token never enters the command line, env, or logs. See ntm#126.
+
 Examples:
   ntm mail send myproject --to GreenCastle "Please review the API changes"
   ntm mail send myproject --all "Stop current work and checkpoint"
@@ -82,6 +88,24 @@ Examples:
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session := args[0]
+
+			// --prepared-redaction is mutually exclusive with positional
+			// body, --file, and the editor flow: the handle IS the body
+			// source. Consume the handle eagerly so an unused handle
+			// doesn't get left in the in-process store.
+			if preparedRedaction != "" {
+				if fromFile != "" || len(args) > 1 {
+					return fmt.Errorf("--prepared-redaction is mutually exclusive with --file and positional body")
+				}
+				raw, _, _, err := consumePreparedRedaction(preparedRedaction)
+				if err != nil {
+					return err
+				}
+				if strings.TrimSpace(raw) == "" {
+					return fmt.Errorf("prepared redaction handle %q produced empty body", preparedRedaction)
+				}
+				return runMailSendOverseer(cmd, session, to, subject, raw, threadID, all)
+			}
 
 			// Get message body
 			var body string
@@ -119,6 +143,7 @@ Examples:
 	cmd.Flags().StringVar(&threadID, "thread", "", "thread ID for conversation continuity")
 	cmd.Flags().BoolVar(&all, "all", false, "send to all registered agents in project")
 	cmd.Flags().StringVarP(&fromFile, "file", "f", "", "read message body from file")
+	cmd.Flags().StringVar(&preparedRedaction, "prepared-redaction", "", "Consume a token-handle from `ntm redact prepare-mail` and use its stashed body as the message (raw token never enters this command's args/env/logs; see ntm#126)")
 
 	return cmd
 }

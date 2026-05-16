@@ -263,5 +263,5 @@ func (v *agentSpecsValue) Set(value string) error {
 }
 
 func (v *agentSpecsValue) Type() string {
-	return "N[:model]"
+	return "N[:model[:effort]]"
 }

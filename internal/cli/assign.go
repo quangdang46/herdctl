@@ -3,6 +3,8 @@ package cli
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -798,6 +800,10 @@ type DirectAssignFileReservations struct {
 type DirectAssignData struct {
 	Assignment       *DirectAssignItem             `json:"assignment"`
 	FileReservations *DirectAssignFileReservations `json:"file_reservations,omitempty"`
+	// Receipt is the wrapper-grade dispatch receipt — populated for
+	// both real dispatches and `--dry-run` planning so wrappers can
+	// drop their parallel dispatch log. See ntm#128.
+	Receipt *DispatchReceipt `json:"receipt,omitempty"`
 }
 
 // getAssignOutput builds the assignment output without printing
@@ -3879,6 +3885,59 @@ type DirectAssignResult struct {
 	PaneWasBusy    bool                          `json:"pane_was_busy,omitempty"`
 	DepsIgnored    bool                          `json:"deps_ignored,omitempty"`
 	BlockedByBeads []string                      `json:"blocked_by_beads,omitempty"`
+	// Receipt is the wrapper-grade dispatch receipt — pane identity,
+	// prompt fingerprint, reservation outcome, transport status, and
+	// timestamp. Lets downstream automation drop their parallel
+	// dispatch log because the envelope itself is the proof of what
+	// was sent. See ntm#128.
+	Receipt *DispatchReceipt `json:"receipt,omitempty"`
+}
+
+// DispatchReceipt is the stable per-dispatch envelope wrappers consume.
+// Fields are present on dry-run too (with `would_*` semantics surfaced
+// by the surrounding envelope's Success/PaneWasBusy fields).
+// See ntm#128.
+type DispatchReceipt struct {
+	WorkItemID  string                  `json:"work_item_id"`
+	Pane        DispatchPaneRef         `json:"pane"`
+	Prompt      DispatchPromptInfo      `json:"prompt"`
+	Reservation *DispatchReservation    `json:"reservation,omitempty"`
+	Transport   DispatchTransportStatus `json:"transport"`
+	Timestamp   string                  `json:"timestamp"`
+	DryRun      bool                    `json:"dry_run,omitempty"`
+}
+
+// DispatchPaneRef identifies the pane the work was dispatched to.
+type DispatchPaneRef struct {
+	Session string `json:"session"`
+	Index   int    `json:"index"`
+	ID      string `json:"id,omitempty"`    // tmux %N pane id
+	Title   string `json:"title,omitempty"` // tmux pane title at dispatch time
+}
+
+// DispatchPromptInfo summarizes the prompt that was sent. The hash is
+// SHA-256 over the exact bytes; callers can match against their own
+// hash to confirm wire fidelity.
+type DispatchPromptInfo struct {
+	Length     int    `json:"length"`
+	HashSHA256 string `json:"hash_sha256"`
+	Source     string `json:"source,omitempty"` // e.g. "persona://implementer"
+}
+
+// DispatchReservation summarizes the file-reservation outcome at
+// dispatch time.
+type DispatchReservation struct {
+	Requested []string `json:"requested,omitempty"`
+	Granted   []string `json:"granted,omitempty"`
+	Conflicts []string `json:"conflicts,omitempty"`
+}
+
+// DispatchTransportStatus captures whether the prompt actually reached
+// the pane via tmux send-keys.
+type DispatchTransportStatus struct {
+	Sent       bool   `json:"sent"`
+	Error      string `json:"error,omitempty"`
+	DurationMs int64  `json:"duration_ms"`
 }
 
 // makeDirectAssignEnvelope creates a standard assign envelope for direct pane assignment JSON output.
@@ -4042,16 +4101,23 @@ func runDirectPaneAssignment(cmd *cobra.Command, opts *AssignCommandOptions) err
 	assignItem.Prompt = prompt
 	assignItem.PromptSent = true
 
-	// Execute the assignment
-	if err := sendPromptWithDoubleEnter(targetPane.ID, prompt); err != nil {
+	// Execute the assignment. Time the transport so the dispatch receipt
+	// (ntm#128) can record duration for downstream automation that
+	// previously kept its own dispatch ledger.
+	transportStart := time.Now()
+	transportErr := sendPromptWithDoubleEnter(targetPane.ID, prompt)
+	transportDurationMs := time.Since(transportStart).Milliseconds()
+	receipt := buildDispatchReceipt(opts.Session, beadID, *targetPane, prompt, opts.Template, fileReservations, transportErr, transportDurationMs, false)
+
+	if transportErr != nil {
 		assignItem.PromptSent = false
-		errMsg := fmt.Sprintf("failed to send prompt: %v", err)
+		errMsg := fmt.Sprintf("failed to send prompt: %v", transportErr)
 
 		if IsJSONOutput() {
-			data := &DirectAssignData{Assignment: assignItem, FileReservations: fileReservations}
+			data := &DirectAssignData{Assignment: assignItem, FileReservations: fileReservations, Receipt: receipt}
 			return json.NewEncoder(os.Stdout).Encode(makeDirectAssignEnvelope(opts.Session, false, data, "SEND_ERROR", errMsg, warnings))
 		}
-		return err
+		return transportErr
 	}
 
 	// Track in assignment store
@@ -4067,6 +4133,7 @@ func runDirectPaneAssignment(cmd *cobra.Command, opts *AssignCommandOptions) err
 		data := &DirectAssignData{
 			Assignment:       assignItem,
 			FileReservations: fileReservations,
+			Receipt:          receipt,
 		}
 		return json.NewEncoder(os.Stdout).Encode(makeDirectAssignEnvelope(opts.Session, true, data, "", "", warnings))
 	}
@@ -4733,6 +4800,60 @@ func (w *WatchLoop) Summary() string {
 	}
 	return fmt.Sprintf("Watch session: %d assigned, %d completed, %d failed in %v%s",
 		w.totalAssigned, w.totalCompleted, w.totalFailed, duration, suffix)
+}
+
+// buildDispatchReceipt constructs the wrapper-grade dispatch receipt
+// surfaced to JSON callers of `ntm assign --pane`. Captures pane
+// identity, prompt fingerprint (length + SHA-256), reservation
+// outcome, and transport result with timing. See ntm#128.
+func buildDispatchReceipt(
+	session, workItemID string,
+	pane tmux.Pane,
+	prompt, templateSource string,
+	res *DirectAssignFileReservations,
+	transportErr error,
+	durationMs int64,
+	dryRun bool,
+) *DispatchReceipt {
+	r := &DispatchReceipt{
+		WorkItemID: workItemID,
+		Pane: DispatchPaneRef{
+			Session: session,
+			Index:   pane.Index,
+			ID:      pane.ID,
+			Title:   pane.Title,
+		},
+		Prompt: DispatchPromptInfo{
+			Length:     len(prompt),
+			HashSHA256: dispatchPromptHash(prompt),
+			Source:     templateSource,
+		},
+		Transport: DispatchTransportStatus{
+			Sent:       transportErr == nil && !dryRun,
+			DurationMs: durationMs,
+		},
+		Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+		DryRun:    dryRun,
+	}
+	if transportErr != nil {
+		r.Transport.Error = transportErr.Error()
+	}
+	if res != nil {
+		r.Reservation = &DispatchReservation{
+			Requested: res.Requested,
+			Granted:   res.Granted,
+			Conflicts: res.Denied,
+		}
+	}
+	return r
+}
+
+// dispatchPromptHash returns the SHA-256 of `prompt` hex-encoded so
+// wrappers can prove byte-for-byte equality without storing the prompt
+// itself in their logs.
+func dispatchPromptHash(prompt string) string {
+	sum := sha256.Sum256([]byte(prompt))
+	return hex.EncodeToString(sum[:])
 }
 
 // runWatchMode implements the --watch flag for continuous auto-assignment

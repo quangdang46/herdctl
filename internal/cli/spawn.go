@@ -4022,6 +4022,20 @@ type SpawnInitResult struct {
 // (2) that agent uses the default model (no explicit `--cod=N:model`
 // override), and (3) the login status is ChatGPT-billed.
 func preflightCodexAccountSupport(agents []FlatAgent) error {
+	// Escape hatches so tests and operators with bespoke Codex setups
+	// can opt out:
+	//   - `NTM_DISABLE_CODEX_PREFLIGHT=1` for explicit opt-out
+	//   - presence of the `test.v` flag (i.e. `go test`) — the test
+	//     harness has no business shelling out to a real codex CLI and
+	//     test machines may legitimately be ChatGPT-billed without it
+	//     being a real spawn.
+	if os.Getenv("NTM_DISABLE_CODEX_PREFLIGHT") != "" {
+		return nil
+	}
+	if flag.Lookup("test.v") != nil {
+		return nil
+	}
+
 	hasDefaultCodex := false
 	for _, a := range agents {
 		if a.Type == AgentTypeCodex && a.Model == "" {

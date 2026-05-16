@@ -531,8 +531,8 @@ func TestAgentSpecsValue_SetWithType(t *testing.T) {
 	var specs AgentSpecs
 	v := NewAgentSpecsValue(AgentTypeClaude, &specs)
 
-	if v.Type() != "N[:model]" {
-		t.Errorf("Type() = %q, want N[:model]", v.Type())
+	if v.Type() != "N[:model[:effort]]" {
+		t.Errorf("Type() = %q, want N[:model[:effort]]", v.Type())
 	}
 
 	err := v.Set("2:opus")

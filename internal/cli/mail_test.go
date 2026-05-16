@@ -786,7 +786,7 @@ func TestRunUnlockErrorsOnZeroSpecificRelease(t *testing.T) {
 
 	t.Setenv("AGENT_MAIL_URL", stub.server.URL+"/")
 
-	err := runUnlock(session, []string{"internal/cli/*.go"}, false)
+	err := runUnlock(session, []string{"internal/cli/*.go"}, false, -1, "")
 	if err == nil {
 		t.Fatal("expected unlock to fail when no requested reservations were released")
 	}
@@ -1526,7 +1526,7 @@ func TestRunUnlockUsesSessionProjectDir(t *testing.T) {
 	t.Setenv("AGENT_MAIL_URL", stub.server.URL+"/")
 	t.Chdir(t.TempDir())
 
-	if err := runUnlock(session, []string{"internal/cli/*.go"}, false); err != nil {
+	if err := runUnlock(session, []string{"internal/cli/*.go"}, false, -1, ""); err != nil {
 		t.Fatalf("runUnlock: %v", err)
 	}
 	if len(stub.releaseCalls) != 1 {
@@ -1561,7 +1561,7 @@ func TestRunUnlockUsesSavedSessionAgentIdentityAndProjectKey(t *testing.T) {
 	t.Setenv("AGENT_MAIL_URL", stub.server.URL+"/")
 	t.Chdir(t.TempDir())
 
-	if err := runUnlock(session, []string{"internal/cli/*.go"}, false); err != nil {
+	if err := runUnlock(session, []string{"internal/cli/*.go"}, false, -1, ""); err != nil {
 		t.Fatalf("runUnlock: %v", err)
 	}
 	if len(stub.releaseCalls) != 1 {
