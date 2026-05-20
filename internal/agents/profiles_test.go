@@ -343,6 +343,7 @@ func TestNormalizeAgentType(t *testing.T) {
 		{"openai", "codex"},
 		{"openai-codex", "codex"},
 		{"GPT", "codex"},
+		{"gpt-5.5", "codex"},
 		{"gpt-5.3-codex", "codex"},
 		{"gemini", "gemini"},
 		{"gmi", "gemini"},

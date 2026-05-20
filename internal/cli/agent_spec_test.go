@@ -382,7 +382,7 @@ func TestResolveModel_WithConfig(t *testing.T) {
 		{"gemini alias flash", AgentTypeGemini, "flash", "gemini-3-flash"},
 		{"unknown alias passthrough", AgentTypeClaude, "unknown-custom", "unknown-custom"},
 		{"claude default", AgentTypeClaude, "", "claude-opus-4-6"},
-		{"codex default", AgentTypeCodex, "", "gpt-5.3-codex"},
+		{"codex default", AgentTypeCodex, "", "gpt-5.5"},
 		{"gemini default", AgentTypeGemini, "", "gemini-3-pro-preview"},
 	}
 

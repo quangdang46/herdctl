@@ -4080,7 +4080,7 @@ func preflightCodexAccountSupport(agents []FlatAgent) error {
 	// that already carry an explicit model (e.g. --cod=1:gpt-5) are
 	// already on a non-Codex model and pass the check.
 	return fmt.Errorf(
-		"refusing to spawn default Codex agent on a ChatGPT-billed account — OpenAI rejects every `gpt-*-codex` model id with HTTP 400 on ChatGPT accounts and the pane will look alive but reject the first prompt. Either upgrade to an API key (Codex CLI > `codex login`) OR pass an explicit non-Codex model: `--cod=%d:gpt-5` (see ntm#142)",
+		"refusing to spawn a `gpt-*-codex` Codex agent on a ChatGPT-billed account — OpenAI rejects `gpt-*-codex` model ids with HTTP 400 on ChatGPT accounts and the pane will look alive but reject the first prompt. Use the ChatGPT-compatible model instead: `--cod=%d:gpt-5.5` (the recommended Codex model on ChatGPT login), OR switch to an API key (Codex CLI > `codex login`) to keep using `gpt-*-codex` (see ntm#142)",
 		countDefaultCodex(agents),
 	)
 }
