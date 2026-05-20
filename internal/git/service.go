@@ -168,24 +168,27 @@ func (ws *WorktreeService) AutoProvisionSession(ctx context.Context, sessionName
 	return response, nil
 }
 
-// CleanupSessionWorktrees removes worktrees associated with a specific session
-func (ws *WorktreeService) CleanupSessionWorktrees(ctx context.Context, sessionName string) error {
+// CleanupSessionWorktrees removes worktrees associated with a specific session.
+// It returns the number of worktrees actually removed so callers can
+// distinguish a real cleanup from a no-op (#151).
+func (ws *WorktreeService) CleanupSessionWorktrees(ctx context.Context, sessionName string) (int, error) {
 	projectDir := ws.config.GetProjectDir(sessionName)
 	if projectDir == "" || !IsGitRepository(projectDir) {
-		return nil // Nothing to clean up
+		return 0, nil // Nothing to clean up
 	}
 
 	manager, err := ws.getManager(projectDir)
 	if err != nil {
-		return fmt.Errorf("failed to create worktree manager: %w", err)
+		return 0, fmt.Errorf("failed to create worktree manager: %w", err)
 	}
 
 	// List all worktrees and find ones associated with this session
 	worktrees, err := manager.ListWorktrees(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list worktrees: %w", err)
+		return 0, fmt.Errorf("failed to list worktrees: %w", err)
 	}
 
+	removed := 0
 	for _, wt := range worktrees {
 		// Check if this worktree is associated with the session
 		// Branch format: agent/<agent-type>/<session-id>
@@ -208,13 +211,15 @@ func (ws *WorktreeService) CleanupSessionWorktrees(ctx context.Context, sessionN
 					// renamed or older worktree basename schemes.
 					if err := manager.removeWorktreePathAndBranch(ctx, wt.Path, wt.Branch); err != nil {
 						log.Printf("Warning: failed to remove worktree for %s: %v", sessionID, err)
+					} else {
+						removed++
 					}
 				}
 			}
 		}
 	}
 
-	return nil
+	return removed, nil
 }
 
 // GetSessionWorktreeStatus returns the status of worktrees for a session
@@ -266,6 +271,16 @@ func (ws *WorktreeService) GetSessionWorktreeStatus(ctx context.Context, session
 func sessionMatchesWorktree(sessionName, agentType, sessionID string) bool {
 	if sessionName == "" || agentType == "" || sessionID == "" {
 		return false
+	}
+
+	// Manual `worktree provision <agent> <sessionID>` stores the sessionID
+	// verbatim (canonicalized) as the branch's session segment, without the
+	// auto-provision "-<agentType>-<num>" suffix. Match those by exact
+	// canonical equality so manually-provisioned worktrees are cleanable
+	// (#150). Exact match (not prefix) keeps the bd-y9ndb anchoring intact:
+	// "my" still cannot match a "my-app-…" sessionID.
+	if sessionID == canonicalSessionKey(sessionName) {
+		return true
 	}
 
 	expectedPrefix := canonicalSessionKey(sessionName+"-"+agentType) + "-"

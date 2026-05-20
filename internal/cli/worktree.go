@@ -111,9 +111,10 @@ var worktreeCleanSessionCmd = &cobra.Command{
 
 var (
 	// Flags for worktree commands
-	worktreeMaxAge = 7 * 24 * time.Hour // Default: 7 days
-	outputFormat   string               // json or table
-	dryRun         bool                 // Preview changes without applying
+	worktreeMaxAge   = 7 * 24 * time.Hour // Default: 7 days
+	outputFormat     string               // json or table
+	worktreeListJSON bool                 // --json shorthand for --output json
+	dryRun           bool                 // Preview changes without applying
 )
 
 func init() {
@@ -129,6 +130,7 @@ func init() {
 
 	// Add flags
 	worktreeListCmd.Flags().StringVarP(&outputFormat, "output", "o", "table", "Output format (table|json)")
+	worktreeListCmd.Flags().BoolVar(&worktreeListJSON, "json", false, "Output as JSON (shorthand for --output json)")
 
 	worktreeCleanupCmd.Flags().DurationVar(&worktreeMaxAge, "max-age", worktreeMaxAge, "Maximum age of worktrees to keep")
 	worktreeCleanupCmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be cleaned up without doing it")
@@ -164,6 +166,10 @@ func runWorktreeList(cmd *cobra.Command, args []string) error {
 		}
 		return worktrees[i].LastUsed.After(worktrees[j].LastUsed)
 	})
+
+	if worktreeListJSON {
+		outputFormat = "json"
+	}
 
 	switch outputFormat {
 	case "json":
@@ -528,11 +534,16 @@ func runWorktreeCleanSession(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Cleaning up worktrees for session '%s'...\n", sessionName)
 
-	if err := service.CleanupSessionWorktrees(ctx, sessionName); err != nil {
+	removed, err := service.CleanupSessionWorktrees(ctx, sessionName)
+	if err != nil {
 		return fmt.Errorf("cleanup failed: %w", err)
 	}
 
-	fmt.Printf("✓ Session worktrees cleaned up successfully!\n")
+	if removed == 0 {
+		fmt.Printf("No worktrees matched session '%s'; nothing to clean up.\n", sessionName)
+	} else {
+		fmt.Printf("✓ Cleaned up %d worktree(s) for session '%s'.\n", removed, sessionName)
+	}
 
 	return nil
 }

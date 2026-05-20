@@ -161,8 +161,12 @@ func TestWorktreeService_CleanupSessionWorktrees_RemovesListedLegacyPath(t *test
 		t.Fatalf("legacy git worktree add failed: %v\n%s", err, out)
 	}
 
-	if err := svc.CleanupSessionWorktrees(context.Background(), sessionName); err != nil {
+	removed, err := svc.CleanupSessionWorktrees(context.Background(), sessionName)
+	if err != nil {
 		t.Fatalf("CleanupSessionWorktrees: %v", err)
+	}
+	if removed < 1 {
+		t.Fatalf("expected at least one worktree removed, got %d", removed)
 	}
 	if _, err := os.Stat(legacyPath); !os.IsNotExist(err) {
 		t.Fatalf("expected legacy session worktree path to be gone, stat err=%v", err)
