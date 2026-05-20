@@ -2395,6 +2395,10 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 	// Get final pane list for output
 	finalPanes, _ := tmux.GetPanes(opts.Session)
+	// Order deterministically so the emitted panes array (and the post-launch
+	// persona→pane mapping) is reproducible across runs rather than dependent
+	// on tmux list-panes ordering (ntm#149).
+	sortPanesForAssignment(finalPanes)
 
 	// Enable project webhooks (if configured) for this session and emit
 	// webhook-compatible lifecycle events (always, regardless of JSON mode).
