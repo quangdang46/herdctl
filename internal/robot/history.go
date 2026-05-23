@@ -196,7 +196,7 @@ func historyPaneFilterAliases(opts HistoryOptions) map[string]struct{} {
 		return nil
 	}
 
-	aliases := map[string]struct{}{filter: struct{}{}}
+	aliases := map[string]struct{}{filter: {}}
 	if opts.Session == "" || !tmux.SessionExists(opts.Session) {
 		return aliases
 	}
