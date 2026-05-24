@@ -1004,6 +1004,141 @@ func TestDetermineAgentState_NormalizesAliasHints(t *testing.T) {
 	}
 }
 
+func TestClassifyTriageRecForAssignment(t *testing.T) {
+	type testCase struct {
+		name              string
+		rec               bv.TriageRecommendation
+		activeAssignments map[string]struct{}
+		wantSkip          bool
+		wantReason        string
+	}
+
+	tests := []testCase{
+		{
+			name:     "open with no blockers is assignable",
+			rec:      bv.TriageRecommendation{ID: "bd-1", Status: "open"},
+			wantSkip: false,
+		},
+		{
+			name:     "empty status is treated as assignable",
+			rec:      bv.TriageRecommendation{ID: "bd-2"},
+			wantSkip: false,
+		},
+		{
+			name:       "dependency blocker wins over status",
+			rec:        bv.TriageRecommendation{ID: "bd-3", Status: "open", BlockedBy: []string{"bd-99"}},
+			wantSkip:   true,
+			wantReason: "blocked_by_dependency",
+		},
+		{
+			name:       "in_progress is skipped",
+			rec:        bv.TriageRecommendation{ID: "bd-4", Status: "in_progress"},
+			wantSkip:   true,
+			wantReason: "already_in_progress",
+		},
+		{
+			name:       "blocked status is skipped",
+			rec:        bv.TriageRecommendation{ID: "bd-5", Status: "blocked"},
+			wantSkip:   true,
+			wantReason: "blocked_status",
+		},
+		{
+			name:       "closed status is skipped",
+			rec:        bv.TriageRecommendation{ID: "bd-6", Status: "closed"},
+			wantSkip:   true,
+			wantReason: "closed_status",
+		},
+		{
+			name:       "operator_gated label beats open status",
+			rec:        bv.TriageRecommendation{ID: "bd-7", Status: "open", Labels: []string{"operator-gated"}},
+			wantSkip:   true,
+			wantReason: "operator_gated",
+		},
+		{
+			name:       "human-input label is operator gated",
+			rec:        bv.TriageRecommendation{ID: "bd-8", Status: "open", Labels: []string{"foo", "human-input"}},
+			wantSkip:   true,
+			wantReason: "operator_gated",
+		},
+		{
+			name:              "already-claimed bead is suppressed",
+			rec:               bv.TriageRecommendation{ID: "bd-9", Status: "open"},
+			activeAssignments: map[string]struct{}{"bd-9": {}},
+			wantSkip:          true,
+			wantReason:        "already_assigned",
+		},
+		{
+			name:       "status case + delimiter variation still classifies",
+			rec:        bv.TriageRecommendation{ID: "bd-10", Status: "In-Progress"},
+			wantSkip:   true,
+			wantReason: "already_in_progress",
+		},
+		{
+			name:       "blockedBy beats already_assigned",
+			rec:        bv.TriageRecommendation{ID: "bd-11", Status: "open", BlockedBy: []string{"bd-x"}},
+			activeAssignments: map[string]struct{}{"bd-11": {}},
+			wantSkip:   true,
+			wantReason: "blocked_by_dependency",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := classifyTriageRecForAssignment(tc.rec, tc.activeAssignments)
+			if tc.wantSkip {
+				if got == nil {
+					t.Fatalf("expected skip with reason %q, got nil (assignable)", tc.wantReason)
+				}
+				if got.Reason != tc.wantReason {
+					t.Fatalf("reason = %q, want %q", got.Reason, tc.wantReason)
+				}
+				if got.BeadID != tc.rec.ID {
+					t.Fatalf("BeadID = %q, want %q", got.BeadID, tc.rec.ID)
+				}
+				if tc.wantReason == "blocked_by_dependency" && len(got.BlockedByIDs) == 0 {
+					t.Fatalf("blocked_by_dependency must populate BlockedByIDs")
+				}
+			} else if got != nil {
+				t.Fatalf("expected assignable, got skip with reason %q", got.Reason)
+			}
+		})
+	}
+}
+
+func TestCountSkippedByReason(t *testing.T) {
+	items := []SkippedItem{
+		{BeadID: "a", Reason: "blocked_by_dependency"},
+		{BeadID: "b", Reason: "blocked_by_dependency"},
+		{BeadID: "c", Reason: "operator_gated"},
+		{BeadID: "d", Reason: "already_in_progress"},
+	}
+	if got := countSkippedByReason(items, "blocked_by_dependency"); got != 2 {
+		t.Fatalf("countSkippedByReason(blocked_by_dependency) = %d, want 2", got)
+	}
+	if got := countSkippedByReason(items, "operator_gated"); got != 1 {
+		t.Fatalf("countSkippedByReason(operator_gated) = %d, want 1", got)
+	}
+	if got := countSkippedByReason(items, "nonexistent"); got != 0 {
+		t.Fatalf("countSkippedByReason(nonexistent) = %d, want 0", got)
+	}
+}
+
+func TestNormalizeBeadStatus(t *testing.T) {
+	tests := map[string]string{
+		"open":          "open",
+		"In Progress":   "in_progress",
+		"in-progress":   "in_progress",
+		" CLOSED ":      "closed",
+		"":              "",
+		"ready-for-qa":  "ready_for_qa",
+	}
+	for in, want := range tests {
+		if got := normalizeBeadStatus(in); got != want {
+			t.Errorf("normalizeBeadStatus(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestNormalizeAgentTypeAlias(t *testing.T) {
 	tests := []struct {
 		name string

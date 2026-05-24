@@ -1611,22 +1611,24 @@ func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced,
 			readyBeads = filteredBeads
 		}
 	} else {
-		// Filter blocked beads from recommendations
+		// Trust bv only for ordering and scoring — never for "actionable". The
+		// triage output is permissive (includes blocked/in_progress/closed/
+		// operator-gated beads with non-zero scores), and the local assignment
+		// store knows about claims bv hasn't caught up on. Both filters run
+		// here so a stale recommendation can't be dispatched.
+		activeAssignments := loadActiveAssignmentBeadIDs(opts.Session)
 		for _, rec := range allRecs {
-			// Skip if blocked by other beads
-			if len(rec.BlockedBy) > 0 {
-				blockedBeads = append(blockedBeads, SkippedItem{
-					BeadID:       rec.ID,
-					BeadTitle:    rec.Title,
-					Reason:       "blocked_by_dependency",
-					BlockedByIDs: rec.BlockedBy,
-				})
+			if skip := classifyTriageRecForAssignment(rec, activeAssignments); skip != nil {
+				blockedBeads = append(blockedBeads, *skip)
 				if opts.Verbose {
-					fmt.Fprintf(os.Stderr, "[DEP] Skipping %s - blocked by: %v\n", rec.ID, rec.BlockedBy)
+					if len(skip.BlockedByIDs) > 0 {
+						fmt.Fprintf(os.Stderr, "[DEP] Skipping %s - %s: %v\n", rec.ID, skip.Reason, skip.BlockedByIDs)
+					} else {
+						fmt.Fprintf(os.Stderr, "[DEP] Skipping %s - %s\n", rec.ID, skip.Reason)
+					}
 				}
 				continue
 			}
-			// Convert TriageRecommendation to BeadPreview
 			readyBeads = append(readyBeads, bv.BeadPreview{
 				ID:       rec.ID,
 				Title:    rec.Title,
@@ -1634,7 +1636,7 @@ func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced,
 			})
 		}
 		if opts.Verbose && len(blockedBeads) > 0 {
-			fmt.Fprintf(os.Stderr, "[DEP] Filtered %d blocked beads, %d actionable\n", len(blockedBeads), len(readyBeads))
+			fmt.Fprintf(os.Stderr, "[DEP] Filtered %d non-actionable beads, %d actionable\n", len(blockedBeads), len(readyBeads))
 		}
 	}
 
@@ -1698,9 +1700,13 @@ func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced,
 		Assignments: make([]AssignmentItem, 0),
 		Skipped:     allSkipped, // Blocked + cyclic beads
 		Summary: AssignSummaryEnhanced{
-			TotalBeadCount:    len(readyBeads) + len(blockedBeads) + cycleWarnings,
-			ActionableCount:   len(readyBeads),
-			BlockedCount:      len(blockedBeads),
+			TotalBeadCount: len(readyBeads) + len(blockedBeads) + cycleWarnings,
+			ActionableCount: len(readyBeads),
+			// BlockedCount stays semantically narrow — only counts beads blocked
+			// by an upstream dependency. Other non-actionable reasons
+			// (in_progress, operator_gated, already_assigned) inflate the
+			// generic Skipped slice but not this metric.
+			BlockedCount:      countSkippedByReason(blockedBeads, "blocked_by_dependency"),
 			IdleAgents:        len(idleAgents),
 			CycleWarningCount: cycleWarnings,
 		},
