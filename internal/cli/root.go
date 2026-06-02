@@ -4042,6 +4042,7 @@ func init() {
 		newReviewQueueCmd(),
 		newScaleCmd(),
 		newControllerCmd(),
+		newCodexCmd(),
 
 		// Session navigation
 		newAttachCmd(),
