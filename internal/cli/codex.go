@@ -215,37 +215,20 @@ Examples:
 				)
 			}
 
-			if !tmux.SessionExists(session) {
-				return robot.RobotError(
-					fmt.Errorf("session '%s' not found", session),
-					robot.ErrCodeSessionNotFound,
-					"Use 'ntm list' to see available sessions",
-				)
-			}
-
-			panes, err := tmux.GetPanes(session)
+			// Resolve the pane and capture its VISIBLE screen (not deep
+			// scrollback). Using the shared resolveCodexPane helper keeps preflight
+			// consistent with the goal-action codex subcommands and, critically,
+			// fixes #173: a deep capture-pane -S -<lines> (up to LinesFullContext=500)
+			// could resurrect a stale "esc to interrupt" footer buried in scrollback
+			// on an otherwise-idle pane, yielding a false-positive goal-in-progress
+			// verdict. The visible-only capture reflects the pane's real on-screen
+			// state. The `lines` flag is still honored for non-default explicit
+			// values (see resolveCodexPane). resolveCodexPane also re-validates the
+			// session/pane, so the explicit session-required / pane>=0 checks above
+			// remain only to surface preflight-specific hints early.
+			_, content, err := resolveCodexPane(session, pane, lines)
 			if err != nil {
-				return robot.RobotError(err, robot.ErrCodeInternalError, "Could not enumerate panes for the session")
-			}
-
-			var target *tmux.Pane
-			for i := range panes {
-				if panes[i].Index == pane {
-					target = &panes[i]
-					break
-				}
-			}
-			if target == nil {
-				return robot.RobotError(
-					fmt.Errorf("pane %d not found in session '%s'", pane, session),
-					robot.ErrCodePaneNotFound,
-					"Use 'ntm status <session>' to see available pane indices",
-				)
-			}
-
-			content, err := tmux.CapturePaneOutput(target.ID, lines)
-			if err != nil {
-				return robot.RobotError(err, robot.ErrCodeInternalError, "Failed to capture pane content")
+				return err
 			}
 
 			// Provenance: hash the exact bytes we classify (same pattern as

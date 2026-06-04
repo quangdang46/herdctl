@@ -11,6 +11,14 @@ NTM is a tmux session management tool for orchestrating multiple AI coding agent
 
 ---
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **`ntm codex preflight` no longer captures deep scrollback (#173).** Preflight inlined its own `capture-pane -S -<lines>` (default `LinesFullContext`=500), so a stale `esc to interrupt` footer buried in scrollback on an otherwise-idle pane could resurrect a false-positive `goal-in-progress` verdict. Preflight now routes through the shared `resolveCodexPane` helper, which captures the **visible screen only** (`capture-pane -S 0`) — matching the goal-action codex subcommands and reflecting the pane's real on-screen state. This changes `provenance_hash`/`captured_lines` in the JSON output (intended).
+
+---
+
 ## [v1.18.1] -- 2026-05-20 [GitHub Release]
 
 **2 commits since v1.18.0** — Codex preflight no longer over-rejects ChatGPT/OAuth users.
