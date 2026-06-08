@@ -13,9 +13,16 @@ package agentsession
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
+
+// claudeNonAlnumPattern matches every character Claude Code rewrites when it
+// derives a project directory name from a cwd. Claude Code's encoder is
+// `cwd.replace(/[^a-zA-Z0-9]/g, "-")` — it collapses ALL non-alphanumeric
+// characters (including '_', '.', '/', spaces, '+', ':') to '-'.
+var claudeNonAlnumPattern = regexp.MustCompile(`[^a-zA-Z0-9]`)
 
 // Info describes a discovered agent CLI session for a pane.
 type Info struct {
@@ -80,17 +87,18 @@ func Discover(agentType, workDir string) *Info {
 // the absolute cwd with path separators and dots replaced by '-'. Underscores
 // are PRESERVED (Claude Code does not transform them), e.g.
 //
-//	/data/projects/ntm              -> -data-projects-ntm
-//	/data/projects/mcp_agent_mail   -> -data-projects-mcp_agent_mail
+//	/data/projects/ntm                -> -data-projects-ntm
+//	/data/projects/mcp_agent_mail     -> -data-projects-mcp-agent-mail
 //	/data/projects/jeffreys-skills.md -> -data-projects-jeffreys-skills-md
 //
-// Collapsing '_' to '-' (as an earlier version did) made discoverClaude look in
-// the wrong directory and, when a hyphen-variant of another project existed,
-// could resolve to a DIFFERENT real project's dir — resuming the wrong session.
+// This must match Claude Code's own encoder exactly (`replace(/[^a-zA-Z0-9]/g,
+// "-")`). An earlier revision preserved '_', which made discoverClaude look in a
+// non-existent (or, worse, a different project's hyphen-variant) directory and
+// resume the wrong session — verified against the real `~/.claude/projects/`
+// session dirs, where every underscore cwd maps to a hyphenated directory.
 func encodeClaudeProjectDir(workDir string) string {
 	cleaned := filepath.Clean(workDir)
-	replacer := strings.NewReplacer("/", "-", ".", "-")
-	return replacer.Replace(cleaned)
+	return claudeNonAlnumPattern.ReplaceAllString(cleaned, "-")
 }
 
 // discoverClaude locates the newest *.jsonl under
