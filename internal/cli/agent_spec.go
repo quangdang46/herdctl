@@ -20,13 +20,14 @@ var (
 type AgentType string
 
 const (
-	AgentTypeClaude   AgentType = "cc"
-	AgentTypeCodex    AgentType = "cod"
-	AgentTypeGemini   AgentType = "gmi"
-	AgentTypeOllama   AgentType = "ollama"
-	AgentTypeCursor   AgentType = "cursor"
-	AgentTypeWindsurf AgentType = "windsurf"
-	AgentTypeAider    AgentType = "aider"
+	AgentTypeClaude      AgentType = "cc"
+	AgentTypeCodex       AgentType = "cod"
+	AgentTypeGemini      AgentType = "gmi"
+	AgentTypeAntigravity AgentType = "agy"
+	AgentTypeOllama      AgentType = "ollama"
+	AgentTypeCursor      AgentType = "cursor"
+	AgentTypeWindsurf    AgentType = "windsurf"
+	AgentTypeAider       AgentType = "aider"
 	// AgentTypeOpencode covers https://opencode.ai panes. See ntm#116 — the
 	// `--oc` flag on spawn/add lets users mix opencode panes alongside the
 	// other built-in agent types without overloading `--cursor` and getting

@@ -3715,6 +3715,8 @@ func detectAgentType(title string) string {
 		return "codex"
 	case strings.Contains(titleLower, "gemini"):
 		return "gemini"
+	case strings.Contains(titleLower, "antigravity"):
+		return "antigravity"
 	case strings.Contains(titleLower, "cursor"):
 		return "cursor"
 	case strings.Contains(titleLower, "windsurf"):
@@ -3737,6 +3739,8 @@ func detectAgentType(title string) string {
 		return "codex"
 	case containsShortForm(titleLower, "gmi"):
 		return "gemini"
+	case containsShortForm(titleLower, "agy"):
+		return "antigravity"
 	case containsShortForm(titleLower, "ws"):
 		return "windsurf"
 	case containsShortForm(titleLower, "oc"):
@@ -3774,6 +3778,8 @@ func ResolveAgentType(t string) string {
 		return "codex"
 	case agent.AgentTypeGemini:
 		return "gemini"
+	case agent.AgentTypeAntigravity:
+		return "antigravity"
 	case agent.AgentTypeCursor:
 		return "cursor"
 	case agent.AgentTypeWindsurf:

@@ -12,16 +12,17 @@ import (
 type AgentType string
 
 const (
-	AgentTypeClaudeCode AgentType = "cc"       // Claude Code CLI
-	AgentTypeCodex      AgentType = "cod"      // Codex CLI (OpenAI)
-	AgentTypeGemini     AgentType = "gmi"      // Gemini CLI (Google)
-	AgentTypeOllama     AgentType = "ollama"   // Local Ollama CLI
-	AgentTypeCursor     AgentType = "cursor"   // Cursor AI
-	AgentTypeWindsurf   AgentType = "windsurf" // Windsurf IDE
-	AgentTypeAider      AgentType = "aider"    // Aider CLI
-	AgentTypeOpencode   AgentType = "oc"       // Opencode (https://opencode.ai) — see ntm#116
-	AgentTypeUser       AgentType = "user"     // User/Shell pane
-	AgentTypeUnknown    AgentType = "unknown"  // Unable to determine agent type
+	AgentTypeClaudeCode  AgentType = "cc"       // Claude Code CLI
+	AgentTypeCodex       AgentType = "cod"      // Codex CLI (OpenAI)
+	AgentTypeGemini      AgentType = "gmi"      // Gemini CLI (Google)
+	AgentTypeAntigravity AgentType = "agy"      // Antigravity CLI (Google) — successor to the Gemini CLI
+	AgentTypeOllama      AgentType = "ollama"   // Local Ollama CLI
+	AgentTypeCursor      AgentType = "cursor"   // Cursor AI
+	AgentTypeWindsurf    AgentType = "windsurf" // Windsurf IDE
+	AgentTypeAider       AgentType = "aider"    // Aider CLI
+	AgentTypeOpencode    AgentType = "oc"       // Opencode (https://opencode.ai) — see ntm#116
+	AgentTypeUser        AgentType = "user"     // User/Shell pane
+	AgentTypeUnknown     AgentType = "unknown"  // Unable to determine agent type
 )
 
 // String returns the agent type as a string.
@@ -39,6 +40,8 @@ func (t AgentType) Canonical() AgentType {
 		return AgentTypeCodex
 	case "gmi", "gemini", "gemini-cli", "gemini_cli", "geminicli", "google", "google-ai", "google_ai", "google-gemini", "google_gemini", "googlegemini":
 		return AgentTypeGemini
+	case "agy", "antigravity", "antigravity-cli", "antigravity_cli", "antigravitycli", "google-antigravity":
+		return AgentTypeAntigravity
 	case "cursor":
 		return AgentTypeCursor
 	case "windsurf", "ws":
@@ -67,6 +70,8 @@ func (t AgentType) DisplayName() string {
 		return "Codex CLI"
 	case AgentTypeGemini:
 		return "Gemini CLI"
+	case AgentTypeAntigravity:
+		return "Antigravity CLI"
 	case AgentTypeOllama:
 		return "Ollama"
 	case AgentTypeCursor:
@@ -93,6 +98,8 @@ func (t AgentType) ProfileName() string {
 		return "Codex"
 	case AgentTypeGemini:
 		return "Gemini"
+	case AgentTypeAntigravity:
+		return "Antigravity"
 	case AgentTypeOllama:
 		return "Ollama"
 	case AgentTypeCursor:
@@ -119,7 +126,7 @@ func (t AgentType) ProfileName() string {
 // IsValid returns true if this is a known agent type.
 func (t AgentType) IsValid() bool {
 	switch t.Canonical() {
-	case AgentTypeClaudeCode, AgentTypeCodex, AgentTypeGemini, AgentTypeOllama, AgentTypeCursor, AgentTypeWindsurf, AgentTypeAider, AgentTypeOpencode, AgentTypeUser:
+	case AgentTypeClaudeCode, AgentTypeCodex, AgentTypeGemini, AgentTypeAntigravity, AgentTypeOllama, AgentTypeCursor, AgentTypeWindsurf, AgentTypeAider, AgentTypeOpencode, AgentTypeUser:
 		return true
 	default:
 		return false
@@ -134,6 +141,10 @@ func (t AgentType) NeedsDoubleEnter() bool {
 		return true
 	case AgentTypeGemini:
 		// Gemini may also benefit from double-Enter in some cases
+		return true
+	case AgentTypeAntigravity:
+		// Antigravity is the Gemini CLI's successor and shares its interactive
+		// TUI input behavior, so mirror the double-Enter handling.
 		return true
 	default:
 		return false

@@ -1349,6 +1349,7 @@ Examples:
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeClaude, &agentSpecs), "cc", "Claude agents (N or N:model, model charset: a-zA-Z0-9._/@:+-)")
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeCodex, &agentSpecs), "cod", "Codex agents (N or N:model, model charset: a-zA-Z0-9._/@:+-)")
 	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeGemini, &agentSpecs), "gmi", "Gemini agents (N or N:model, model charset: a-zA-Z0-9._/@:+-)")
+	cmd.Flags().Var(NewAgentSpecsValue(AgentTypeAntigravity, &agentSpecs), "agy", "Antigravity (agy) agents (N; model is pinned to Gemini 3.1 Pro (High))")
 	cmd.Flags().IntVar(&localCount, "local", 0, "Local agents via Ollama (alias: --ollama)")
 	cmd.Flags().IntVar(&ollamaCount, "ollama", 0, "Alias for --local (explicit Ollama)")
 	cmd.Flags().StringVar(&localModel, "local-model", "codellama:latest", "Ollama model to run for --local/--ollama agents")
@@ -1895,6 +1896,15 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 			agentCmdTemplate = cfg.Agents.Codex
 		case AgentTypeGemini:
 			agentCmdTemplate = cfg.Agents.Gemini
+		case AgentTypeAntigravity:
+			agentCmdTemplate = cfg.Agents.Antigravity
+			if agentCmdTemplate == "" {
+				// Default when [agents] antigravity isn't configured (e.g. a
+				// config.toml that predates this provider). The model is pinned by
+				// ResolveModel; --dangerously-skip-permissions is agy's autonomous
+				// flag, which the dcg agy guard (F5) backstops.
+				agentCmdTemplate = `agy --model {{shellQuote .Model}} --dangerously-skip-permissions`
+			}
 		case AgentTypeOllama:
 			agentCmdTemplate = cfg.Agents.Ollama
 			if ollamaHost != "" {
@@ -1987,6 +1997,14 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 		// Resolve model alias to full model name
 		resolvedModel := ResolveModel(agent.Type, agent.Model)
 		modelRequested := strings.TrimSpace(agent.Model) != ""
+		// agy is hard-pinned: ResolveModel always returns the required model. If
+		// the user explicitly requested a different one, surface that it was
+		// ignored (model guard, bd-47kjh.1.7) rather than silently overriding.
+		if agent.Type == AgentTypeAntigravity && modelRequested &&
+			!strings.EqualFold(strings.TrimSpace(agent.Model), resolvedModel) && !IsJSONOutput() {
+			output.PrintWarningf("agy model is pinned to %q; ignoring requested %q (agent %d)",
+				resolvedModel, agent.Model, agent.Index)
+		}
 		if agent.Type == AgentTypeOllama && resolvedModel == "" {
 			resolvedModel = strings.TrimSpace(opts.LocalModel)
 			if resolvedModel == "" {

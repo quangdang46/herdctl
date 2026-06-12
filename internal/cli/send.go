@@ -778,6 +778,8 @@ func newSendCmd() *cobra.Command {
 	cmd.Flags().Lookup("cod").NoOptDefVal = "true"
 	cmd.Flags().Var(newSendTargetValue(AgentTypeGemini, &targets), "gmi", "send to Gemini agents (optional :variant filter)")
 	cmd.Flags().Lookup("gmi").NoOptDefVal = "true"
+	cmd.Flags().Var(newSendTargetValue(AgentTypeAntigravity, &targets), "agy", "send to Antigravity (agy) agents (optional :variant filter)")
+	cmd.Flags().Lookup("agy").NoOptDefVal = "true"
 	cmd.Flags().BoolVar(&targetAll, "all", false, "send to all panes (including user pane)")
 	cmd.Flags().BoolVarP(&skipFirst, "skip-first", "s", false, "skip the first (user) pane")
 	cmd.Flags().IntVarP(&paneIndex, "pane", "p", -1, "send to specific pane index")

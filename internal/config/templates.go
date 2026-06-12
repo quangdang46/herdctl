@@ -229,12 +229,17 @@ func IsTemplateCommand(cmd string) bool {
 // System prompt injection is supported via SystemPromptFile for persona agents.
 func DefaultAgentTemplates() AgentConfig {
 	return AgentConfig{
-		Claude:   `{{memLimitPrefix}} claude --dangerously-skip-permissions{{if .Model}} --model {{shellQuote .Model}}{{end}}{{if .SystemPromptFile}} --system-prompt-file {{shellQuote .SystemPromptFile}}{{end}}`,
-		Codex:    `{{if .SystemPromptFile}}CODEX_SYSTEM_PROMPT="$(cat {{shellQuote .SystemPromptFile}})" {{end}}codex --dangerously-bypass-approvals-and-sandbox -m {{shellQuote (.Model | default "gpt-5.5")}} -c model_reasoning_effort={{shellQuote (.ReasoningEffort | default "xhigh")}} -c model_reasoning_summary_format=experimental --search`,
-		Gemini:   `gemini{{if .Model}} --model {{shellQuote .Model}}{{end}} --yolo`,
-		Ollama:   `ollama run {{shellQuote (.Model | default "codellama:latest")}}`,
-		Cursor:   `cursor{{if .Model}} --model {{shellQuote .Model}}{{end}}`,
-		Windsurf: `windsurf{{if .Model}} --model {{shellQuote .Model}}{{end}}`,
-		Aider:    `aider{{if .Model}} --model {{shellQuote .Model}}{{end}}`,
+		Claude: `{{memLimitPrefix}} claude --dangerously-skip-permissions{{if .Model}} --model {{shellQuote .Model}}{{end}}{{if .SystemPromptFile}} --system-prompt-file {{shellQuote .SystemPromptFile}}{{end}}`,
+		Codex:  `{{if .SystemPromptFile}}CODEX_SYSTEM_PROMPT="$(cat {{shellQuote .SystemPromptFile}})" {{end}}codex --dangerously-bypass-approvals-and-sandbox -m {{shellQuote (.Model | default "gpt-5.5")}} -c model_reasoning_effort={{shellQuote (.ReasoningEffort | default "xhigh")}} -c model_reasoning_summary_format=experimental --search`,
+		Gemini: `gemini{{if .Model}} --model {{shellQuote .Model}}{{end}} --yolo`,
+		// Antigravity (agy): the model is hard-pinned to "Gemini 3.1 Pro (High)"
+		// by ResolveModel, so --model is always injected. --dangerously-skip-permissions
+		// is agy's autonomous (auto-approve) flag — the equivalent of gemini's --yolo —
+		// which the dcg agy guard (F5) backstops.
+		Antigravity: `agy --model {{shellQuote .Model}} --dangerously-skip-permissions`,
+		Ollama:      `ollama run {{shellQuote (.Model | default "codellama:latest")}}`,
+		Cursor:      `cursor{{if .Model}} --model {{shellQuote .Model}}{{end}}`,
+		Windsurf:    `windsurf{{if .Model}} --model {{shellQuote .Model}}{{end}}`,
+		Aider:       `aider{{if .Model}} --model {{shellQuote .Model}}{{end}}`,
 	}
 }

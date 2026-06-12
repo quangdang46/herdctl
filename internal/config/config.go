@@ -556,16 +556,17 @@ type AccountEntry struct {
 
 // AccountsConfig holds multi-account management configuration
 type AccountsConfig struct {
-	StateFile          string         `toml:"state_file"`           // Path to account state JSON
-	AutoRotate         bool           `toml:"auto_rotate"`          // Auto-rotate on limit detection
-	ResetBufferMinutes int            `toml:"reset_buffer_minutes"` // Minutes before reset to consider available
-	Claude             []AccountEntry `toml:"claude"`               // Claude accounts
-	Codex              []AccountEntry `toml:"codex"`                // Codex accounts
-	Gemini             []AccountEntry `toml:"gemini"`               // Gemini accounts
-	Cursor             []AccountEntry `toml:"cursor,omitempty"`     // Cursor accounts
-	Windsurf           []AccountEntry `toml:"windsurf,omitempty"`   // Windsurf accounts
-	Aider              []AccountEntry `toml:"aider,omitempty"`      // Aider accounts
-	Ollama             []AccountEntry `toml:"ollama,omitempty"`     // Ollama accounts
+	StateFile          string         `toml:"state_file"`            // Path to account state JSON
+	AutoRotate         bool           `toml:"auto_rotate"`           // Auto-rotate on limit detection
+	ResetBufferMinutes int            `toml:"reset_buffer_minutes"`  // Minutes before reset to consider available
+	Claude             []AccountEntry `toml:"claude"`                // Claude accounts
+	Codex              []AccountEntry `toml:"codex"`                 // Codex accounts
+	Gemini             []AccountEntry `toml:"gemini"`                // Gemini accounts
+	Antigravity        []AccountEntry `toml:"antigravity,omitempty"` // Antigravity (agy) accounts
+	Cursor             []AccountEntry `toml:"cursor,omitempty"`      // Cursor accounts
+	Windsurf           []AccountEntry `toml:"windsurf,omitempty"`    // Windsurf accounts
+	Aider              []AccountEntry `toml:"aider,omitempty"`       // Aider accounts
+	Ollama             []AccountEntry `toml:"ollama,omitempty"`      // Ollama accounts
 }
 
 // DefaultAccountsConfig returns the default accounts configuration
@@ -833,6 +834,7 @@ type AgentConfig struct {
 	Claude       string            `toml:"claude"`
 	Codex        string            `toml:"codex"`
 	Gemini       string            `toml:"gemini"`
+	Antigravity  string            `toml:"antigravity"` // Antigravity (agy) launch command — successor to the Gemini CLI
 	Ollama       string            `toml:"ollama"`
 	Cursor       string            `toml:"cursor"`
 	Windsurf     string            `toml:"windsurf"`
@@ -1819,6 +1821,8 @@ func canonicalModelLookupAgentType(agentType string) string {
 		return "codex"
 	case agent.AgentTypeGemini:
 		return "gemini"
+	case agent.AgentTypeAntigravity:
+		return "antigravity"
 	case agent.AgentTypeOllama:
 		return "ollama"
 	case agent.AgentTypeCursor:
@@ -1834,10 +1838,21 @@ func canonicalModelLookupAgentType(agentType string) string {
 	}
 }
 
+// AntigravityRequiredModel is the ONLY model agy (Antigravity CLI) may run on.
+// agy is hard-pinned to it everywhere (never a Flash/Anthropic/other tier) per
+// the model guard (bd-47kjh.1.7); it is intentionally NOT user-configurable.
+const AntigravityRequiredModel = "Gemini 3.1 Pro (High)"
+
 // GetModelName resolves a model alias to its full model name.
 // Returns the alias itself if no mapping is found.
 func (m *ModelsConfig) GetModelName(agentType, alias string) string {
 	normalizedAgentType := canonicalModelLookupAgentType(agentType)
+
+	// agy is hard-pinned: ignore any requested alias/model and always resolve to
+	// the single allowed model (model guard, bd-47kjh.1.7).
+	if normalizedAgentType == "antigravity" {
+		return AntigravityRequiredModel
+	}
 
 	if alias == "" {
 		// Return default if no alias specified.
@@ -3047,6 +3062,9 @@ func Print(cfg *Config, w io.Writer) error {
 	fmt.Fprintf(w, "claude = %q\n", cfg.Agents.Claude)
 	fmt.Fprintf(w, "codex = %q\n", cfg.Agents.Codex)
 	fmt.Fprintf(w, "gemini = %q\n", cfg.Agents.Gemini)
+	if cfg.Agents.Antigravity != "" {
+		fmt.Fprintf(w, "antigravity = %q\n", cfg.Agents.Antigravity)
+	}
 	if cfg.Agents.Cursor != "" {
 		fmt.Fprintf(w, "cursor = %q\n", cfg.Agents.Cursor)
 	}

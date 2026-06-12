@@ -140,6 +140,14 @@ func defaultDepChecks() []depCheck {
 			Category:    "AI Agents",
 			InstallHint: "npm install -g @google/gemini-cli",
 		},
+		{
+			Name:        "Antigravity CLI (agy)",
+			Command:     "agy",
+			VersionArgs: []string{"--version"},
+			Required:    false,
+			Category:    "AI Agents",
+			InstallHint: "curl -fsSL https://antigravity.google/cli/install.sh | bash (then `agy` once to authenticate via Google OAuth)",
+		},
 
 		// Recommended
 		{
