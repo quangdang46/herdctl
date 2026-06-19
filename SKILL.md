@@ -35,7 +35,7 @@ ntm deps -v
 ntm quick myproject --template=go
 
 # Launch a mixed swarm
-ntm spawn myproject --cc=2 --cod=1 --gmi=1
+ntm spawn myproject --cc=2 --cod=1 --agy=1
 
 # Dispatch work
 ntm send myproject --cc "Map the auth layer and propose a refactor plan."
@@ -50,7 +50,7 @@ ntm --robot-snapshot
 Use these for day-to-day session lifecycle management:
 
 ```bash
-ntm spawn myproject --cc=3 --cod=2 --gmi=1
+ntm spawn myproject --cc=3 --cod=2 --agy=1
 ntm spawn myproject --label frontend --cc=2
 ntm spawn myproject --label backend --cc=2 --worktrees
 ntm add myproject --cc=1

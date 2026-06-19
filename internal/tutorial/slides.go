@@ -392,7 +392,7 @@ func (m Model) renderQuickStartSlide(tick int) string {
 		b.WriteString(step2 + "\n\n")
 
 		code2 := []string{
-			"$ ntm spawn myproject --cc=3 --cod=2 --gmi=1",
+			"$ ntm spawn myproject --cc=3 --cod=2 --agy=1",
 		}
 		b.WriteString("      " + RenderCommandCode(code2, tick-50, true) + "\n\n")
 	}
