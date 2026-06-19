@@ -306,7 +306,48 @@ type AccountRotator struct {
 	// availabilityChecked tracks if we've checked caam availability.
 	availabilityChecked bool
 	availabilityResult  bool
+
+	// pinnedAccounts maps a caam provider (e.g. "openai", "claude") to an
+	// operator-pinned account name. While a provider is pinned, automatic
+	// rotation (OnLimitHit) is refused unless ForceGlobalAuthClobber is set.
+	// Manual operator-initiated switches (SwitchToAccount) are not blocked.
+	pinnedAccounts map[string]string
+
+	// codexHomeInspector, when set, reports the currently live Codex panes and
+	// their CODEX_HOME isolation status. It lets the rotator refuse an automatic
+	// *global* Codex rotation while one or more live Codex panes share the
+	// default global ~/.codex/auth.json (no explicit per-pane CODEX_HOME).
+	// When nil, the isolation state is unknown and, for safety, automatic global
+	// Codex rotation is refused unless ForceGlobalAuthClobber is set.
+	codexHomeInspector CodexHomeInspector
+
+	// ForceGlobalAuthClobber is the explicit operator escape hatch that permits
+	// automatic global Codex rotation even when live panes share global ~/.codex
+	// or the isolation state is unknown, and bypasses pin enforcement. It maps to
+	// the --force-global-auth-clobber operator intent. Off by default.
+	ForceGlobalAuthClobber bool
 }
+
+// CodexPaneInfo describes one live Codex pane for the auto-rotation safety guard.
+type CodexPaneInfo struct {
+	// SessionPane identifies the pane (e.g. "session:0.1"), for diagnostics.
+	SessionPane string
+	// CodexHome is the pane's effective CODEX_HOME. Empty means the pane uses
+	// the default global ~/.codex (i.e. it is NOT isolated).
+	CodexHome string
+}
+
+// IsIsolated reports whether the pane has an explicit per-pane CODEX_HOME and is
+// therefore safe to rotate without clobbering the shared global ~/.codex/auth.json.
+func (p CodexPaneInfo) IsIsolated() bool {
+	return strings.TrimSpace(p.CodexHome) != ""
+}
+
+// CodexHomeInspector returns the live Codex panes and their CODEX_HOME isolation
+// status. It is injected so the swarm package stays decoupled from tmux and the
+// guard remains unit-testable. A nil error with an empty slice means "no live
+// Codex panes" (rotation is then permitted by the shared-global guard).
+type CodexHomeInspector func() ([]CodexPaneInfo, error)
 
 // NewAccountRotator creates a new AccountRotator with default settings.
 func NewAccountRotator() *AccountRotator {
@@ -318,7 +359,132 @@ func NewAccountRotator() *AccountRotator {
 		rotationHistory:      make([]RotationRecord, 0),
 		rotationStates:       make(map[string]*RotationState),
 		rotationHistoryStore: NewAccountRotationHistory("", slog.Default()),
+		pinnedAccounts:       make(map[string]string),
 	}
+}
+
+// WithCodexHomeInspector installs a callback used by the auto-rotation safety
+// guard to discover live Codex panes and whether they share the global ~/.codex.
+func (r *AccountRotator) WithCodexHomeInspector(inspector CodexHomeInspector) *AccountRotator {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.codexHomeInspector = inspector
+	return r
+}
+
+// WithForceGlobalAuthClobber sets the operator escape hatch that permits unsafe
+// automatic global Codex rotation (shared global ~/.codex or unknown isolation)
+// and bypasses pin enforcement. Maps to --force-global-auth-clobber.
+func (r *AccountRotator) WithForceGlobalAuthClobber(force bool) *AccountRotator {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.ForceGlobalAuthClobber = force
+	return r
+}
+
+// PinAccount pins a provider to a specific account so automatic rotation refuses
+// to rotate away from it. agentType may be an agent type ("cod") or a caam
+// provider ("openai"); it is normalized to the caam provider name.
+func (r *AccountRotator) PinAccount(agentType, accountName string) {
+	provider := normalizeProvider(agentType)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.pinnedAccounts == nil {
+		r.pinnedAccounts = make(map[string]string)
+	}
+	r.pinnedAccounts[provider] = accountName
+	r.logger().Info("[AccountRotator] account_pinned",
+		"provider", provider,
+		"account", accountName)
+}
+
+// UnpinAccount removes any pin for the provider, re-enabling automatic rotation.
+func (r *AccountRotator) UnpinAccount(agentType string) {
+	provider := normalizeProvider(agentType)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	delete(r.pinnedAccounts, provider)
+	r.logger().Info("[AccountRotator] account_unpinned",
+		"provider", provider)
+}
+
+// PinnedAccount returns the pinned account for the provider and whether a pin is set.
+func (r *AccountRotator) PinnedAccount(agentType string) (string, bool) {
+	provider := normalizeProvider(agentType)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	name, ok := r.pinnedAccounts[provider]
+	return name, ok
+}
+
+// PinnedAccounts returns a copy of all current pins (provider -> account).
+func (r *AccountRotator) PinnedAccounts() map[string]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make(map[string]string, len(r.pinnedAccounts))
+	for k, v := range r.pinnedAccounts {
+		out[k] = v
+	}
+	return out
+}
+
+// accountPinsFile is the on-disk location for shared account pins, relative to a
+// data directory. The CLI (ntm rotate lock/unlock/status) and the running
+// rotator both read/write this file so a pin set in one process is honored by
+// the long-lived auto-rotation loop in another.
+func accountPinsPath(dataDir string) string {
+	return filepath.Join(dataDir, ".ntm", "account_pins.json")
+}
+
+type persistedAccountPins struct {
+	Pins map[string]string `json:"pins"`
+}
+
+// LoadPins replaces the in-memory pins with those persisted under
+// <dataDir>/.ntm/account_pins.json. A missing file is not an error.
+func (r *AccountRotator) LoadPins(dataDir string) error {
+	if dataDir == "" {
+		return nil
+	}
+	data, err := os.ReadFile(accountPinsPath(dataDir))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read account pins: %w", err)
+	}
+	var pd persistedAccountPins
+	if err := json.Unmarshal(data, &pd); err != nil {
+		return fmt.Errorf("parse account pins: %w", err)
+	}
+	r.mu.Lock()
+	if pd.Pins != nil {
+		r.pinnedAccounts = pd.Pins
+	} else {
+		r.pinnedAccounts = make(map[string]string)
+	}
+	r.mu.Unlock()
+	return nil
+}
+
+// SavePins persists the current pins to <dataDir>/.ntm/account_pins.json.
+func (r *AccountRotator) SavePins(dataDir string) error {
+	if dataDir == "" {
+		return fmt.Errorf("dataDir cannot be empty")
+	}
+	pins := r.PinnedAccounts()
+	ntmDir := filepath.Join(dataDir, ".ntm")
+	if err := os.MkdirAll(ntmDir, 0o755); err != nil {
+		return fmt.Errorf("create .ntm dir: %w", err)
+	}
+	data, err := json.MarshalIndent(persistedAccountPins{Pins: pins}, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal account pins: %w", err)
+	}
+	if err := os.WriteFile(accountPinsPath(dataDir), data, 0o644); err != nil {
+		return fmt.Errorf("write account pins: %w", err)
+	}
+	return nil
 }
 
 // WithCaamPath sets a custom caam binary path.
@@ -757,6 +923,14 @@ func (r *AccountRotator) OnLimitHit(event LimitHitEvent) (*RotationRecord, error
 
 	provider := normalizeProvider(event.AgentType)
 
+	// Safety guard: honor pins and refuse unsafe global Codex clobbering before
+	// we ever shell out to caam. A deliberate refusal is wrapped in
+	// ErrRotationBlocked so the caller can degrade gracefully.
+	caamCommand := fmt.Sprintf("caam switch %s --next --json", provider)
+	if err := r.guardAutoRotation(provider, currentAccount, caamCommand); err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), r.CommandTimeout)
 	defer cancel()
 
@@ -826,6 +1000,103 @@ func (r *AccountRotator) OnLimitHit(event LimitHitEvent) (*RotationRecord, error
 		"total_rotations", state.RotationCount)
 
 	return record, nil
+}
+
+// ErrRotationBlocked is returned (wrapped) when the safety guard refuses an
+// automatic rotation. Callers can use errors.Is to detect a deliberate refusal
+// (as opposed to an operational failure) and degrade gracefully.
+var ErrRotationBlocked = fmt.Errorf("rotation blocked by safety guard")
+
+// guardAutoRotation enforces the automatic-rotation safety guardrails for the
+// caam-switch path:
+//
+//  1. Honor an explicit account pin: refuse to auto-rotate away from a pinned
+//     provider unless ForceGlobalAuthClobber is set.
+//  2. Refuse automatic *global* Codex rotation when one or more live Codex panes
+//     use the default global ~/.codex (no explicit per-pane CODEX_HOME), or when
+//     the isolation state is unknown — unless ForceGlobalAuthClobber is set.
+//
+// It logs every decision (allowed and blocked) with structured fields. The
+// caamCommand argument is the caam invocation that would run if allowed.
+// Returns nil to allow, or an error wrapping ErrRotationBlocked to refuse.
+func (r *AccountRotator) guardAutoRotation(provider, from, caamCommand string) error {
+	r.mu.Lock()
+	pinned, isPinned := r.pinnedAccounts[provider]
+	force := r.ForceGlobalAuthClobber
+	inspector := r.codexHomeInspector
+	r.mu.Unlock()
+
+	logBlocked := func(reason string, livePanes int) {
+		r.logger().Warn("[AccountRotator] rotation_blocked",
+			"provider", provider,
+			"reason", reason,
+			"live_panes", livePanes,
+			"caam_command", caamCommand,
+			"from", from,
+			"to", "")
+	}
+	logAllowed := func(reason string, livePanes int) {
+		r.logger().Info("[AccountRotator] rotation_allowed",
+			"provider", provider,
+			"reason", reason,
+			"live_panes", livePanes,
+			"caam_command", caamCommand,
+			"from", from,
+			"to", "")
+	}
+
+	// Guardrail 2: honor an explicit pin. Checked first so a pin protects every
+	// provider, not just Codex. Force overrides.
+	if isPinned && !force {
+		logBlocked("account_pinned:"+pinned, 0)
+		return fmt.Errorf("%w: %s is pinned to %q; unpin (ntm rotate unlock) or pass --force-global-auth-clobber to override",
+			ErrRotationBlocked, provider, pinned)
+	}
+
+	// Guardrail 1 only applies to Codex/global-auth clobbering. Non-Codex
+	// providers (and forced rotations) skip the shared-global check.
+	if !isCodexProvider(provider) {
+		logAllowed("non_codex_provider", 0)
+		return nil
+	}
+	if force {
+		logAllowed("force_global_auth_clobber", 0)
+		return nil
+	}
+
+	// Unknown isolation state (no inspector wired): refuse, since we cannot prove
+	// no live pane shares the global ~/.codex/auth.json.
+	if inspector == nil {
+		logBlocked("codex_isolation_unknown", -1)
+		return fmt.Errorf("%w: refusing to auto-rotate Codex account: live Codex pane isolation is unknown. "+
+			"Use per-pane CODEX_HOME isolation, or pass --force-global-auth-clobber",
+			ErrRotationBlocked)
+	}
+
+	panes, err := inspector()
+	if err != nil {
+		// Fail closed: if we cannot determine pane state, refuse the global clobber.
+		logBlocked("codex_inspect_failed:"+err.Error(), -1)
+		return fmt.Errorf("%w: refusing to auto-rotate Codex account: could not inspect live Codex panes: %v. "+
+			"Use per-pane CODEX_HOME isolation, or pass --force-global-auth-clobber",
+			ErrRotationBlocked, err)
+	}
+
+	sharedGlobal := 0
+	for _, p := range panes {
+		if !p.IsIsolated() {
+			sharedGlobal++
+		}
+	}
+	if sharedGlobal > 0 {
+		logBlocked("shared_global_codex_home", sharedGlobal)
+		return fmt.Errorf("%w: refusing to auto-rotate Codex account: %d live Codex pane(s) share global ~/.codex/auth.json. "+
+			"Use per-pane CODEX_HOME isolation, or pass --force-global-auth-clobber",
+			ErrRotationBlocked, sharedGlobal)
+	}
+
+	logAllowed("codex_panes_isolated", len(panes))
+	return nil
 }
 
 func (r *AccountRotator) switchNext(ctx context.Context, provider string) (tools.SwitchResult, string, string, error) {
