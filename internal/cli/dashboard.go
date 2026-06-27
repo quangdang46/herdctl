@@ -24,6 +24,7 @@ func newDashboardCmd() *cobra.Command {
 	var debug bool
 	var popup bool
 	var attentionCursor int64
+	var inferredFlag bool
 
 	cmd := &cobra.Command{
 		Use:     "dashboard [session-name]",
@@ -85,7 +86,7 @@ Examples:
 			if noTUI {
 				return runDashboardPlain(cmd.OutOrStdout(), cmd.ErrOrStderr(), session)
 			}
-			return runDashboard(cmd.OutOrStdout(), cmd.ErrOrStderr(), session, debug, popup, attentionCursor)
+			return runDashboard(cmd.OutOrStdout(), cmd.ErrOrStderr(), session, debug, popup, attentionCursor, inferredFlag)
 		},
 	}
 
@@ -94,6 +95,13 @@ Examples:
 	cmd.Flags().BoolVar(&debug, "debug", false, "Enable debug mode with state inspection")
 	cmd.Flags().BoolVar(&popup, "popup", false, "Run in popup/overlay mode (Esc closes, zoom focuses pane)")
 	cmd.Flags().Int64Var(&attentionCursor, "attention-cursor", 0, "Pre-focus the attention panel on this event cursor")
+	// --inferred is an internal marker set by the overlay relaunch (ntm dash →
+	// display-popup) so the popup keeps the lenient, current-session project-dir
+	// resolution of the original inferred invocation instead of flipping to the
+	// strict explicit-session path just because the relaunch hard-codes the
+	// session into the inner command.
+	cmd.Flags().BoolVar(&inferredFlag, "inferred", false, "Internal: treat the session as inferred (lenient project-dir resolution)")
+	_ = cmd.Flags().MarkHidden("inferred")
 	cmd.ValidArgsFunction = completeSessionArgs
 
 	return cmd
@@ -374,7 +382,7 @@ func dashboardPaneTypeSummary(panes []tmux.Pane) string {
 	)
 }
 
-func runDashboard(w io.Writer, errW io.Writer, session string, debug bool, popup bool, attentionCursor int64) error {
+func runDashboard(w io.Writer, errW io.Writer, session string, debug bool, popup bool, attentionCursor int64, inferredFlag bool) error {
 	if err := tmux.EnsureInstalled(); err != nil {
 		return err
 	}
@@ -394,6 +402,14 @@ func runDashboard(w io.Writer, errW io.Writer, session string, debug bool, popup
 	res.ExplainIfInferred(errW)
 	session = res.Session
 
+	// The dashboard is inherently a current-session view. When the session was
+	// inferred (plain `ntm dash`) it must resolve the project dir leniently
+	// (with cwd fallback). The overlay relaunch hard-codes the session into the
+	// inner command, which would otherwise flip res.Inferred to false and route
+	// resolution down the strict/fail-closed path; the relaunch carries the
+	// --inferred marker (inferredFlag) so we preserve that lenient behavior.
+	inferred := res.Inferred || inferredFlag
+
 	// Auto-popup: if we're inside tmux AND inside the same session we're
 	// monitoring, launch as an overlay popup instead of consuming a pane.
 	// Skip if already in popup mode (--popup flag or NTM_POPUP env) to
@@ -401,7 +417,7 @@ func runDashboard(w io.Writer, errW io.Writer, session string, debug bool, popup
 	if !popup && !popupEnvEnabled() && tmux.InTmux() {
 		currentSession := tmux.GetCurrentSession()
 		if currentSession == session {
-			return launchOverlayPopup(session, "", attentionCursor)
+			return launchOverlayPopup(session, "", attentionCursor, inferred)
 		}
 	}
 
@@ -417,8 +433,8 @@ func runDashboard(w io.Writer, errW io.Writer, session string, debug bool, popup
 		initialPanes = nil
 	}
 
-	projectDir := resolveCommandProjectDirForSession(session, res.Inferred)
-	if projectDir == "" && !res.Inferred {
+	projectDir := resolveCommandProjectDirForSession(session, inferred)
+	if projectDir == "" && !inferred {
 		return fmt.Errorf("getting project root failed")
 	}
 

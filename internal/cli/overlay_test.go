@@ -345,10 +345,51 @@ func TestOverlayTmuxArgs(t *testing.T) {
 }
 
 func TestOverlayPopupInnerCommandIncludesAttentionCursor(t *testing.T) {
-	got := overlayPopupInnerCommand("/usr/local/bin/ntm", "myproject", 42135)
+	got := overlayPopupInnerCommand("/usr/local/bin/ntm", "myproject", 42135, false)
 	want := "NTM_POPUP=1 '/usr/local/bin/ntm' dashboard --popup --attention-cursor 42135 'myproject'"
 	if got != want {
 		t.Fatalf("overlayPopupInnerCommand() = %q, want %q", got, want)
+	}
+}
+
+func TestOverlayPopupInnerCommandInferredMarker(t *testing.T) {
+	// When the relaunch is inferred (plain `ntm dash` for the current session),
+	// the inner command must carry --inferred so the popup keeps lenient,
+	// current-session project-dir resolution instead of failing closed.
+	gotInferred := overlayPopupInnerCommand("/usr/local/bin/ntm", "myproject", 0, true)
+	wantInferred := "NTM_POPUP=1 '/usr/local/bin/ntm' dashboard --popup --inferred 'myproject'"
+	if gotInferred != wantInferred {
+		t.Fatalf("overlayPopupInnerCommand(inferred=true) = %q, want %q", gotInferred, wantInferred)
+	}
+
+	// Genuinely-explicit invocations (inferred=false) must NOT get --inferred,
+	// preserving strict resolution for `ntm overlay <session>` / `ntm dash <session>`.
+	gotExplicit := overlayPopupInnerCommand("/usr/local/bin/ntm", "myproject", 0, false)
+	if strings.Contains(gotExplicit, "--inferred") {
+		t.Fatalf("overlayPopupInnerCommand(inferred=false) leaked --inferred: %q", gotExplicit)
+	}
+	wantExplicit := "NTM_POPUP=1 '/usr/local/bin/ntm' dashboard --popup 'myproject'"
+	if gotExplicit != wantExplicit {
+		t.Fatalf("overlayPopupInnerCommand(inferred=false) = %q, want %q", gotExplicit, wantExplicit)
+	}
+
+	// The inferred marker must appear before the positional session arg so cobra
+	// parses it as a flag, not a second positional.
+	if idxFlag, idxSession := strings.Index(gotInferred, "--inferred"), strings.Index(gotInferred, "'myproject'"); idxFlag < 0 || idxFlag > idxSession {
+		t.Fatalf("--inferred must precede the session arg: %q", gotInferred)
+	}
+}
+
+func TestShellSingleQuote(t *testing.T) {
+	cases := map[string]string{
+		"/tmp/foo.log":            "'/tmp/foo.log'",
+		"/tmp/has space/foo.log":  "'/tmp/has space/foo.log'",
+		"/tmp/it's/weird/foo.log": `'/tmp/it'\''s/weird/foo.log'`,
+	}
+	for in, want := range cases {
+		if got := shellSingleQuote(in); got != want {
+			t.Errorf("shellSingleQuote(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -59,7 +60,7 @@ Examples:
 				return fmt.Errorf("session '%s' not found", session)
 			}
 
-			return launchOverlayPopup(session, overlayKey, attentionCursor)
+			return launchOverlayPopup(session, overlayKey, attentionCursor, res.Inferred)
 		},
 	}
 
@@ -71,7 +72,13 @@ Examples:
 }
 
 // launchOverlayPopup opens the NTM dashboard inside a tmux display-popup.
-func launchOverlayPopup(session, bindKey string, attentionCursor int64) error {
+//
+// inferred reports whether the relaunch came from a session that ntm inferred
+// (e.g. plain `ntm dash` for the current tmux session, or the F12 overlay key
+// which always targets #{session_name}). It is threaded into the inner command
+// so the popup keeps lenient, current-session project-dir resolution instead of
+// flipping to the strict explicit-session path.
+func launchOverlayPopup(session, bindKey string, attentionCursor int64, inferred bool) error {
 	t := theme.Current()
 
 	// Auto-setup: if the overlay key isn't bound yet, set it up on first use.
@@ -94,7 +101,20 @@ func launchOverlayPopup(session, bindKey string, attentionCursor int64) error {
 	if err != nil {
 		ntmBin = "ntm"
 	}
-	innerCmd := overlayPopupInnerCommand(ntmBin, session, attentionCursor)
+	innerCmd := overlayPopupInnerCommand(ntmBin, session, attentionCursor, inferred)
+
+	// display-popup -E tears the popup down the instant the inner process
+	// exits, so any error the inner ntm prints is painted and erased in the
+	// same frame and the parent only ever sees a bare "exit status 1".
+	// Redirect the inner stderr to a temp file so we can surface the real,
+	// actionable error (e.g. "getting project root failed") on failure.
+	var errFile string
+	if f, ferr := os.CreateTemp("", "ntm-overlay-stderr-*.log"); ferr == nil {
+		errFile = f.Name()
+		_ = f.Close()
+		defer os.Remove(errFile)
+		innerCmd += " 2>" + shellSingleQuote(errFile)
+	}
 
 	// Launch the popup — this blocks until the popup is dismissed
 	tmuxArgs := []string{
@@ -109,13 +129,50 @@ func launchOverlayPopup(session, bindKey string, attentionCursor int64) error {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	runErr := cmd.Run()
+
+	captured := ""
+	if errFile != "" {
+		if data, rerr := os.ReadFile(errFile); rerr == nil {
+			captured = strings.TrimSpace(string(data))
+		}
+	}
+
+	if runErr != nil {
+		if captured != "" {
+			// Strip the inner cobra "Error: " prefix so the top-level handler
+			// doesn't print a doubled "Error: ... Error: ...".
+			return fmt.Errorf("dashboard overlay failed: %s", strings.TrimPrefix(captured, "Error: "))
+		}
+		return fmt.Errorf("dashboard overlay failed: %w", runErr)
+	}
+
+	// On success, re-emit any inner warnings (e.g. "project directory does not
+	// exist") that were redirected away from the popup so the overlay path stays
+	// as informative as the non-overlay dashboard.
+	if captured != "" {
+		fmt.Fprintln(os.Stderr, captured)
+	}
+	return nil
 }
 
-func overlayPopupInnerCommand(ntmBin, session string, attentionCursor int64) string {
+func overlayPopupInnerCommand(ntmBin, session string, attentionCursor int64, inferred bool) string {
 	innerCmd := fmt.Sprintf("NTM_POPUP=1 '%s' dashboard --popup", ntmBin)
+	if inferred {
+		// Preserve the lenient current-session resolution across the relaunch:
+		// without this marker the explicit session arg appended below would
+		// route project-dir resolution down the strict, fail-closed path and
+		// `ntm dash` would refuse to open for any unregistered tmux session.
+		innerCmd += " --inferred"
+	}
 	if attentionCursor > 0 {
 		innerCmd += fmt.Sprintf(" --attention-cursor %d", attentionCursor)
 	}
 	return innerCmd + fmt.Sprintf(" '%s'", session)
+}
+
+// shellSingleQuote single-quotes s for safe use inside the /bin/sh -c command
+// line that tmux display-popup runs, escaping any embedded single quotes.
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

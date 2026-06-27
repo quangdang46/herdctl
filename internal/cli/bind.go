@@ -238,14 +238,17 @@ func setupOverlayBindingWithWriter(key string, out io.Writer) error {
 }
 
 func overlayBindingCommand(key string) string {
-	return fmt.Sprintf(`bind-key -n %s display-popup -E -w 95%% -h 95%% "NTM_POPUP=1 ntm dashboard --popup #{session_name}"`, key)
+	return fmt.Sprintf(`bind-key -n %s display-popup -E -w 95%% -h 95%% "NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}"`, key)
 }
 
 func overlayBindingArgs(key string) []string {
 	return []string{
 		"bind-key", "-n", key,
 		"display-popup", "-E", "-w", "95%", "-h", "95%",
-		"NTM_POPUP=1 ntm dashboard --popup #{session_name}",
+		// --inferred keeps the lenient current-session resolution: #{session_name}
+		// is always the session the key was pressed in, so the overlay is a
+		// current-session view and must not fail closed for unregistered sessions.
+		"NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}",
 	}
 }
 
