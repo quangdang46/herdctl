@@ -609,6 +609,35 @@ func NewErrorResponse(err error, code, hint string) RobotResponse {
 	return resp
 }
 
+// ExitCodeForResponse maps a robot response envelope to the process exit code
+// documented in AGENTS.md ("Robot Command Exit Codes"):
+//
+//	0 — success
+//	2 — feature unavailable / not implemented (NOT_IMPLEMENTED)
+//	1 — any other failure (success:false)
+//
+// A robot command that emits `success:false` MUST make the process exit
+// nonzero so agents branching on the shell exit status don't treat a failed
+// call (e.g. SESSION_NOT_FOUND) as success. Previously the oauth/health family
+// printed the failure envelope but still returned nil, so the process exited 0
+// and callers silently proceeded on bad data (ntm#207). CLI dispatch passes the
+// embedded RobotResponse through this helper to derive the real exit code.
+//
+// When a command has already recorded a concrete exit code in its metadata
+// (via WithExitCode), that value wins so bespoke conventions are preserved.
+func ExitCodeForResponse(resp RobotResponse) int {
+	if resp.Meta != nil && resp.Meta.ExitCode != 0 {
+		return resp.Meta.ExitCode
+	}
+	if resp.Success {
+		return 0
+	}
+	if resp.ErrorCode == ErrCodeNotImplemented {
+		return 2
+	}
+	return 1
+}
+
 // RobotError outputs a standardized error response as JSON and returns the original error.
 // Use this when you want structured JSON output but need to return an error to the caller.
 // This is useful for testing and for callers that want to handle errors themselves.

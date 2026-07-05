@@ -101,6 +101,69 @@ func TestAddThreadsReasoningEffort(t *testing.T) {
 	}
 }
 
+// TestAddThreadsCodexReasoningEffort is the ntm#208 regression guard. Issue
+// #208 reproduced against v1.18.3 (commit 6615dd7), which predates the ntm#195
+// `add` fix: `ntm add --cod=1:MODEL:EFFORT` parsed the third spec field but
+// runAdd handed GenerateAgentCommand an empty ReasoningEffort, so the default
+// Codex template's `{{.ReasoningEffort | default "xhigh"}}` always emitted the
+// fallback rather than the requested effort. This drives the real
+// parse(--cod=1:model:low)→Flatten→render path the add loop uses against the
+// default Codex template and asserts the requested effort reaches
+// `model_reasoning_effort='low'`, with a negative control proving an unset
+// effort falls back to the template default.
+func TestAddThreadsCodexReasoningEffort(t *testing.T) {
+	oldCfg := cfg
+	defer func() { cfg = oldCfg }()
+	cfg = config.Default()
+
+	// Parse exactly as the --cod flag would, then flatten to the per-pane agent
+	// the runAdd loop iterates over.
+	spec, err := ParseAgentSpec("1:gpt-5.3-codex-spark:low")
+	if err != nil {
+		t.Fatalf("ParseAgentSpec error = %v", err)
+	}
+	spec.Type = AgentTypeCodex
+	flat := AgentSpecs{spec}.Flatten()
+	if len(flat) != 1 {
+		t.Fatalf("Flatten() len = %d, want 1", len(flat))
+	}
+	agent := flat[0]
+	if agent.ReasoningEffort != "low" {
+		t.Fatalf("FlatAgent.ReasoningEffort = %q, want low", agent.ReasoningEffort)
+	}
+
+	// Mirror runAdd's render: thread the flattened agent's effort into the vars.
+	withEffort, err := config.GenerateAgentCommand(cfg.Agents.Codex, config.AgentTemplateVars{
+		Model:           ResolveModel(agent.Type, agent.Model),
+		ReasoningEffort: agent.ReasoningEffort,
+	})
+	if err != nil {
+		t.Fatalf("GenerateAgentCommand (with effort) error = %v", err)
+	}
+	// The Codex template shell-quotes the value: `model_reasoning_effort='low'`.
+	if !strings.Contains(withEffort, "model_reasoning_effort='low'") {
+		t.Errorf("add render dropped Codex reasoning effort: got %q, want it to contain %q", withEffort, "model_reasoning_effort='low'")
+	}
+
+	// Negative control: no effort parsed → template default (not 'low').
+	noEffortSpec, err := ParseAgentSpec("1:gpt-5.3-codex-spark")
+	if err != nil {
+		t.Fatalf("ParseAgentSpec (no effort) error = %v", err)
+	}
+	noEffortSpec.Type = AgentTypeCodex
+	noEffortAgent := AgentSpecs{noEffortSpec}.Flatten()[0]
+	noEffort, err := config.GenerateAgentCommand(cfg.Agents.Codex, config.AgentTemplateVars{
+		Model:           ResolveModel(noEffortAgent.Type, noEffortAgent.Model),
+		ReasoningEffort: noEffortAgent.ReasoningEffort,
+	})
+	if err != nil {
+		t.Fatalf("GenerateAgentCommand (no effort) error = %v", err)
+	}
+	if strings.Contains(noEffort, "model_reasoning_effort='low'") {
+		t.Errorf("unset effort should not render low: %q", noEffort)
+	}
+}
+
 func TestAddResponseJSONIncludesOllama(t *testing.T) {
 
 	data, err := json.Marshal(output.AddResponse{

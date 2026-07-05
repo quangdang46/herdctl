@@ -1224,11 +1224,9 @@ Shell Integration:
 				IncludeCaut:   !robotAgentHealthNoCaut,
 				Verbose:       resolveRobotAgentHealthVerbose(cmd),
 			}
-			if err := robot.PrintAgentHealth(opts); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
+			// PrintAgentHealth emits the JSON envelope and returns the process
+			// exit code; a success:false result must exit nonzero (ntm#207).
+			os.Exit(robot.PrintAgentHealth(opts))
 		}
 		if robotSmartRestart != "" {
 			session, err := resolveRobotLiveSession(robotSmartRestart)
@@ -1466,11 +1464,9 @@ Shell Integration:
 				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 				os.Exit(1)
 			}
-			if err := robot.PrintHealthOAuth(session); err != nil {
-				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-				os.Exit(1)
-			}
-			return
+			// PrintHealthOAuth emits the JSON envelope and returns the process
+			// exit code; a success:false result must exit nonzero (ntm#207).
+			os.Exit(robot.PrintHealthOAuth(session))
 		}
 		if robotHealthRestartStuck != "" {
 			session, err := resolveRobotLiveSession(robotHealthRestartStuck)
