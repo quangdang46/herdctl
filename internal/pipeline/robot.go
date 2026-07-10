@@ -431,7 +431,7 @@ func PrintPipelineStatus(runID string) int {
 		output.RobotResponse = NewErrorResponse(
 			errors.New(errMsg),
 			ErrCodeSessionNotFound,
-			"Use 'ntm --robot-pipeline-list' to see available pipelines",
+			"Use 'ntm --robot-pipeline-list' to see tracked pipelines. Completed runs are read from .ntm/pipelines/<run-id>.json (searched upward from the current directory), so run this from the project the pipeline executed in.",
 		)
 		// Set outer Error field to avoid shadowing from embedded RobotResponse
 		output.Error = errMsg
@@ -735,10 +735,124 @@ func GetPipelineExecution(runID string) *PipelineExecution {
 }
 
 // GetPipelineSnapshot returns a read-only snapshot of a pipeline, including live executor state when available.
+// When the in-memory registry has no entry (e.g. the run finished in a
+// different ntm process), it falls back to the persisted state file under
+// .ntm/pipelines/<run-id>.json, searching upward from the current directory
+// (ntm#216).
 func GetPipelineSnapshot(runID string) *PipelineExecution {
 	pipelineMu.RLock()
-	defer pipelineMu.RUnlock()
-	return snapshotPipeline(pipelineRegistry[runID])
+	snapshot := snapshotPipeline(pipelineRegistry[runID])
+	pipelineMu.RUnlock()
+	if snapshot != nil {
+		return snapshot
+	}
+	return loadPersistedSnapshot(runID)
+}
+
+// snapshotFromPersistedState converts a persisted ExecutionState (the
+// .ntm/pipelines/<run-id>.json format written by Executor.persistState) into
+// a read-only PipelineExecution snapshot so status/list surfaces can report
+// runs that are no longer in this process's live registry (ntm#216). The
+// reported status is the last persisted one — a run whose process died
+// mid-flight will still read "running" until it is resumed or cleaned up.
+func snapshotFromPersistedState(state *ExecutionState) *PipelineExecution {
+	if state == nil {
+		return nil
+	}
+	exec := &PipelineExecution{
+		RunID:       state.RunID,
+		WorkflowID:  state.WorkflowID,
+		Session:     state.Session,
+		Status:      string(state.Status),
+		StartedAt:   state.StartedAt,
+		CurrentStep: state.CurrentStep,
+		Progress:    calculateProgress(state),
+		Steps:       convertSteps(state),
+	}
+	if !state.FinishedAt.IsZero() {
+		finishedAt := state.FinishedAt
+		exec.FinishedAt = &finishedAt
+	}
+	if len(state.Errors) > 0 {
+		exec.Error = state.Errors[len(state.Errors)-1].Message
+	}
+	return exec
+}
+
+// persistedStateRootFn resolves the project directory whose .ntm/pipelines
+// directory holds persisted run state. Overridable in tests so registry-only
+// assertions aren't polluted by state files under the test process's cwd.
+var persistedStateRootFn = findPersistedStateRoot
+
+// findPersistedStateRoot walks upward from the current working directory and
+// returns the first directory containing a .ntm/pipelines state directory.
+// This mirrors how the executor persists state (config.ProjectDir, defaulting
+// to the run's cwd) so status lookups issued from the project root or any
+// subdirectory find the same files. Returns "" when none exists.
+func findPersistedStateRoot() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for {
+		if info, err := os.Stat(pipelineStateDir(dir)); err == nil && info.IsDir() {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+// loadPersistedSnapshot loads a single persisted run from disk, returning nil
+// when no state file exists for the run ID.
+func loadPersistedSnapshot(runID string) *PipelineExecution {
+	if validateRunID(runID) != nil {
+		return nil
+	}
+	root := persistedStateRootFn()
+	if root == "" {
+		return nil
+	}
+	state, err := LoadState(root, runID)
+	if err != nil {
+		return nil
+	}
+	return snapshotFromPersistedState(state)
+}
+
+// loadAllPersistedSnapshots loads every readable persisted run from the
+// nearest .ntm/pipelines directory. Unreadable or malformed files are
+// skipped — listing is best-effort.
+func loadAllPersistedSnapshots() []*PipelineExecution {
+	root := persistedStateRootFn()
+	if root == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(pipelineStateDir(root))
+	if err != nil {
+		return nil
+	}
+	var snapshots []*PipelineExecution
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		runID := strings.TrimSuffix(entry.Name(), ".json")
+		if validateRunID(runID) != nil {
+			continue
+		}
+		state, err := LoadState(root, runID)
+		if err != nil {
+			continue
+		}
+		if snapshot := snapshotFromPersistedState(state); snapshot != nil {
+			snapshots = append(snapshots, snapshot)
+		}
+	}
+	return snapshots
 }
 
 // GetAllPipelines returns all tracked pipelines (exported for CLI)
@@ -754,13 +868,26 @@ func GetAllPipelines() []*PipelineExecution {
 }
 
 // GetAllPipelineSnapshots returns stable, read-only pipeline snapshots sorted by start time descending.
+// The result merges this process's live registry with persisted runs from
+// .ntm/pipelines so completed runs from other processes remain listable
+// (ntm#216). Registry entries win on run-ID conflicts (they carry live
+// executor state).
 func GetAllPipelineSnapshots() []*PipelineExecution {
 	pipelineMu.RLock()
 	snapshots := make([]*PipelineExecution, 0, len(pipelineRegistry))
+	seen := make(map[string]bool, len(pipelineRegistry))
 	for _, exec := range pipelineRegistry {
-		snapshots = append(snapshots, snapshotPipeline(exec))
+		snapshot := snapshotPipeline(exec)
+		snapshots = append(snapshots, snapshot)
+		seen[snapshot.RunID] = true
 	}
 	pipelineMu.RUnlock()
+
+	for _, snapshot := range loadAllPersistedSnapshots() {
+		if !seen[snapshot.RunID] {
+			snapshots = append(snapshots, snapshot)
+		}
+	}
 
 	sort.Slice(snapshots, func(i, j int) bool {
 		return snapshots[i].StartedAt.After(snapshots[j].StartedAt)

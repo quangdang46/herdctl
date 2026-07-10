@@ -27,6 +27,17 @@ func captureStdout(t *testing.T, f func()) string {
 	return buf.String()
 }
 
+// stubPersistedStateRoot pins the persisted-state root used by the ntm#216
+// disk fallback (GetPipelineSnapshot / GetAllPipelineSnapshots) for the
+// duration of a test. Pass "" to disable the fallback so registry-only
+// assertions aren't polluted by .ntm/pipelines files under the test cwd.
+func stubPersistedStateRoot(t *testing.T, root string) {
+	t.Helper()
+	orig := persistedStateRootFn
+	persistedStateRootFn = func() string { return root }
+	t.Cleanup(func() { persistedStateRootFn = orig })
+}
+
 func TestNewRobotResponse(t *testing.T) {
 
 	tests := []struct {
@@ -873,6 +884,7 @@ func TestPrintPipelineRun_WorkflowLoadErrors(t *testing.T) {
 
 func TestPrintPipelineStatus_ValidationErrors(t *testing.T) {
 	ClearPipelineRegistry()
+	stubPersistedStateRoot(t, "")
 
 	tests := []struct {
 		name       string
@@ -987,6 +999,7 @@ func TestPrintPipelineStatus_FoundPipeline(t *testing.T) {
 
 func TestPrintPipelineList_Empty(t *testing.T) {
 	ClearPipelineRegistry()
+	stubPersistedStateRoot(t, "")
 
 	var exitCode int
 	output := captureStdout(t, func() {
@@ -1013,6 +1026,7 @@ func TestPrintPipelineList_Empty(t *testing.T) {
 
 func TestPrintPipelineList_WithPipelines(t *testing.T) {
 	ClearPipelineRegistry()
+	stubPersistedStateRoot(t, "")
 
 	// Register some test pipelines
 	now := time.Now()
@@ -1753,6 +1767,7 @@ steps:
 func TestPrintPipelineList_StatusCounts(t *testing.T) {
 	ClearPipelineRegistry()
 	defer ClearPipelineRegistry()
+	stubPersistedStateRoot(t, "")
 
 	now := time.Now()
 	fin := now.Add(time.Minute)
@@ -1801,5 +1816,132 @@ func TestPrintPipelineList_StatusCounts(t *testing.T) {
 	}
 	if !strings.Contains(result.AgentHints.Summary, "1 running") {
 		t.Errorf("Summary = %q, should contain '1 running'", result.AgentHints.Summary)
+	}
+}
+
+// TestGetPipelineSnapshot_PersistedFallback is the ntm#216 regression guard:
+// a run that finished in another ntm process is gone from this process's
+// in-memory registry, but its state was persisted to
+// .ntm/pipelines/<run-id>.json — status and list must read it from disk
+// instead of reporting "pipeline not found".
+func TestGetPipelineSnapshot_PersistedFallback(t *testing.T) {
+	ClearPipelineRegistry()
+	defer ClearPipelineRegistry()
+
+	dir := t.TempDir()
+	stubPersistedStateRoot(t, dir)
+
+	const runID = "run-20260709-120600-2519"
+	started := time.Now().Add(-10 * time.Minute).UTC().Truncate(time.Second)
+	finished := started.Add(5 * time.Minute)
+	state := &ExecutionState{
+		RunID:       runID,
+		WorkflowID:  "wf-persisted",
+		Session:     "sess-persisted",
+		Status:      StatusCompleted,
+		StartedAt:   started,
+		FinishedAt:  finished,
+		CurrentStep: "one",
+		Steps: map[string]StepResult{
+			"one": {StepID: "one", Status: StatusCompleted},
+		},
+	}
+	if err := SaveState(dir, state); err != nil {
+		t.Fatalf("SaveState() failed: %v", err)
+	}
+
+	// Registry is empty — the snapshot must come from disk.
+	snapshot := GetPipelineSnapshot(runID)
+	if snapshot == nil {
+		t.Fatal("GetPipelineSnapshot() = nil, want persisted fallback snapshot")
+	}
+	if snapshot.WorkflowID != "wf-persisted" {
+		t.Errorf("WorkflowID = %q, want %q", snapshot.WorkflowID, "wf-persisted")
+	}
+	if snapshot.Session != "sess-persisted" {
+		t.Errorf("Session = %q, want %q", snapshot.Session, "sess-persisted")
+	}
+	if snapshot.Status != string(StatusCompleted) {
+		t.Errorf("Status = %q, want %q", snapshot.Status, StatusCompleted)
+	}
+	if snapshot.FinishedAt == nil || !snapshot.FinishedAt.Equal(finished) {
+		t.Errorf("FinishedAt = %v, want %v", snapshot.FinishedAt, finished)
+	}
+	if snapshot.Progress.Completed != 1 || snapshot.Progress.Total != 1 {
+		t.Errorf("Progress = %+v, want 1/1 completed", snapshot.Progress)
+	}
+
+	// The robot status surface must succeed with exit code 0.
+	var exitCode int
+	output := captureStdout(t, func() {
+		exitCode = PrintPipelineStatus(runID)
+	})
+	if exitCode != 0 {
+		t.Errorf("PrintPipelineStatus() exit code = %d, want 0\nOutput: %s", exitCode, output)
+	}
+	var statusResult PipelineStatusOutput
+	if err := json.Unmarshal([]byte(output), &statusResult); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nOutput: %s", err, output)
+	}
+	if !statusResult.Success {
+		t.Errorf("PrintPipelineStatus() success = false, error: %s", statusResult.Error)
+	}
+	if statusResult.RunID != runID {
+		t.Errorf("RunID = %q, want %q", statusResult.RunID, runID)
+	}
+
+	// The list surface must include the persisted run.
+	output = captureStdout(t, func() {
+		exitCode = PrintPipelineList()
+	})
+	if exitCode != 0 {
+		t.Errorf("PrintPipelineList() exit code = %d, want 0", exitCode)
+	}
+	var listResult PipelineListOutput
+	if err := json.Unmarshal([]byte(output), &listResult); err != nil {
+		t.Fatalf("Failed to parse JSON: %v\nOutput: %s", err, output)
+	}
+	found := false
+	for _, p := range listResult.Pipelines {
+		if p.RunID == runID {
+			found = true
+			if p.Status != string(StatusCompleted) {
+				t.Errorf("listed Status = %q, want %q", p.Status, StatusCompleted)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("PrintPipelineList() did not include persisted run %s", runID)
+	}
+
+	// A live registry entry with the same run ID must shadow the disk copy.
+	RegisterPipeline(&PipelineExecution{
+		RunID:      runID,
+		WorkflowID: "wf-live",
+		Status:     "running",
+		StartedAt:  time.Now(),
+	})
+	snapshot = GetPipelineSnapshot(runID)
+	if snapshot == nil || snapshot.WorkflowID != "wf-live" {
+		t.Errorf("registry entry should shadow persisted state, got %+v", snapshot)
+	}
+}
+
+// TestGetPipelineSnapshot_NoPersistedState verifies the fallback returns nil
+// (and status surfaces keep their not-found error) when neither the registry
+// nor the state directory knows the run.
+func TestGetPipelineSnapshot_NoPersistedState(t *testing.T) {
+	ClearPipelineRegistry()
+	defer ClearPipelineRegistry()
+
+	stubPersistedStateRoot(t, t.TempDir())
+
+	if snapshot := GetPipelineSnapshot("run-never-existed"); snapshot != nil {
+		t.Errorf("GetPipelineSnapshot() = %+v, want nil", snapshot)
+	}
+
+	// Hostile run IDs must not reach the filesystem.
+	if snapshot := GetPipelineSnapshot("../../etc/passwd"); snapshot != nil {
+		t.Errorf("GetPipelineSnapshot(traversal) = %+v, want nil", snapshot)
 	}
 }

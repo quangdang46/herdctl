@@ -559,7 +559,9 @@ func newPipelineListCmd() *cobra.Command {
 		Short: "List all tracked pipelines",
 		Long: `List all pipelines that have been run in this session.
 
-Pipelines are tracked in memory and reset when ntm exits.`,
+Live pipelines are tracked in memory; completed runs are also read from the
+persisted state files in .ntm/pipelines/ (searched upward from the current
+directory), so runs from earlier ntm processes remain visible.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if jsonOutput {
 				pipeline.PrintPipelineList()
