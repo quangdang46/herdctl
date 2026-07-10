@@ -4304,8 +4304,9 @@ func preflightCodexAccountSupport(agents []FlatAgent) error {
 	// `--cod=N` with `a.Model == ""` only means "no CLI override" — the
 	// resolved model still comes from `cfg.Models.DefaultCodex` (or, if
 	// that's unset, from `config.DefaultModels().DefaultCodex`). The default
-	// is `gpt-5.5`, so a bare `--cod=N` is fine even on a ChatGPT account
-	// (#147); this only fires for an explicit gpt-*-codex choice.
+	// is a non-`-codex` GPT model, so a bare `--cod=N` is fine even on a
+	// ChatGPT account (#147); this only fires for an explicit gpt-*-codex
+	// choice.
 	hasUnsafeCodex := false
 	for _, a := range agents {
 		if a.Type != AgentTypeCodex {
@@ -4336,14 +4337,14 @@ func preflightCodexAccountSupport(agents []FlatAgent) error {
 	switch decideCodexPreflight(hasUnsafeCodex && isChatGPT, strict) {
 	case codexBlock:
 		return fmt.Errorf(
-			"refusing to spawn %d `gpt-*-codex` Codex agent(s) on a ChatGPT-billed account (NTM_CODEX_PREFLIGHT_STRICT is set). Some ChatGPT plans reject `gpt-*-codex` with HTTP 400; if yours supports it, unset NTM_CODEX_PREFLIGHT_STRICT, or use `--cod=%d:gpt-5.5` / a Codex API key (see ntm#155, ntm#142)",
-			n, n,
+			"refusing to spawn %d `gpt-*-codex` Codex agent(s) on a ChatGPT-billed account (NTM_CODEX_PREFLIGHT_STRICT is set). Some ChatGPT plans reject `gpt-*-codex` with HTTP 400; if yours supports it, unset NTM_CODEX_PREFLIGHT_STRICT, or use `--cod=%d:%s` / a Codex API key (see ntm#155, ntm#142)",
+			n, n, config.DefaultCodexModel,
 		)
 	case codexWarn:
 		if !IsJSONOutput() {
 			output.PrintWarningf(
-				"%d Codex agent(s) request a `gpt-*-codex` model on a ChatGPT-billed login. Most ChatGPT plans run it fine, but some accounts get HTTP 400 — if a pane stays alive yet rejects the first prompt, switch to `--cod=N:gpt-5.5` or use a Codex API key (see ntm#155). Set NTM_CODEX_PREFLIGHT_STRICT=1 to fail fast instead.",
-				n,
+				"%d Codex agent(s) request a `gpt-*-codex` model on a ChatGPT-billed login. Most ChatGPT plans run it fine, but some accounts get HTTP 400 — if a pane stays alive yet rejects the first prompt, switch to `--cod=N:%s` or use a Codex API key (see ntm#155). Set NTM_CODEX_PREFLIGHT_STRICT=1 to fail fast instead.",
+				n, config.DefaultCodexModel,
 			)
 		}
 	}
@@ -4380,7 +4381,7 @@ func effectiveCodexModel(cliModel string) string {
 // accounts. The check is suffix-based ("-codex") so it matches
 // gpt-5-codex, gpt-5.2-codex, gpt-5.3-codex, and any future
 // gpt-5.X-codex without an explicit allow-list update. Plain
-// `gpt-5`, `gpt-5.5`, etc. do not match and are considered safe.
+// `gpt-5`, `gpt-5.6-sol`, etc. do not match and are considered safe.
 func isCodexFamilyModel(model string) bool {
 	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(model)), "-codex")
 }

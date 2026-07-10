@@ -105,8 +105,8 @@ func TestAddThreadsReasoningEffort(t *testing.T) {
 // #208 reproduced against v1.18.3 (commit 6615dd7), which predates the ntm#195
 // `add` fix: `ntm add --cod=1:MODEL:EFFORT` parsed the third spec field but
 // runAdd handed GenerateAgentCommand an empty ReasoningEffort, so the default
-// Codex template's `{{.ReasoningEffort | default "xhigh"}}` always emitted the
-// fallback rather than the requested effort. This drives the real
+// Codex template always emitted the fallback rather than the requested effort.
+// This drives the real
 // parse(--cod=1:model:low)→Flatten→render path the add loop uses against the
 // default Codex template and asserts the requested effort reaches
 // `model_reasoning_effort='low'`, with a negative control proving an unset
@@ -161,6 +161,9 @@ func TestAddThreadsCodexReasoningEffort(t *testing.T) {
 	}
 	if strings.Contains(noEffort, "model_reasoning_effort='low'") {
 		t.Errorf("unset effort should not render low: %q", noEffort)
+	}
+	if !strings.Contains(noEffort, "model_reasoning_effort="+config.ShellQuote(config.DefaultCodexReasoningEffort)) {
+		t.Errorf("unset effort should render default effort: %q", noEffort)
 	}
 }
 

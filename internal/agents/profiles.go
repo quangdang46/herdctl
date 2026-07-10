@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agentpkg "github.com/Dicklesworthstone/ntm/internal/agent"
+	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/models"
 )
 
@@ -104,7 +105,7 @@ func (pm *ProfileMatcher) loadDefaults() {
 
 	pm.profiles[AgentTypeCodex] = &AgentProfile{
 		Type:          AgentTypeCodex,
-		Model:         "gpt-5.5",
+		Model:         config.DefaultCodexModel,
 		ContextBudget: models.GetTokenBudget("cod"),
 		Specializations: []Specialization{
 			SpecQuick,
@@ -547,7 +548,7 @@ func NormalizeAgentType(t string) string {
 	switch normalized {
 	case "opus", "sonnet", "haiku":
 		return "claude"
-	case "gpt", "gpt-5", "gpt-5.5", "gpt-5-codex", "gpt-5.3-codex":
+	case "gpt", "gpt-5", "gpt-5.5", "gpt-5.6-sol", "gpt-5-codex", "gpt-5.3-codex":
 		return "codex"
 	case "gemini-pro", "gemini-ultra", "gemini-3-pro-preview":
 		return "gemini"

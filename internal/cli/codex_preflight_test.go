@@ -49,7 +49,7 @@ func TestIsCodexFamilyModel(t *testing.T) {
 
 		// Non-codex gpt models — must NOT be flagged.
 		{"gpt-5", false},
-		{"gpt-5.5", false}, // the #147 reporter's configured default
+		{config.DefaultCodexModel, false}, // the configured default
 		{"gpt-5.3", false},
 		{"gpt-4", false},
 		{"gpt-4o", false},
@@ -82,15 +82,15 @@ func TestEffectiveCodexModelPrecedence(t *testing.T) {
 	// Case 1: explicit CLI model wins over everything.
 	cfg = &config.Config{}
 	cfg.Models.DefaultCodex = "gpt-5-codex"
-	if got := effectiveCodexModel("gpt-5.5"); got != "gpt-5.5" {
-		t.Errorf("CLI override should win: got %q want gpt-5.5", got)
+	if got := effectiveCodexModel(config.DefaultCodexModel); got != config.DefaultCodexModel {
+		t.Errorf("CLI override should win: got %q want %s", got, config.DefaultCodexModel)
 	}
 
 	// Case 2: empty CLI -> cfg.Models.DefaultCodex.
 	cfg = &config.Config{}
-	cfg.Models.DefaultCodex = "gpt-5.5"
-	if got := effectiveCodexModel(""); got != "gpt-5.5" {
-		t.Errorf("cfg default should win when CLI empty: got %q want gpt-5.5", got)
+	cfg.Models.DefaultCodex = config.DefaultCodexModel
+	if got := effectiveCodexModel(""); got != config.DefaultCodexModel {
+		t.Errorf("cfg default should win when CLI empty: got %q want %s", got, config.DefaultCodexModel)
 	}
 
 	// Case 3: empty CLI + cfg default empty -> compiled-in default.
@@ -122,10 +122,11 @@ func TestPreflightCounters_RespectsResolvedModel(t *testing.T) {
 	defer func() { cfg = origCfg }()
 
 	cfg = &config.Config{}
-	cfg.Models.DefaultCodex = "gpt-5.5"
+	cfg.Models.DefaultCodex = config.DefaultCodexModel
 
 	// Mixed batch: two codex agents, one with bare flag (resolves to
-	// gpt-5.5, safe) and one with an explicit codex model (unsafe).
+	// the configured non-codex model, safe) and one with an explicit codex
+	// model (unsafe).
 	agents := []FlatAgent{
 		{Type: AgentTypeCodex, Model: ""},
 		{Type: AgentTypeCodex, Model: "gpt-5.3-codex"},
@@ -136,7 +137,7 @@ func TestPreflightCounters_RespectsResolvedModel(t *testing.T) {
 		t.Errorf("countDefaultCodex should only count the codex-family agent; got %d want 1", got)
 	}
 
-	// All-safe batch: bare codex resolves to gpt-5.5.
+	// All-safe batch: bare codex resolves to the configured non-codex model.
 	agents = []FlatAgent{
 		{Type: AgentTypeCodex, Model: ""},
 		{Type: AgentTypeCodex, Model: "gpt-5"},

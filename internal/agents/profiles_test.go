@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/models"
 )
 
@@ -344,6 +345,7 @@ func TestNormalizeAgentType(t *testing.T) {
 		{"openai-codex", "codex"},
 		{"GPT", "codex"},
 		{"gpt-5.5", "codex"},
+		{config.DefaultCodexModel, "codex"},
 		{"gpt-5.3-codex", "codex"},
 		{"gemini", "gemini"},
 		{"gmi", "gemini"},

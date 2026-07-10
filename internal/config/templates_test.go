@@ -288,9 +288,20 @@ func TestDefaultAgentTemplates(t *testing.T) {
 	}
 
 	// Test Codex template
-	_, err = GenerateAgentCommand(templates.Codex, vars)
+	codexCmd, err := GenerateAgentCommand(templates.Codex, AgentTemplateVars{})
 	if err != nil {
 		t.Errorf("Codex template failed: %v", err)
+	}
+	if !strings.Contains(codexCmd, "-m "+ShellQuote(DefaultCodexModel)) {
+		t.Errorf("Codex default model missing from rendered command: %s", codexCmd)
+	}
+	if !strings.Contains(codexCmd, "model_reasoning_effort="+ShellQuote(DefaultCodexReasoningEffort)) {
+		t.Errorf("Codex default reasoning effort missing from rendered command: %s", codexCmd)
+	}
+
+	_, err = GenerateAgentCommand(templates.Codex, vars)
+	if err != nil {
+		t.Errorf("Codex template with explicit vars failed: %v", err)
 	}
 
 	// Test Gemini template
