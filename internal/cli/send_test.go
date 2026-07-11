@@ -893,6 +893,104 @@ func TestSendDryRunDoesNotSendToPane(t *testing.T) {
 	}
 }
 
+func TestSendDefaultTargetsAllAgentsWithoutUserPane(t *testing.T) {
+	testutil.RequireTmuxThrottled(t)
+
+	tmpDir, err := os.MkdirTemp("", "ntm-test-send-no-user")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	oldCfg := cfg
+	oldJSONOutput := jsonOutput
+	defer func() {
+		cfg = oldCfg
+		jsonOutput = oldJSONOutput
+	}()
+
+	cfg = newTmuxIntegrationTestConfig(tmpDir)
+	cfg.Checkpoints.Enabled = false
+	cfg.Agents.Claude = testAgentCatCommandTemplate
+	jsonOutput = true
+
+	sessionName := fmt.Sprintf("ntm-test-send-no-user-%d", time.Now().UnixNano())
+	defer func() {
+		_ = tmux.KillSession(sessionName)
+	}()
+
+	projectDir := filepath.Join(tmpDir, sessionName)
+	if err := os.MkdirAll(projectDir, 0755); err != nil {
+		t.Fatalf("failed to create project dir: %v", err)
+	}
+
+	agents := []FlatAgent{
+		{Type: AgentTypeClaude, Index: 1, Model: "test-model"},
+		{Type: AgentTypeClaude, Index: 2, Model: "test-model"},
+	}
+	if err := spawnSessionLogic(SpawnOptions{
+		Session:  sessionName,
+		Agents:   agents,
+		CCCount:  2,
+		UserPane: false,
+	}); err != nil {
+		t.Fatalf("spawnSessionLogic failed: %v", err)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	dryRunTargets := func(skipFirst bool) SendDryRunResult {
+		t.Helper()
+
+		oldStdout := os.Stdout
+		r, w, err := os.Pipe()
+		if err != nil {
+			t.Fatalf("failed to create stdout pipe: %v", err)
+		}
+		os.Stdout = w
+		defer func() {
+			os.Stdout = oldStdout
+			_ = r.Close()
+		}()
+
+		sendErr := runSendWithTargets(SendOptions{
+			Session:      sessionName,
+			Prompt:       "dry-run target coverage",
+			PromptSource: "args",
+			Targets:      SendTargets{},
+			SkipFirst:    skipFirst,
+			PaneIndex:    -1,
+			DryRun:       true,
+		})
+		_ = w.Close()
+		os.Stdout = oldStdout
+
+		stdoutBytes, readErr := io.ReadAll(r)
+		if readErr != nil {
+			t.Fatalf("failed reading stdout: %v", readErr)
+		}
+		if sendErr != nil {
+			t.Fatalf("runSendWithTargets failed: %v (stdout=%q)", sendErr, strings.TrimSpace(string(stdoutBytes)))
+		}
+
+		var result SendDryRunResult
+		if err := json.Unmarshal(stdoutBytes, &result); err != nil {
+			t.Fatalf("failed to parse dry-run JSON: %v (stdout=%q)", err, strings.TrimSpace(string(stdoutBytes)))
+		}
+		return result
+	}
+
+	defaultResult := dryRunTargets(false)
+	if defaultResult.Total != 2 || len(defaultResult.WouldSend) != 2 {
+		t.Fatalf("default send targeted %d panes (%d entries), want both agents", defaultResult.Total, len(defaultResult.WouldSend))
+	}
+
+	explicitSkipResult := dryRunTargets(true)
+	if explicitSkipResult.Total != 1 || len(explicitSkipResult.WouldSend) != 1 {
+		t.Fatalf("explicit skip-first targeted %d panes (%d entries), want one agent", explicitSkipResult.Total, len(explicitSkipResult.WouldSend))
+	}
+}
+
 func TestSendSmartRouteIsDisabledWhenPanesSpecified(t *testing.T) {
 	testutil.RequireTmuxThrottled(t)
 

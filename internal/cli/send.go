@@ -1506,10 +1506,6 @@ func runSendInternal(opts SendOptions) (err error) {
 	} else {
 		noFilter := !targetCC && !targetCod && !targetGmi && !targetAgy && !targetAll && len(tags) == 0
 		hasVariantFilter := len(targets) > 0
-		if noFilter {
-			// Default: send to all agent panes (skip user panes)
-			skipFirst = true
-		}
 
 		for i, p := range panes {
 			// Skip first pane if requested
