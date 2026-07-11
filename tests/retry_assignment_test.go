@@ -3,7 +3,6 @@ package tests
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 	"time"
 
@@ -12,12 +11,8 @@ import (
 
 // Test fixtures for retry logic
 func setupRetryTestStore(t *testing.T) (*assignment.AssignmentStore, string) {
-	tmpDir := t.TempDir()
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	t.Cleanup(func() { os.Unsetenv("XDG_DATA_HOME") })
-
-	store := assignment.NewStore("retry-test")
-	return store, tmpDir
+	store := newIsolatedAssignmentStore(t, "retry-test")
+	return store, assignment.StorageDir()
 }
 
 // =============================================================================

@@ -13,13 +13,19 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
+func newReviewQueueTestStore(t *testing.T) *assignment.AssignmentStore {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	return assignment.NewStore("test-session")
+}
+
 // =============================================================================
 // detectIdleAgents
 // =============================================================================
 
 func TestDetectIdleAgents_AllIdle(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	panes := []tmux.Pane{
 		{Index: 0, Title: "user", Active: true},
 		{Index: 1, Title: "__cc_1", Active: true},
@@ -41,7 +47,7 @@ func TestDetectIdleAgents_AllIdle(t *testing.T) {
 
 func TestDetectIdleAgents_BusyAgentExcluded(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	_, _ = store.Assign("bd-123", "Fix bug", 1, "claude", "", "")
 
 	panes := []tmux.Pane{
@@ -62,7 +68,7 @@ func TestDetectIdleAgents_BusyAgentExcluded(t *testing.T) {
 
 func TestDetectIdleAgents_FilterByType(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	panes := []tmux.Pane{
 		{Index: 0, Title: "user", Active: true},
 		{Index: 1, Title: "__cc_1", Active: true},
@@ -84,7 +90,7 @@ func TestDetectIdleAgents_FilterByType(t *testing.T) {
 
 func TestDetectIdleAgents_NoPanes(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	idle := detectIdleAgents(store, nil, "", 0)
 
 	if len(idle) != 0 {
@@ -94,7 +100,7 @@ func TestDetectIdleAgents_NoPanes(t *testing.T) {
 
 func TestDetectIdleAgents_SkipsUserPane(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	panes := []tmux.Pane{
 		{Index: 0, Title: "user", Active: true},
 	}
@@ -108,7 +114,7 @@ func TestDetectIdleAgents_SkipsUserPane(t *testing.T) {
 
 func TestDetectIdleAgents_IdleThreshold(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 
 	// Create a completed assignment with recent completion time
 	a, _ := store.Assign("bd-100", "Task A", 1, "claude", "", "")
@@ -135,7 +141,7 @@ func TestDetectIdleAgents_IdleThreshold(t *testing.T) {
 
 func TestDetectIdleAgents_LastTaskInfo(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 
 	a, _ := store.Assign("bd-200", "Implement auth", 1, "claude", "", "")
 	_ = store.UpdateStatus(a.BeadID, assignment.StatusWorking)
@@ -157,7 +163,7 @@ func TestDetectIdleAgents_LastTaskInfo(t *testing.T) {
 
 func TestDetectIdleAgents_UsesParsedPaneType(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	panes := []tmux.Pane{
 		{Index: 1, Type: tmux.AgentClaude, Title: "notes", Active: true},
 		{Index: 2, Type: tmux.AgentUser, Title: "__cc_2", Active: true},
@@ -337,7 +343,7 @@ func TestMinInt(t *testing.T) {
 
 func TestGenerateReviewSuggestions_NoIdleAgents(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 	result := generateReviewSuggestions(store, nil, 5)
 
 	if result != nil {
@@ -347,7 +353,7 @@ func TestGenerateReviewSuggestions_NoIdleAgents(t *testing.T) {
 
 func TestGenerateReviewSuggestions_CompletedWork(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 
 	// Create a completed assignment as review source
 	a, _ := store.Assign("bd-300", "Refactor auth", 2, "codex", "", "")
@@ -379,7 +385,7 @@ func TestGenerateReviewSuggestions_CompletedWork(t *testing.T) {
 
 func TestGenerateReviewSuggestions_AgentWorkPromptFormat(t *testing.T) {
 
-	store := assignment.NewStore("test-session")
+	store := newReviewQueueTestStore(t)
 
 	a, _ := store.Assign("bd-400", "Add login page", 2, "codex", "", "")
 	_ = store.UpdateStatus(a.BeadID, assignment.StatusWorking)

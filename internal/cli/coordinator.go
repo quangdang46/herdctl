@@ -514,7 +514,7 @@ Examples:
 	cmd.Flags().BoolVar(&assignQuiet, "quiet", false, "Suppress non-essential output")
 	cmd.Flags().DurationVar(&assignTimeout, "timeout", 30*time.Second, "Timeout for external calls (bv, br, Agent Mail)")
 	cmd.Flags().BoolVar(&assignReserveFiles, "reserve-files", true, "Reserve files via Agent Mail when assigning")
-	cmd.Flags().IntVar(&assignPane, "pane", -1, "Assign bead directly to a specific pane (requires --beads)")
+	cmd.Flags().StringVar(&assignPane, "pane", "", "Assign bead directly to exactly one N, W.P, or %N pane selector (requires --beads)")
 	cmd.Flags().BoolVar(&assignForce, "force", false, "Force assignment even if pane is busy")
 	cmd.Flags().BoolVar(&assignIgnoreDeps, "ignore-deps", false, "Ignore dependency checks for assignment")
 	cmd.Flags().StringVar(&assignPrompt, "prompt", "", "Custom prompt for direct assignment")
@@ -586,13 +586,13 @@ func runCoordinatorAssign(cmd *cobra.Command, args []string, dryRun bool) error 
 		Quiet:           assignQuiet,
 		Timeout:         timeout,
 		ReserveFiles:    assignReserveFiles,
-		Pane:            assignPane,
+		PaneSelector:    assignPane,
 		Force:           assignForce,
 		IgnoreDeps:      assignIgnoreDeps,
 		Prompt:          assignPrompt,
 	}
 
-	if assignPane >= 0 {
+	if strings.TrimSpace(assignPane) != "" {
 		return runDirectPaneAssignment(cmd, assignOpts)
 	}
 

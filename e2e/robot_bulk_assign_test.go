@@ -28,7 +28,7 @@ type BulkAssignOutput struct {
 	Assignments      []BulkAssignAssignment `json:"assignments"`
 	Summary          BulkAssignSummary      `json:"summary"`
 	UnassignedBeads  []string               `json:"unassigned_beads,omitempty"`
-	UnassignedPanes  []int                  `json:"unassigned_panes,omitempty"`
+	UnassignedPanes  []string               `json:"unassigned_panes,omitempty"`
 	DryRun           bool                   `json:"dry_run,omitempty"`
 	AllocationSource string                 `json:"allocation_source,omitempty"`
 	Error            string                 `json:"error,omitempty"`
@@ -37,7 +37,8 @@ type BulkAssignOutput struct {
 
 // BulkAssignAssignment represents a single pane-to-bead allocation.
 type BulkAssignAssignment struct {
-	Pane       int    `json:"pane"`
+	Pane       string `json:"pane"`
+	PaneID     string `json:"pane_id"`
 	Bead       string `json:"bead"`
 	BeadTitle  string `json:"bead_title"`
 	Reason     string `json:"reason"`
@@ -67,7 +68,11 @@ func runBulkAssignCmd(t *testing.T, suite *TestSuite, session string, flags ...s
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "/tmp/ntm-test", args...)
+	ntmPath, resolveErr := ensureE2ENTMBin()
+	if resolveErr != nil {
+		return nil, nil, fmt.Errorf("resolve E2E ntm binary: %w", resolveErr)
+	}
+	cmd := exec.CommandContext(ctx, ntmPath, args...)
 	output, err := cmd.CombinedOutput()
 
 	// Check for timeout
@@ -96,7 +101,11 @@ func TestE2E_RobotBulkAssign_RequiresSession(t *testing.T) {
 
 	// Test that empty session (--robot-bulk-assign=) falls through to help
 	// This is expected behavior - the flag needs a value
-	cmd := exec.Command("/tmp/ntm-test", "--robot-bulk-assign=")
+	ntmPath, err := ensureE2ENTMBin()
+	if err != nil {
+		t.Fatalf("resolve E2E ntm binary: %v", err)
+	}
+	cmd := exec.Command(ntmPath, "--robot-bulk-assign=")
 	output, _ := cmd.CombinedOutput()
 
 	suite.Logger().Log("[E2E-BULK-ASSIGN] empty session shows help: bytes=%d", len(output))
@@ -214,11 +223,11 @@ func TestE2E_RobotBulkAssign_SkipPanes(t *testing.T) {
 		t.Fatalf("[E2E-BULK-ASSIGN] Setup failed: %v", err)
 	}
 
-	// Test with --skip-panes
+	// Test with the canonical --skip flag.
 	allocation := `{"1":"bd-test1","2":"bd-test2","3":"bd-test3"}`
 	result, _, _ := runBulkAssignCmd(t, suite, suite.Session(),
 		"--allocation="+allocation,
-		"--skip-panes=1,2",
+		"--skip=1,2",
 		"--dry-run")
 
 	if result == nil {
@@ -230,10 +239,10 @@ func TestE2E_RobotBulkAssign_SkipPanes(t *testing.T) {
 
 	// Skipped panes should be marked as failed (not available)
 	for _, a := range result.Assignments {
-		if a.Pane == 1 || a.Pane == 2 {
+		if a.Pane == "1" || a.Pane == "2" {
 			// These panes should be failed due to skip
 			if a.Status != "failed" || !strings.Contains(a.Error, "pane not available") {
-				suite.Logger().Log("[E2E-BULK-ASSIGN] Pane %d: status=%s error=%s", a.Pane, a.Status, a.Error)
+				suite.Logger().Log("[E2E-BULK-ASSIGN] Pane %s: status=%s error=%s", a.Pane, a.Status, a.Error)
 			}
 		}
 	}
@@ -542,12 +551,11 @@ func TestE2E_RobotBulkAssign_AssignmentDetails(t *testing.T) {
 
 	// Verify assignment details structure
 	for _, a := range result.Assignments {
-		suite.Logger().Log("[E2E-BULK-ASSIGN] Assignment: pane=%d bead=%s status=%s prompt_sent=%v",
-			a.Pane, a.Bead, a.Status, a.PromptSent)
+		suite.Logger().Log("[E2E-BULK-ASSIGN] Assignment: pane=%s pane_id=%s bead=%s status=%s prompt_sent=%v",
+			a.Pane, a.PaneID, a.Bead, a.Status, a.PromptSent)
 
-		// Pane should be non-negative
-		if a.Pane < 0 {
-			t.Fatalf("[E2E-BULK-ASSIGN] Invalid pane index: %d", a.Pane)
+		if _, err := tmux.ParsePaneSelector(a.Pane); err != nil {
+			t.Fatalf("[E2E-BULK-ASSIGN] Invalid canonical pane selector %q: %v", a.Pane, err)
 		}
 
 		// Bead ID should be set
@@ -578,7 +586,7 @@ func TestE2E_RobotBulkAssign_SkipMultiplePanes(t *testing.T) {
 	allocation := `{"0":"bd-s0","1":"bd-s1","2":"bd-s2","3":"bd-s3","4":"bd-s4"}`
 	result, _, _ := runBulkAssignCmd(t, suite, suite.Session(),
 		"--allocation="+allocation,
-		"--skip-panes=0,2,4",
+		"--skip=0,2,4",
 		"--dry-run")
 
 	if result == nil {
@@ -586,11 +594,11 @@ func TestE2E_RobotBulkAssign_SkipMultiplePanes(t *testing.T) {
 	}
 
 	// Verify skipped panes appear as failed (not available in filtered pane list)
-	skippedPanes := map[int]bool{0: true, 2: true, 4: true}
+	skippedPanes := map[string]bool{"0": true, "2": true, "4": true}
 	for _, a := range result.Assignments {
 		if skippedPanes[a.Pane] {
 			// Skipped panes should be marked as failed
-			suite.Logger().Log("[E2E-BULK-ASSIGN] Skipped pane %d: status=%s error=%s", a.Pane, a.Status, a.Error)
+			suite.Logger().Log("[E2E-BULK-ASSIGN] Skipped pane %s: status=%s error=%s", a.Pane, a.Status, a.Error)
 		}
 	}
 
@@ -665,7 +673,7 @@ func TestE2E_RobotBulkAssign_PaneIndexValidation(t *testing.T) {
 
 	// The assignment should either fail or not be included
 	for _, a := range result.Assignments {
-		if a.Pane == 99 && a.Error == "" {
+		if a.Pane == "99" && a.Error == "" {
 			t.Fatal("[E2E-BULK-ASSIGN] Assignment to non-existent pane 99 should have error")
 		}
 	}
@@ -748,7 +756,7 @@ func TestE2E_RobotBulkAssign_CombinedFlags(t *testing.T) {
 	allocation := `{"0":"bd-c0","1":"bd-c1","2":"bd-c2"}`
 	result, _, _ := runBulkAssignCmd(t, suite, suite.Session(),
 		"--allocation="+allocation,
-		"--skip-panes=1",
+		"--skip=1",
 		"--bulk-strategy=impact",
 		"--dry-run")
 
@@ -766,7 +774,7 @@ func TestE2E_RobotBulkAssign_CombinedFlags(t *testing.T) {
 
 	// Pane 1 should be in assignments but marked as failed (skip causes pane not available)
 	for _, a := range result.Assignments {
-		if a.Pane == 1 {
+		if a.Pane == "1" {
 			suite.Logger().Log("[E2E-BULK-ASSIGN] Pane 1 skipped: status=%s error=%s", a.Status, a.Error)
 		}
 	}
@@ -831,7 +839,7 @@ func TestE2E_RobotBulkAssign_SkipPanesFormat(t *testing.T) {
 			allocation := `{"0":"bd-skip0","1":"bd-skip1","2":"bd-skip2"}`
 			result, _, _ := runBulkAssignCmd(t, suite, suite.Session(),
 				"--allocation="+allocation,
-				"--skip-panes="+tc.skipPanes,
+				"--skip="+tc.skipPanes,
 				"--dry-run")
 
 			if result == nil {
@@ -863,19 +871,12 @@ func TestE2E_RobotBulkAssign_AllocationPaneTypes(t *testing.T) {
 		t.Fatal("[E2E-BULK-ASSIGN] Expected JSON response")
 	}
 
-	// Verify pane indices are integers in response
+	// Verify response pane identities use the canonical selector grammar.
 	for _, a := range result.Assignments {
-		if a.Pane < 0 {
-			t.Fatalf("[E2E-BULK-ASSIGN] Invalid pane index: %d", a.Pane)
+		if _, err := tmux.ParsePaneSelector(a.Pane); err != nil {
+			t.Fatalf("[E2E-BULK-ASSIGN] Invalid canonical pane selector %q: %v", a.Pane, err)
 		}
 	}
 
 	suite.Logger().Log("[E2E-BULK-ASSIGN] Pane types validated: %d assignments", len(result.Assignments))
-}
-
-// Helper to check if NTM test binary exists
-func init() {
-	if _, err := exec.LookPath("/tmp/ntm-test"); err != nil {
-		// Binary not built yet - tests will be skipped via CommonE2EPrerequisites
-	}
 }

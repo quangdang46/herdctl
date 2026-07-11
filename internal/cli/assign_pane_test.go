@@ -194,16 +194,16 @@ func TestDirectAssignFileReservationsEmpty(t *testing.T) {
 // TestAssignCommandOptionsPaneFields tests the pane-related options fields
 func TestAssignCommandOptionsPaneFields(t *testing.T) {
 	opts := AssignCommandOptions{
-		Session:    "myproject",
-		BeadIDs:    []string{"bd-xyz"},
-		Pane:       3,
-		Force:      false,
-		IgnoreDeps: false,
-		Prompt:     "Custom prompt for the task",
+		Session:      "myproject",
+		BeadIDs:      []string{"bd-xyz"},
+		PaneSelector: "1.3",
+		Force:        false,
+		IgnoreDeps:   false,
+		Prompt:       "Custom prompt for the task",
 	}
 
-	if opts.Pane != 3 {
-		t.Errorf("Expected Pane 3, got %d", opts.Pane)
+	if opts.PaneSelector != "1.3" {
+		t.Errorf("Expected pane selector 1.3, got %q", opts.PaneSelector)
 	}
 	if opts.Force {
 		t.Error("Expected Force to be false by default")
@@ -233,9 +233,9 @@ func TestAssignCommandOptionsForceFlag(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := AssignCommandOptions{
-				Session: "test",
-				Pane:    1,
-				Force:   tc.force,
+				Session:      "test",
+				PaneSelector: "1",
+				Force:        tc.force,
 			}
 			if opts.Force != tc.expected {
 				t.Errorf("Expected Force=%v, got %v", tc.expected, opts.Force)
@@ -258,9 +258,9 @@ func TestAssignCommandOptionsIgnoreDepsFlag(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := AssignCommandOptions{
-				Session:    "test",
-				Pane:       1,
-				IgnoreDeps: tc.ignoreDeps,
+				Session:      "test",
+				PaneSelector: "1",
+				IgnoreDeps:   tc.ignoreDeps,
 			}
 			if opts.IgnoreDeps != tc.expected {
 				t.Errorf("Expected IgnoreDeps=%v, got %v", tc.expected, opts.IgnoreDeps)
@@ -272,11 +272,11 @@ func TestAssignCommandOptionsIgnoreDepsFlag(t *testing.T) {
 // TestAssignCommandOptionsBothOverrideFlags tests using both force and ignore-deps
 func TestAssignCommandOptionsBothOverrideFlags(t *testing.T) {
 	opts := AssignCommandOptions{
-		Session:    "test",
-		BeadIDs:    []string{"bd-blocked"},
-		Pane:       5,
-		Force:      true,
-		IgnoreDeps: true,
+		Session:      "test",
+		BeadIDs:      []string{"bd-blocked"},
+		PaneSelector: "%5",
+		Force:        true,
+		IgnoreDeps:   true,
 	}
 
 	if !opts.Force {
@@ -287,16 +287,14 @@ func TestAssignCommandOptionsBothOverrideFlags(t *testing.T) {
 	}
 }
 
-// TestAssignCommandOptionsPaneDisabledValue tests the disabled pane sentinel value
+// TestAssignCommandOptionsPaneDisabledValue tests the empty disabled value.
 func TestAssignCommandOptionsPaneDisabledValue(t *testing.T) {
-	// -1 indicates pane is not specified (per the struct comment)
 	opts := AssignCommandOptions{
 		Session: "test",
-		Pane:    -1,
 	}
 
-	if opts.Pane != -1 {
-		t.Errorf("Expected Pane -1 (disabled), got %d", opts.Pane)
+	if opts.PaneSelector != "" {
+		t.Errorf("Expected empty pane selector, got %q", opts.PaneSelector)
 	}
 }
 
@@ -521,9 +519,9 @@ func TestPaneValidationRequiresSingleBead(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			opts := AssignCommandOptions{
-				Session: "test",
-				BeadIDs: tc.beadIDs,
-				Pane:    1,
+				Session:      "test",
+				BeadIDs:      tc.beadIDs,
+				PaneSelector: "1",
 			}
 
 			// The validation is: len(opts.BeadIDs) != 1
@@ -623,15 +621,15 @@ func TestAssignCommandHasIgnoreDepsFlag(t *testing.T) {
 	}
 }
 
-// TestPaneFlagDefaultValue tests that --pane defaults to -1 (disabled)
+// TestPaneFlagDefaultValue tests that --pane defaults to an empty selector (disabled).
 func TestPaneFlagDefaultValue(t *testing.T) {
 	cmd := newAssignCmd()
 	flag := cmd.Flags().Lookup("pane")
 	if flag == nil {
 		t.Fatal("Expected 'pane' flag to exist")
 	}
-	if flag.DefValue != "-1" {
-		t.Errorf("Expected default value '-1', got %q", flag.DefValue)
+	if flag.DefValue != "" {
+		t.Errorf("Expected empty default selector, got %q", flag.DefValue)
 	}
 }
 
@@ -791,14 +789,13 @@ func TestDirectAssignWithEmptyPrompt(t *testing.T) {
 func TestDirectAssignPaneZero(t *testing.T) {
 	// Pane 0 is typically the user pane, which should not accept assignments
 	opts := AssignCommandOptions{
-		Session: "test",
-		BeadIDs: []string{"bd-xyz"},
-		Pane:    0,
+		Session:      "test",
+		BeadIDs:      []string{"bd-xyz"},
+		PaneSelector: "0",
 	}
 
-	// Pane 0 should not be treated as "disabled" (-1 is disabled)
-	if opts.Pane != 0 {
-		t.Errorf("Expected Pane 0, got %d", opts.Pane)
+	if opts.PaneSelector != "0" {
+		t.Errorf("Expected pane selector 0, got %q", opts.PaneSelector)
 	}
 }
 
@@ -806,25 +803,25 @@ func TestDirectAssignPaneZero(t *testing.T) {
 func TestDirectAssignLargePaneIndex(t *testing.T) {
 	// Large pane index should be validated against actual panes
 	opts := AssignCommandOptions{
-		Session: "test",
-		BeadIDs: []string{"bd-xyz"},
-		Pane:    999,
+		Session:      "test",
+		BeadIDs:      []string{"bd-xyz"},
+		PaneSelector: "999",
 	}
 
-	if opts.Pane != 999 {
-		t.Errorf("Expected Pane 999, got %d", opts.Pane)
+	if opts.PaneSelector != "999" {
+		t.Errorf("Expected pane selector 999, got %q", opts.PaneSelector)
 	}
 }
 
 // TestDirectAssignCombinedFlags tests all override flags together
 func TestDirectAssignCombinedFlags(t *testing.T) {
 	opts := AssignCommandOptions{
-		Session:    "test",
-		BeadIDs:    []string{"bd-xyz"},
-		Pane:       5,
-		Force:      true,
-		IgnoreDeps: true,
-		Prompt:     "Custom prompt",
+		Session:      "test",
+		BeadIDs:      []string{"bd-xyz"},
+		PaneSelector: "5",
+		Force:        true,
+		IgnoreDeps:   true,
+		Prompt:       "Custom prompt",
 	}
 
 	if !opts.Force {

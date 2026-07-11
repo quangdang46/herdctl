@@ -234,6 +234,9 @@ func TestLabelIntegration(t *testing.T) {
 
 func runNTM(t *testing.T, root string, args ...string) (stdout string, stderr string, exitCode int) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping go-run process integration in short mode")
+	}
 	cmd := exec.Command("go", append([]string{"run", "./cmd/ntm"}, args...)...)
 	cmd.Dir = root
 	cmd.Env = os.Environ()

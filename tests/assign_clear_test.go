@@ -2,19 +2,39 @@
 package tests
 
 import (
-	"os"
 	"testing"
 
 	"github.com/Dicklesworthstone/ntm/internal/assignment"
 )
 
+func newIsolatedAssignmentStore(t *testing.T, sessionName string) *assignment.AssignmentStore {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	return assignment.NewStore(sessionName)
+}
+
 func setupClearTestStore(t *testing.T) *assignment.AssignmentStore {
 	t.Helper()
-	tmpDir := t.TempDir()
-	os.Setenv("XDG_DATA_HOME", tmpDir)
-	t.Cleanup(func() { os.Unsetenv("XDG_DATA_HOME") })
+	return newIsolatedAssignmentStore(t, "clear-test")
+}
 
-	return assignment.NewStore("clear-test")
+func TestAssignmentStoreFixtureIgnoresExistingHomeState(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	polluted := assignment.NewStore("test-session")
+	if _, err := polluted.Assign("bd-stale", "Stale assignment", 1, "claude", "OldAgent", "old prompt"); err != nil {
+		t.Fatalf("seed stale assignment: %v", err)
+	}
+
+	t.Run("fresh fixture", func(t *testing.T) {
+		store := newIsolatedAssignmentStore(t, "test-session")
+		if got := store.Stats().Total; got != 0 {
+			t.Fatalf("fresh fixture loaded %d assignments from the outer HOME, want 0", got)
+		}
+	})
+
+	if polluted.Get("bd-stale") == nil {
+		t.Fatal("fixture isolation unexpectedly modified the seeded store")
+	}
 }
 
 func createAssignmentWithStatus(t *testing.T, store *assignment.AssignmentStore, beadID string, pane int, status assignment.AssignmentStatus) {

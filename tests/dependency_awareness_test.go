@@ -334,7 +334,7 @@ func TestAutoReassign_QueueNewlyUnblocked(t *testing.T) {
 func TestAutoReassign_AssignToFirstIdle(t *testing.T) {
 	t.Log("=== TestAutoReassign_AssignToFirstIdle ===")
 
-	store := assignment.NewStore("test-session")
+	store := newIsolatedAssignmentStore(t, "test-session")
 
 	// Create assignment for first idle agent
 	_, err := store.Assign("bd-unblock1", "Unblocked Task", 2, "claude", "cc_1", "Work on this unblocked task")
@@ -511,7 +511,7 @@ func TestEdgeCase_CompletionNoNewUnblocks(t *testing.T) {
 func TestEdgeCase_AllAgentsBusy(t *testing.T) {
 	t.Log("=== TestEdgeCase_AllAgentsBusy ===")
 
-	store := assignment.NewStore("test-session")
+	store := newIsolatedAssignmentStore(t, "test-session")
 
 	// Assign work to multiple agents (simulating busy state)
 	store.Assign("bd-busy1", "Busy Task 1", 2, "claude", "cc_1", "prompt 1")
@@ -614,7 +614,7 @@ func TestEdgeCase_PartialBlockerResolution(t *testing.T) {
 func TestStateTransition_FailedToAssigned(t *testing.T) {
 	t.Log("=== TestStateTransition_FailedToAssigned ===")
 
-	store := assignment.NewStore("test-session")
+	store := newIsolatedAssignmentStore(t, "test-session")
 
 	// Create and fail an assignment
 	_, err := store.Assign("bd-retry", "Retry task", 2, "claude", "cc_1", "initial prompt")
@@ -655,7 +655,7 @@ func TestStateTransition_FailedToAssigned(t *testing.T) {
 func TestStateTransition_CompletedCannotRetry(t *testing.T) {
 	t.Log("=== TestStateTransition_CompletedCannotRetry ===")
 
-	store := assignment.NewStore("test-session")
+	store := newIsolatedAssignmentStore(t, "test-session")
 
 	// Create, work, and complete an assignment
 	_, err := store.Assign("bd-done", "Done task", 2, "claude", "cc_1", "prompt")

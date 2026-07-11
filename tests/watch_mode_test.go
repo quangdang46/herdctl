@@ -50,7 +50,7 @@ func (m *MockCompletionDetector) WasStarted() bool {
 // TestWatchLoopStructure tests the WatchLoop struct initialization
 func TestWatchLoopStructure(t *testing.T) {
 	t.Run("NewWatchLoop creates valid instance", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Verify store was created
 		if store == nil {
@@ -67,7 +67,7 @@ func TestWatchLoopStructure(t *testing.T) {
 // TestCompletionEventHandling tests how completion events are processed
 func TestCompletionEventHandling(t *testing.T) {
 	t.Run("completion event updates stats", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Add an assignment
 		_, err := store.Assign("bd-test1", "Test Bead", 2, "claude", "cc_1", "test prompt")
@@ -101,7 +101,7 @@ func TestCompletionEventHandling(t *testing.T) {
 	})
 
 	t.Run("failed completion records failure reason", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Add an assignment
 		_, err := store.Assign("bd-test2", "Test Bead 2", 3, "codex", "cod_1", "test prompt")
@@ -185,7 +185,7 @@ func TestExitConditions(t *testing.T) {
 // TestShouldStopCondition tests the logic for stop-when-done exit
 func TestShouldStopCondition(t *testing.T) {
 	t.Run("returns false when active assignments exist", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Add an active assignment
 		_, err := store.Assign("bd-active", "Active Bead", 2, "claude", "cc_1", "prompt")
@@ -201,7 +201,7 @@ func TestShouldStopCondition(t *testing.T) {
 	})
 
 	t.Run("returns true when no active assignments", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Add and complete an assignment (need to go through working first)
 		_, err := store.Assign("bd-done", "Done Bead", 2, "claude", "cc_1", "prompt")
@@ -244,7 +244,7 @@ func TestStreamingOutput(t *testing.T) {
 // TestErrorHandling tests error scenarios
 func TestErrorHandling(t *testing.T) {
 	t.Run("handles missing assignment gracefully", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Try to mark non-existent assignment as completed
 		err := store.MarkCompleted("bd-nonexistent")
@@ -254,7 +254,7 @@ func TestErrorHandling(t *testing.T) {
 	})
 
 	t.Run("handles invalid status transition", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Add and complete an assignment
 		_, err := store.Assign("bd-test", "Test", 2, "claude", "cc_1", "prompt")
@@ -275,7 +275,7 @@ func TestErrorHandling(t *testing.T) {
 // TestEdgeCases tests edge case scenarios
 func TestEdgeCases(t *testing.T) {
 	t.Run("empty assignment list", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// List should return empty slice (may be nil but len should be 0)
 		active := store.ListActive()
@@ -285,7 +285,7 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("single agent scenario", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Single assignment
 		_, err := store.Assign("bd-single", "Single Bead", 2, "claude", "cc_1", "prompt")
@@ -303,7 +303,7 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("rapid completion events", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Create multiple assignments
 		for i := 0; i < 10; i++ {
@@ -340,7 +340,7 @@ func TestEdgeCases(t *testing.T) {
 // TestConcurrentWatchOperations tests thread-safety of watch mode
 func TestConcurrentWatchOperations(t *testing.T) {
 	t.Run("concurrent completion events", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		// Create assignments and mark them as working first
 		numAssignments := 20
@@ -376,7 +376,7 @@ func TestConcurrentWatchOperations(t *testing.T) {
 	})
 
 	t.Run("concurrent reads and writes", func(t *testing.T) {
-		store := assignment.NewStore("test-session")
+		store := newIsolatedAssignmentStore(t, "test-session")
 
 		var wg sync.WaitGroup
 		numOperations := 50

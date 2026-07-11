@@ -74,6 +74,9 @@ func (th *throttle) AcquireForTest(t *testing.T) {
 //	}
 func RequireTmuxThrottled(t *testing.T) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("skipping real tmux session integration in short mode")
+	}
 	RequireTmux(t)
 	// Cross-process lock to prevent tmux overload when `go test ./...` runs
 	// multiple packages in parallel.
