@@ -378,7 +378,7 @@ func newBenchModel(width, height, panes int) Model {
 			Active:  i == 0,
 		}
 
-		m.paneStatus[i] = PaneStatus{
+		m.paneStatus[paneStatusKey(m.panes[i])] = PaneStatus{
 			State:          "working",
 			ContextPercent: 42.0,
 			ContextLimit:   200000,

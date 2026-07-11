@@ -486,12 +486,12 @@ func TestRenderRateLimitAlert(t *testing.T) {
 		m := Model{
 			theme: th,
 			panes: []tmux.Pane{
-				{Index: 1, Type: tmux.AgentClaude},
-				{Index: 2, Type: tmux.AgentCodex},
+				{ID: "%1", Index: 1, Type: tmux.AgentClaude},
+				{ID: "%2", Index: 2, Type: tmux.AgentCodex},
 			},
-			paneStatus: map[int]PaneStatus{
-				1: {State: "working"},
-				2: {State: "idle"},
+			paneStatus: map[string]PaneStatus{
+				"%1": {State: "working"},
+				"%2": {State: "idle"},
 			},
 		}
 		got := m.renderRateLimitAlert()
@@ -506,12 +506,12 @@ func TestRenderRateLimitAlert(t *testing.T) {
 			session: "myproj",
 			width:   120,
 			panes: []tmux.Pane{
-				{Index: 1, Type: tmux.AgentClaude},
-				{Index: 2, Type: tmux.AgentCodex},
+				{ID: "%1", Index: 1, Type: tmux.AgentClaude},
+				{ID: "%2", Index: 2, Type: tmux.AgentCodex},
 			},
-			paneStatus: map[int]PaneStatus{
-				1: {State: "rate_limited"},
-				2: {State: "working"},
+			paneStatus: map[string]PaneStatus{
+				"%1": {State: "rate_limited"},
+				"%2": {State: "working"},
 			},
 		}
 		got := m.renderRateLimitAlert()
@@ -532,14 +532,14 @@ func TestRenderRateLimitAlert(t *testing.T) {
 			session: "myproj",
 			width:   120,
 			panes: []tmux.Pane{
-				{Index: 1, Type: tmux.AgentClaude},
-				{Index: 2, Type: tmux.AgentCodex},
-				{Index: 3, Type: tmux.AgentGemini},
+				{ID: "%1", Index: 1, Type: tmux.AgentClaude},
+				{ID: "%2", Index: 2, Type: tmux.AgentCodex},
+				{ID: "%3", Index: 3, Type: tmux.AgentGemini},
 			},
-			paneStatus: map[int]PaneStatus{
-				1: {State: "rate_limited"},
-				2: {State: "rate_limited"},
-				3: {State: "working"},
+			paneStatus: map[string]PaneStatus{
+				"%1": {State: "rate_limited"},
+				"%2": {State: "rate_limited"},
+				"%3": {State: "working"},
 			},
 		}
 		got := m.renderRateLimitAlert()
@@ -562,8 +562,8 @@ func TestRenderRateLimitAlert(t *testing.T) {
 	t.Run("pane status missing", func(t *testing.T) {
 		m := Model{
 			theme:      th,
-			panes:      []tmux.Pane{{Index: 1, Type: tmux.AgentClaude}},
-			paneStatus: map[int]PaneStatus{},
+			panes:      []tmux.Pane{{ID: "%1", Index: 1, Type: tmux.AgentClaude}},
+			paneStatus: map[string]PaneStatus{},
 		}
 		got := m.renderRateLimitAlert()
 		if got != "" {

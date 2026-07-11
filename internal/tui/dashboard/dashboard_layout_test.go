@@ -48,7 +48,7 @@ func newTestModel(width int) Model {
 		},
 	}
 	m.cursor = 0
-	m.paneStatus[1] = PaneStatus{
+	m.paneStatus[paneStatusKey(m.panes[0])] = PaneStatus{
 		State:          "working",
 		ContextPercent: 50,
 		ContextLimit:   1000,
@@ -162,12 +162,12 @@ func TestRenderHeaderContextWarningLine(t *testing.T) {
 		{ID: "%1", Index: 1, Title: "test__cc_1", Type: tmux.AgentClaude},
 		{ID: "%2", Index: 2, Title: "test__cod_1", Type: tmux.AgentCodex},
 	}
-	m.paneStatus[1] = PaneStatus{
+	m.paneStatus["%1"] = PaneStatus{
 		ContextPercent: 72,
 		ContextLimit:   1000,
 		ContextModel:   "claude-sonnet-4-6",
 	}
-	m.paneStatus[2] = PaneStatus{
+	m.paneStatus["%2"] = PaneStatus{
 		ContextPercent: 86,
 		ContextLimit:   1000,
 		ContextModel:   "gpt-4",
@@ -186,12 +186,12 @@ func TestRenderHeaderContextWarningLine(t *testing.T) {
 		t.Fatalf("expected warning line to include model names, got %q", plain)
 	}
 
-	m.paneStatus[1] = PaneStatus{
+	m.paneStatus["%1"] = PaneStatus{
 		ContextPercent: 60,
 		ContextLimit:   1000,
 		ContextModel:   "claude-sonnet-4-6",
 	}
-	m.paneStatus[2] = PaneStatus{
+	m.paneStatus["%2"] = PaneStatus{
 		ContextPercent: 65,
 		ContextLimit:   1000,
 		ContextModel:   "gpt-4",
@@ -223,7 +223,7 @@ func TestViewFitsHeightWithManyPanes(t *testing.T) {
 			Command: "claude",
 		}
 		m.panes = append(m.panes, pane)
-		m.paneStatus[i] = PaneStatus{
+		m.paneStatus[paneStatusKey(pane)] = PaneStatus{
 			State:          "working",
 			ContextPercent: float64(i * 5),
 			ContextLimit:   200000,
@@ -312,9 +312,9 @@ func TestPaneRowSelectionStyling_NoWrapAcrossWidths(t *testing.T) {
 				Index:        m.panes[0].Index,
 				Type:         string(m.panes[0].Type),
 				Title:        m.panes[0].Title,
-				Status:       m.paneStatus[m.panes[0].Index].State,
+				Status:       m.paneStatus[paneStatusKey(m.panes[0])].State,
 				IsSelected:   true,
-				ContextPct:   m.paneStatus[m.panes[0].Index].ContextPercent,
+				ContextPct:   m.paneStatus[paneStatusKey(m.panes[0])].ContextPercent,
 				ModelVariant: m.panes[0].Variant,
 			}
 			rendered := RenderPaneRow(row, dims, m.theme)
@@ -959,9 +959,10 @@ func TestPaneGridRendersEnhancedBadges(t *testing.T) {
 	}
 
 	// Set TokenVelocity in paneStatus for badge rendering
-	if ps, ok := m.paneStatus[m.panes[0].Index]; ok {
+	paneKey := paneStatusKey(m.panes[0])
+	if ps, ok := m.paneStatus[paneKey]; ok {
 		ps.TokenVelocity = 120.0 // 120 tokens per minute
-		m.paneStatus[m.panes[0].Index] = ps
+		m.paneStatus[paneKey] = ps
 	}
 
 	out := status.StripANSI(m.renderPaneGrid())
@@ -2146,10 +2147,10 @@ func TestComputeContextRanks(t *testing.T) {
 		{Index: 2, ID: "2"},
 		{Index: 3, ID: "3"},
 	}
-	m.paneStatus = map[int]PaneStatus{
-		1: {ContextPercent: 80},
-		2: {ContextPercent: 50},
-		3: {ContextPercent: 90},
+	m.paneStatus = map[string]PaneStatus{
+		"1": {ContextPercent: 80},
+		"2": {ContextPercent: 50},
+		"3": {ContextPercent: 90},
 	}
 
 	ranks := m.computeContextRanks()
@@ -2159,16 +2160,16 @@ func TestComputeContextRanks(t *testing.T) {
 	}
 
 	// Pane 3 should have rank 1 (highest context)
-	if ranks[3] != 1 {
-		t.Errorf("pane 3 rank = %d, want 1 (highest context)", ranks[3])
+	if ranks["3"] != 1 {
+		t.Errorf("pane 3 rank = %d, want 1 (highest context)", ranks["3"])
 	}
 	// Pane 1 should have rank 2
-	if ranks[1] != 2 {
-		t.Errorf("pane 1 rank = %d, want 2", ranks[1])
+	if ranks["1"] != 2 {
+		t.Errorf("pane 1 rank = %d, want 2", ranks["1"])
 	}
 	// Pane 2 should have rank 3
-	if ranks[2] != 3 {
-		t.Errorf("pane 2 rank = %d, want 3 (lowest context)", ranks[2])
+	if ranks["2"] != 3 {
+		t.Errorf("pane 2 rank = %d, want 3 (lowest context)", ranks["2"])
 	}
 }
 
@@ -2540,8 +2541,8 @@ func TestDashboardAgentMailInboxSummaryClearsStaleBadgesOnEmptyRefresh(t *testin
 		{ID: "pane-1", Index: 1, Title: "proj__cc_1", Type: tmux.AgentClaude},
 		{ID: "pane-2", Index: 2, Title: "proj__cod_1", Type: tmux.AgentCodex},
 	}
-	m.paneStatus[1] = PaneStatus{MailUnread: 3, MailUrgent: 1}
-	m.paneStatus[2] = PaneStatus{MailUnread: 2, MailUrgent: 0}
+	m.paneStatus["pane-1"] = PaneStatus{MailUnread: 3, MailUrgent: 1}
+	m.paneStatus["pane-2"] = PaneStatus{MailUnread: 2, MailUrgent: 0}
 	m.agentMailUnread = 5
 	m.agentMailUrgent = 1
 	m.agentMailInbox = map[string][]agentmail.InboxMessage{
@@ -2571,11 +2572,11 @@ func TestDashboardAgentMailInboxSummaryClearsStaleBadgesOnEmptyRefresh(t *testin
 	if next.agentMailUnread != 0 || next.agentMailUrgent != 0 {
 		t.Fatalf("expected summary totals to clear, got unread=%d urgent=%d", next.agentMailUnread, next.agentMailUrgent)
 	}
-	if next.paneStatus[1].MailUnread != 0 || next.paneStatus[1].MailUrgent != 0 {
-		t.Fatalf("expected pane-1 mail badge state to clear, got %+v", next.paneStatus[1])
+	if next.paneStatus["pane-1"].MailUnread != 0 || next.paneStatus["pane-1"].MailUrgent != 0 {
+		t.Fatalf("expected pane-1 mail badge state to clear, got %+v", next.paneStatus["pane-1"])
 	}
-	if next.paneStatus[2].MailUnread != 0 || next.paneStatus[2].MailUrgent != 0 {
-		t.Fatalf("expected pane-2 mail badge state to clear, got %+v", next.paneStatus[2])
+	if next.paneStatus["pane-2"].MailUnread != 0 || next.paneStatus["pane-2"].MailUrgent != 0 {
+		t.Fatalf("expected pane-2 mail badge state to clear, got %+v", next.paneStatus["pane-2"])
 	}
 	if len(next.agentMailInbox) != 0 {
 		t.Fatalf("expected inbox cache to clear, got %#v", next.agentMailInbox)
@@ -2592,8 +2593,8 @@ func TestDashboardAgentMailInboxSummaryAppliesPartialResultsOnError(t *testing.T
 		{ID: "pane-1", Index: 1, Title: "proj__cc_1", Type: tmux.AgentClaude},
 		{ID: "pane-2", Index: 2, Title: "proj__cod_1", Type: tmux.AgentCodex},
 	}
-	m.paneStatus[1] = PaneStatus{MailUnread: 4, MailUrgent: 1}
-	m.paneStatus[2] = PaneStatus{MailUnread: 2, MailUrgent: 0}
+	m.paneStatus["pane-1"] = PaneStatus{MailUnread: 4, MailUrgent: 1}
+	m.paneStatus["pane-2"] = PaneStatus{MailUnread: 2, MailUrgent: 0}
 	m.agentMailUnread = 6
 	m.agentMailUrgent = 1
 	m.agentMailInbox = map[string][]agentmail.InboxMessage{
@@ -2631,11 +2632,11 @@ func TestDashboardAgentMailInboxSummaryAppliesPartialResultsOnError(t *testing.T
 	if next.agentMailUnread != 1 || next.agentMailUrgent != 1 {
 		t.Fatalf("expected partial fresh totals to apply, got unread=%d urgent=%d", next.agentMailUnread, next.agentMailUrgent)
 	}
-	if next.paneStatus[1].MailUnread != 0 || next.paneStatus[1].MailUrgent != 0 {
-		t.Fatalf("expected missing pane state to clear after partial refresh, got %+v", next.paneStatus[1])
+	if next.paneStatus["pane-1"].MailUnread != 0 || next.paneStatus["pane-1"].MailUrgent != 0 {
+		t.Fatalf("expected missing pane state to clear after partial refresh, got %+v", next.paneStatus["pane-1"])
 	}
-	if next.paneStatus[2].MailUnread != 1 || next.paneStatus[2].MailUrgent != 1 {
-		t.Fatalf("expected successful pane state to update, got %+v", next.paneStatus[2])
+	if next.paneStatus["pane-2"].MailUnread != 1 || next.paneStatus["pane-2"].MailUrgent != 1 {
+		t.Fatalf("expected successful pane state to update, got %+v", next.paneStatus["pane-2"])
 	}
 	if len(next.agentMailInbox["pane-2"]) != 1 {
 		t.Fatalf("expected successful pane inbox to be retained, got %#v", next.agentMailInbox)
@@ -2672,8 +2673,8 @@ func TestDashboardAgentMailInboxSummaryCountsUnreadOnly(t *testing.T) {
 	if next.agentMailUnread != 2 || next.agentMailUrgent != 1 {
 		t.Fatalf("expected unread/urgent totals to ignore read messages, got unread=%d urgent=%d", next.agentMailUnread, next.agentMailUrgent)
 	}
-	if next.paneStatus[1].MailUnread != 2 || next.paneStatus[1].MailUrgent != 1 {
-		t.Fatalf("expected pane unread/urgent badge state to ignore read messages, got %+v", next.paneStatus[1])
+	if next.paneStatus["1"].MailUnread != 2 || next.paneStatus["1"].MailUrgent != 1 {
+		t.Fatalf("expected pane unread/urgent badge state to ignore read messages, got %+v", next.paneStatus["1"])
 	}
 }
 
@@ -3612,7 +3613,7 @@ func TestFleetCount_Consistent(t *testing.T) {
 		if i%2 == 0 {
 			state = "working"
 		}
-		m.paneStatus[i] = PaneStatus{
+		m.paneStatus[paneStatusKey(pane)] = PaneStatus{
 			State:          state,
 			ContextPercent: float64(i * 5),
 			ContextLimit:   200000,
@@ -3667,9 +3668,9 @@ func TestFleetCount_ActiveDefinition(t *testing.T) {
 	}
 
 	// Set status for only 3 of them (various states, not just "working")
-	m.paneStatus[1] = PaneStatus{State: "working"}
-	m.paneStatus[2] = PaneStatus{State: "idle"}
-	m.paneStatus[3] = PaneStatus{State: "error"}
+	m.paneStatus["1"] = PaneStatus{State: "working"}
+	m.paneStatus["2"] = PaneStatus{State: "idle"}
+	m.paneStatus["3"] = PaneStatus{State: "error"}
 	// Panes 4 and 5 have no status set (empty state)
 
 	m.updateStats()
@@ -4015,10 +4016,10 @@ func TestDashboardPaneListForwardsFilterKeys(t *testing.T) {
 		{ID: "pane-3", Index: 2, Title: "proj__cc_2", Type: tmux.AgentClaude},
 	}
 	m.cursor = 0
-	m.paneStatus = map[int]PaneStatus{
-		0: {State: "working"},
-		1: {State: "idle"},
-		2: {State: "waiting"},
+	m.paneStatus = map[string]PaneStatus{
+		"pane-1": {State: "working"},
+		"pane-2": {State: "idle"},
+		"pane-3": {State: "waiting"},
 	}
 	_ = m.rebuildPaneList()
 
@@ -4061,10 +4062,10 @@ func TestDashboardPaneListArrowKeysAdvanceSingleRow(t *testing.T) {
 		{ID: "3", Index: 3, Title: "pane-3", Type: tmux.AgentGemini},
 	}
 	m.cursor = 0
-	m.paneStatus = map[int]PaneStatus{
-		0: {State: "working"},
-		1: {State: "idle"},
-		2: {State: "waiting"},
+	m.paneStatus = map[string]PaneStatus{
+		"1": {State: "working"},
+		"2": {State: "idle"},
+		"3": {State: "waiting"},
 	}
 	_ = m.rebuildPaneList()
 
@@ -4104,9 +4105,9 @@ func TestDashboardPaneTableToggleSplitTier(t *testing.T) {
 		{ID: "pane-1", Index: 0, Title: "proj__cc_1", Type: tmux.AgentClaude, Variant: "sonnet", Command: "go test ./..."},
 		{ID: "pane-2", Index: 1, Title: "proj__cod_1", Type: tmux.AgentCodex, Variant: "gpt-5.4", Command: "rg TODO"},
 	}
-	m.paneStatus = map[int]PaneStatus{
-		0: {State: "working", ContextPercent: 65},
-		1: {State: "idle", ContextPercent: 18},
+	m.paneStatus = map[string]PaneStatus{
+		"pane-1": {State: "working", ContextPercent: 65},
+		"pane-2": {State: "idle", ContextPercent: 18},
 	}
 	_ = m.rebuildPaneList()
 
@@ -4154,9 +4155,9 @@ func TestDashboardPaneTableBlocksHiddenListFiltering(t *testing.T) {
 		{ID: "pane-1", Index: 0, Title: "proj__cc_1", Type: tmux.AgentClaude},
 		{ID: "pane-2", Index: 1, Title: "proj__cod_1", Type: tmux.AgentCodex},
 	}
-	m.paneStatus = map[int]PaneStatus{
-		0: {State: "working"},
-		1: {State: "idle"},
+	m.paneStatus = map[string]PaneStatus{
+		"pane-1": {State: "working"},
+		"pane-2": {State: "idle"},
 	}
 	_ = m.rebuildPaneList()
 
@@ -4177,9 +4178,9 @@ func TestDashboardPaneTableToggleClearsActiveListFilter(t *testing.T) {
 		{ID: "pane-1", Index: 0, Title: "proj__cc_1", Type: tmux.AgentClaude},
 		{ID: "pane-2", Index: 1, Title: "proj__cod_1", Type: tmux.AgentCodex},
 	}
-	m.paneStatus = map[int]PaneStatus{
-		0: {State: "working"},
-		1: {State: "idle"},
+	m.paneStatus = map[string]PaneStatus{
+		"pane-1": {State: "working"},
+		"pane-2": {State: "idle"},
 	}
 	_ = m.rebuildPaneList()
 
@@ -4206,9 +4207,9 @@ func TestToPaneItems(t *testing.T) {
 		{ID: "1", Index: 0, Title: "cc_1", Type: tmux.AgentClaude},
 		{ID: "2", Index: 1, Title: "cod_1", Type: tmux.AgentCodex},
 	}
-	statuses := map[int]PaneStatus{
-		0: {State: "working", ContextPercent: 50},
-		1: {State: "idle", ContextPercent: 20},
+	statuses := map[string]PaneStatus{
+		"1": {State: "working", ContextPercent: 50},
+		"2": {State: "idle", ContextPercent: 20},
 	}
 
 	items := toPaneItems(panes, statuses, nil, m.theme)

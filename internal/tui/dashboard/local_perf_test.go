@@ -252,7 +252,8 @@ func TestDashboardOllamaPSErrorClearsStalePaneMemory(t *testing.T) {
 		{ID: "%1", Index: 0, Title: "session__ollama_1_mistral", Type: tmux.AgentOllama, Variant: "mistral:7b"},
 	}
 	m.ollamaModelMemory = map[string]int64{"mistral:7b": 1234}
-	m.paneStatus[0] = PaneStatus{LocalMemoryBytes: 1234}
+	paneKey := paneStatusKey(m.panes[0])
+	m.paneStatus[paneKey] = PaneStatus{LocalMemoryBytes: 1234}
 
 	updated, _ := m.Update(OllamaPSResultMsg{Err: errors.New("ollama /api/ps unavailable")})
 	next, ok := updated.(Model)
@@ -266,7 +267,7 @@ func TestDashboardOllamaPSErrorClearsStalePaneMemory(t *testing.T) {
 	if next.ollamaModelMemory != nil {
 		t.Fatalf("expected stale ollama memory cache to clear, got %#v", next.ollamaModelMemory)
 	}
-	if next.paneStatus[0].LocalMemoryBytes != 0 {
-		t.Fatalf("expected stale pane memory to clear, got %d", next.paneStatus[0].LocalMemoryBytes)
+	if next.paneStatus[paneKey].LocalMemoryBytes != 0 {
+		t.Fatalf("expected stale pane memory to clear, got %d", next.paneStatus[paneKey].LocalMemoryBytes)
 	}
 }

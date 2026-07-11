@@ -74,28 +74,35 @@ type Progress struct {
 
 // AgentHealth contains health information for a single agent
 type AgentHealth struct {
-	Pane          int           `json:"pane"`           // Pane index
-	PaneID        string        `json:"pane_id"`        // Full pane ID
-	AgentType     string        `json:"agent_type"`     // claude, codex, gemini, user, unknown
-	Status        Status        `json:"status"`         // Overall health status
-	ProcessStatus ProcessStatus `json:"process_status"` // Process running state
-	Activity      ActivityLevel `json:"activity"`       // Activity level
-	LastActivity  *time.Time    `json:"last_activity"`  // Last activity timestamp
-	IdleSeconds   int           `json:"idle_seconds"`   // Seconds since last activity
-	Issues        []Issue       `json:"issues"`         // Detected issues
-	RateLimited   bool          `json:"rate_limited"`   // True if agent hit rate limit
-	WaitSeconds   int           `json:"wait_seconds"`   // Suggested wait time (if rate limited)
-	Progress      *Progress     `json:"progress"`       // Detected work progress
-	ShellPID      int           `json:"shell_pid"`      // Shell PID from tmux pane
+	Pane                  int                         `json:"pane"`           // Pane index
+	PaneID                string                      `json:"pane_id"`        // Full pane ID
+	AgentType             string                      `json:"agent_type"`     // claude, codex, gemini, user, unknown
+	Status                Status                      `json:"status"`         // Overall health status
+	ProcessStatus         ProcessStatus               `json:"process_status"` // Process running state
+	Activity              ActivityLevel               `json:"activity"`       // Activity level
+	LastActivity          *time.Time                  `json:"last_activity"`  // Last activity timestamp
+	IdleSeconds           int                         `json:"idle_seconds"`   // Seconds since last activity
+	Issues                []Issue                     `json:"issues"`         // Detected issues
+	RateLimited           bool                        `json:"rate_limited"`   // True if agent hit rate limit
+	WaitSeconds           int                         `json:"wait_seconds"`   // Suggested wait time (if rate limited)
+	Progress              *Progress                   `json:"progress"`       // Detected work progress
+	ShellPID              int                         `json:"shell_pid"`      // Shell PID from tmux pane
+	ObservedState         status.AgentState           `json:"observed_state"`
+	LastKnownState        status.AgentState           `json:"last_known_state,omitempty"`
+	ObservationFreshness  status.ObservationFreshness `json:"observation_freshness"`
+	ObservationConfidence float64                     `json:"observation_confidence"`
+	SafeToDispatch        bool                        `json:"safe_to_dispatch"`
 }
 
 // SessionHealth contains health information for an entire session
 type SessionHealth struct {
-	Session       string        `json:"session"`        // Session name
-	CheckedAt     time.Time     `json:"checked_at"`     // When check was performed
-	Agents        []AgentHealth `json:"agents"`         // Per-agent health
-	Summary       HealthSummary `json:"summary"`        // Aggregate summary
-	OverallStatus Status        `json:"overall_status"` // Worst status among all agents
+	Session             string                      `json:"session"`        // Session name
+	CheckedAt           time.Time                   `json:"checked_at"`     // When check was performed
+	Agents              []AgentHealth               `json:"agents"`         // Per-agent health
+	Summary             HealthSummary               `json:"summary"`        // Aggregate summary
+	OverallStatus       Status                      `json:"overall_status"` // Worst status among all agents
+	ObservationComplete bool                        `json:"observation_complete"`
+	ObservationFailures []status.ObservationFailure `json:"observation_failures"`
 }
 
 // HealthSummary provides aggregate statistics
@@ -119,7 +126,7 @@ const (
 
 // CheckSession performs health checks on all agents in a session
 func CheckSession(ctx context.Context, session string) (*SessionHealth, error) {
-	panesWithActivity, err := tmux.GetPanesWithActivityContext(ctx, session)
+	observation, err := status.NewSessionObserver(status.NewDetector()).Observe(ctx, session)
 	if err != nil {
 		if isSessionMissing(err) {
 			return nil, &SessionNotFoundError{Session: session}
@@ -128,20 +135,22 @@ func CheckSession(ctx context.Context, session string) (*SessionHealth, error) {
 	}
 
 	health := &SessionHealth{
-		Session:       session,
-		CheckedAt:     time.Now().UTC(),
-		Agents:        make([]AgentHealth, 0, len(panesWithActivity)),
-		Summary:       HealthSummary{},
-		OverallStatus: StatusOK,
+		Session:             session,
+		CheckedAt:           observation.ObservedAt,
+		Agents:              make([]AgentHealth, 0, len(observation.Panes)),
+		Summary:             HealthSummary{},
+		OverallStatus:       StatusOK,
+		ObservationComplete: observation.Complete,
+		ObservationFailures: append([]status.ObservationFailure{}, observation.Failures...),
 	}
 
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8) // Limit concurrent tmux checks to 8
 
-	for _, pa := range panesWithActivity {
+	for _, paneObservation := range observation.Panes {
 		wg.Add(1)
-		go func(pa tmux.PaneActivity) {
+		go func(paneObservation status.PaneObservation) {
 			defer wg.Done()
 
 			select {
@@ -153,7 +162,7 @@ func CheckSession(ctx context.Context, session string) (*SessionHealth, error) {
 			// Ensure token is released even if checkAgent panics
 			defer func() { <-sem }()
 
-			agentHealth := checkAgent(ctx, pa)
+			agentHealth := checkAgentObservation(paneObservation)
 
 			mu.Lock()
 			defer mu.Unlock()
@@ -177,7 +186,7 @@ func CheckSession(ctx context.Context, session string) (*SessionHealth, error) {
 			if statusSeverity(agentHealth.Status) > statusSeverity(health.OverallStatus) {
 				health.OverallStatus = agentHealth.Status
 			}
-		}(pa)
+		}(paneObservation)
 	}
 	wg.Wait()
 
@@ -212,6 +221,39 @@ func isSessionMissing(err error) bool {
 
 // checkAgent performs health checks on a single agent pane
 func checkAgent(ctx context.Context, pa tmux.PaneActivity) AgentHealth {
+	agent := newAgentHealth(pa)
+
+	// Capture pane output for analysis
+	output, err := tmux.CapturePaneOutputContext(ctx, pa.Pane.ID, 50)
+	if err != nil {
+		agent.ProcessStatus = ProcessUnknown
+		agent.Status = StatusUnknown
+		return agent
+	}
+
+	return analyzeAgentHealth(agent, pa, output)
+}
+
+func checkAgentObservation(observation status.PaneObservation) AgentHealth {
+	pa := tmux.PaneActivity{
+		Pane:         observation.Metadata,
+		LastActivity: observation.Current.Status.LastActive,
+	}
+	agent := newAgentHealth(pa)
+	agent.ObservedState = observation.Current.Status.State
+	agent.ObservationFreshness = observation.Current.Freshness
+	agent.ObservationConfidence = observation.Current.Confidence
+	agent.SafeToDispatch = observation.SafeToDispatch()
+	if observation.LastKnown != nil {
+		agent.LastKnownState = observation.LastKnown.Status.State
+	}
+	if observation.Current.Freshness != status.FreshnessFresh {
+		return agent
+	}
+	return analyzeAgentHealth(agent, pa, observation.RawOutput)
+}
+
+func newAgentHealth(pa tmux.PaneActivity) AgentHealth {
 	agent := AgentHealth{
 		Pane:          pa.Pane.Index,
 		PaneID:        pa.Pane.ID,
@@ -228,15 +270,10 @@ func checkAgent(ctx context.Context, pa tmux.PaneActivity) AgentHealth {
 		agent.LastActivity = &pa.LastActivity
 		agent.IdleSeconds = int(time.Since(pa.LastActivity).Seconds())
 	}
+	return agent
+}
 
-	// Capture pane output for analysis
-	output, err := tmux.CapturePaneOutputContext(ctx, pa.Pane.ID, 50)
-	if err != nil {
-		agent.ProcessStatus = ProcessUnknown
-		agent.Status = StatusUnknown
-		return agent
-	}
-
+func analyzeAgentHealth(agent AgentHealth, pa tmux.PaneActivity, output string) AgentHealth {
 	// Check for rate limit and parse wait time (preferred authoritative source)
 	detection := detectRateLimit(output, string(pa.Pane.Type))
 	if detection.RateLimited {

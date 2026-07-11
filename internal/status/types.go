@@ -3,7 +3,11 @@
 // by analyzing tmux pane activity and output patterns.
 package status
 
-import "time"
+import (
+	"time"
+
+	"github.com/Dicklesworthstone/ntm/internal/tmux"
+)
 
 // AgentState represents the current state of an agent
 type AgentState string
@@ -101,6 +105,119 @@ type AgentStatus struct {
 	TokensUsed int64 `json:"tokens_used,omitempty"`
 	// UpdatedAt is when this status was computed
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ObservationFreshness distinguishes a current reading from historical or
+// unavailable evidence. Consumers must not treat stale state as current state.
+type ObservationFreshness string
+
+const (
+	FreshnessFresh       ObservationFreshness = "fresh"
+	FreshnessStale       ObservationFreshness = "stale"
+	FreshnessUnavailable ObservationFreshness = "unavailable"
+)
+
+// ObservationProvenance identifies the subsystem that produced evidence.
+type ObservationProvenance string
+
+const (
+	ProvenanceTMUXTopology ObservationProvenance = "tmux_topology"
+	ProvenanceTMUXCapture  ObservationProvenance = "tmux_capture"
+	ProvenanceDetector     ObservationProvenance = "status_detector"
+	ProvenanceLastKnown    ObservationProvenance = "last_known"
+)
+
+// ObservationEvidence records one input to a state estimate. Error is data
+// about an unavailable source, not the raw pane output.
+type ObservationEvidence struct {
+	Provenance ObservationProvenance `json:"provenance"`
+	ObservedAt time.Time             `json:"observed_at"`
+	Freshness  ObservationFreshness  `json:"freshness"`
+	Confidence float64               `json:"confidence"`
+	Error      string                `json:"error,omitempty"`
+}
+
+// StateObservation is one state estimate and the evidence quality attached to
+// it. Last-known estimates are carried separately from Current and are always
+// marked stale when the current capture is unavailable.
+type StateObservation struct {
+	Status     AgentStatus           `json:"status"`
+	ObservedAt time.Time             `json:"observed_at"`
+	Freshness  ObservationFreshness  `json:"freshness"`
+	Confidence float64               `json:"confidence"`
+	Evidence   []ObservationEvidence `json:"evidence"`
+	Error      string                `json:"error,omitempty"`
+}
+
+// PaneObservation is the canonical observation for one physical tmux pane.
+// RawOutput is intentionally process-private; serialized APIs expose only the
+// bounded LastOutput preview inside AgentStatus.
+type PaneObservation struct {
+	Pane      tmux.PaneRef      `json:"pane"`
+	PaneName  string            `json:"pane_name"`
+	AgentType string            `json:"agent_type"`
+	Current   StateObservation  `json:"current"`
+	LastKnown *StateObservation `json:"last_known,omitempty"`
+	Metadata  tmux.Pane         `json:"-"`
+	RawOutput string            `json:"-"`
+}
+
+const minimumDispatchConfidence = 0.75
+
+// SafeToDispatch fails closed. Only a fresh, confident idle classification can
+// receive new work; stale, unknown, working, error, and failed observations are
+// all rejected.
+func (p PaneObservation) SafeToDispatch() bool {
+	return p.Current.Freshness == FreshnessFresh &&
+		p.Current.Error == "" &&
+		p.Current.Confidence >= minimumDispatchConfidence &&
+		p.Current.Confidence <= 1 &&
+		p.Current.Status.State == StateIdle
+}
+
+// ObservationFailure describes one failed observation stage without dropping
+// successful pane results from the same session scan.
+type ObservationFailure struct {
+	PaneID string `json:"pane_id,omitempty"`
+	Stage  string `json:"stage"`
+	Error  string `json:"error"`
+}
+
+// SessionObservation is a deterministic, point-in-time view of a tmux session.
+// Complete is false when any pane capture failed, while Panes still contains an
+// explicit unavailable Current estimate for every pane found in the topology.
+type SessionObservation struct {
+	Session    string               `json:"session"`
+	ObservedAt time.Time            `json:"observed_at"`
+	Complete   bool                 `json:"complete"`
+	Panes      []PaneObservation    `json:"panes"`
+	Failures   []ObservationFailure `json:"failures"`
+}
+
+// PaneByID returns the unique pane with the requested tmux ID.
+func (o SessionObservation) PaneByID(paneID string) (PaneObservation, bool) {
+	if paneID == "" {
+		return PaneObservation{}, false
+	}
+	var match PaneObservation
+	found := false
+	for _, pane := range o.Panes {
+		if pane.Pane.ID != paneID {
+			continue
+		}
+		if found {
+			return PaneObservation{}, false
+		}
+		match = pane
+		found = true
+	}
+	return match, found
+}
+
+// SafeToDispatch fails closed for missing and duplicate pane IDs.
+func (o SessionObservation) SafeToDispatch(paneID string) bool {
+	pane, ok := o.PaneByID(paneID)
+	return ok && pane.SafeToDispatch()
 }
 
 // IsHealthy returns true if the agent is in a healthy state (idle or working)

@@ -49,3 +49,19 @@ func TestPaneTableTruncatesLongCommands(t *testing.T) {
 		t.Fatalf("expected ellipsis in %q", rendered)
 	}
 }
+
+func TestPaneTableRendersMultiWindowAddressesForSameLocalIndex(t *testing.T) {
+	table := NewPaneTable(theme.Current())
+	table.SetSize(80, 10)
+	table.SetRows([]PaneTableRow{
+		{PaneIndex: 0, PaneAddress: "0.0", Type: "cc", Status: "working", ContextPct: 70, Model: "sonnet"},
+		{PaneIndex: 0, PaneAddress: "1.0", Type: "cod", Status: "idle", ContextPct: 20, Model: "gpt-5.4"},
+	})
+
+	rendered := table.View()
+	for _, address := range []string{"0.0", "1.0"} {
+		if !strings.Contains(rendered, address) {
+			t.Fatalf("pane table omitted physical address %q in %q", address, rendered)
+		}
+	}
+}

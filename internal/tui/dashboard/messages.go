@@ -44,11 +44,11 @@ type RefreshMsg struct{}
 
 // StatusUpdateMsg is sent when status detection completes.
 type StatusUpdateMsg struct {
-	Statuses []status.AgentStatus
-	Time     time.Time
-	Duration time.Duration
-	Err      error
-	Gen      uint64
+	Observation status.SessionObservation
+	Time        time.Time
+	Duration    time.Duration
+	Err         error
+	Gen         uint64
 }
 
 // ConfigReloadMsg is sent when configuration changes.

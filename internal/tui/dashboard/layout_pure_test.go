@@ -611,9 +611,9 @@ func TestBuildPaneTableRows_WithHealthStates(t *testing.T) {
 		"%1": {State: status.StateWorking, AgentType: "cc"},
 	}
 
-	paneStatus := map[int]PaneStatus{
-		1: {State: "working", ContextPercent: 42.0, TokenVelocity: 100},
-		2: {State: "idle"},
+	paneStatus := map[string]PaneStatus{
+		"%1": {State: "working", ContextPercent: 42.0, TokenVelocity: 100},
+		"%2": {State: "idle"},
 	}
 
 	rows := BuildPaneTableRows(panes, statuses, paneStatus, nil, nil, nil, 5, th)
@@ -682,8 +682,8 @@ func TestBuildPaneTableRows_ContextHistoryCopied(t *testing.T) {
 	}
 
 	sourceHistory := []float64{18, 27, 41, 56}
-	paneStatus := map[int]PaneStatus{
-		1: {
+	paneStatus := map[string]PaneStatus{
+		"%1": {
 			State:          "working",
 			ContextPercent: 56,
 			ContextHistory: append([]float64(nil), sourceHistory...),
@@ -703,7 +703,7 @@ func TestBuildPaneTableRows_ContextHistoryCopied(t *testing.T) {
 		}
 	}
 
-	paneStatus[1].ContextHistory[0] = 99
+	paneStatus["%1"].ContextHistory[0] = 99
 	if rows[0].ContextHistory[0] == 99 {
 		t.Fatal("expected row context history to be copied, not aliased")
 	}

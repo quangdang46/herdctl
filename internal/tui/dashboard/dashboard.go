@@ -230,7 +230,7 @@ func (m *Model) recordVelocitySnapshot() {
 	total := 0.0
 	byTypeTotals := make(map[string]float64)
 	for _, pane := range m.panes {
-		ps, ok := m.paneStatus[pane.Index]
+		ps, ok := m.paneStatus[paneStatusKey(pane)]
 		if !ok || ps.TokenVelocity <= 0 {
 			continue
 		}
@@ -338,6 +338,7 @@ func (m *Model) clearAllPaneLiveStatus() {
 		m.paneStatus[idx] = clearPaneLiveStatus(ps)
 	}
 	m.agentStatuses = make(map[string]status.AgentStatus)
+	m.paneObservations = make(map[string]status.PaneObservation)
 }
 
 func (m *Model) applyOllamaMemorySnapshot(memory map[string]int64) {
@@ -354,14 +355,15 @@ func (m *Model) applyOllamaMemorySnapshot(memory map[string]int64) {
 		if pane.Type != tmux.AgentOllama {
 			continue
 		}
-		ps := m.paneStatus[pane.Index]
+		key := paneStatusKey(pane)
+		ps := m.paneStatus[key]
 		ps.LocalMemoryBytes = 0
 		if m.ollamaModelMemory != nil && pane.Variant != "" {
 			if mem, ok := m.ollamaModelMemory[pane.Variant]; ok {
 				ps.LocalMemoryBytes = mem
 			}
 		}
-		m.paneStatus[pane.Index] = ps
+		m.paneStatus[key] = ps
 	}
 }
 
@@ -1171,6 +1173,7 @@ type PaneOutputData struct {
 	LastActivity time.Time
 	Output       string
 	AgentType    string
+	Observation  status.PaneObservation
 }
 
 type SessionDataWithOutputMsg struct {
@@ -1596,6 +1599,7 @@ func (m *Model) fetchSessionDataWithOutputsCtx(ctx context.Context) tea.Cmd {
 	}
 
 	session := m.session
+	observer := m.observer
 
 	return func() tea.Msg {
 		start := time.Now()
@@ -1637,19 +1641,21 @@ func (m *Model) fetchSessionDataWithOutputsCtx(ctx context.Context) tea.Cmd {
 		for i := 0; i < len(plan.Targets); i++ {
 			select {
 			case res := <-resultsCh:
-				if res.err != nil {
-					if ctxErr := ctx.Err(); ctxErr != nil {
-						return SessionDataWithOutputMsg{Err: ctxErr, Duration: time.Since(start), Gen: gen}
-					}
-					continue
+				if res.err != nil && ctx.Err() != nil {
+					return SessionDataWithOutputMsg{Err: ctx.Err(), Duration: time.Since(start), Gen: gen}
 				}
-
+				observation := observer.ObservePaneCapture(session, res.pane, res.output, res.err)
+				safeOutput := res.output
+				if res.err != nil {
+					safeOutput = ""
+				}
 				outputs = append(outputs, PaneOutputData{
 					PaneID:       res.pane.Pane.ID,
 					PaneIndex:    res.pane.Pane.Index,
 					LastActivity: res.pane.LastActivity,
-					Output:       res.output,
+					Output:       safeOutput,
 					AgentType:    string(res.pane.Pane.Type), // Simplified mapping
+					Observation:  observation,
 				})
 			case <-ctx.Done():
 				return SessionDataWithOutputMsg{Err: ctx.Err(), Duration: time.Since(start), Gen: gen}
@@ -1793,18 +1799,23 @@ func copyTimeMap(src map[string]time.Time) map[string]time.Time {
 // fetchStatuses runs unified status detection across all panes
 func (m *Model) fetchStatuses() tea.Cmd {
 	gen := m.nextGen(refreshStatus)
+	observer := m.observer
+	session := m.session
 	return func() tea.Msg {
 		start := time.Now()
 		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 		defer cancel()
 
-		statuses, err := m.detector.DetectAllContext(ctx, m.session)
+		observation, err := observer.Observe(ctx, session)
 		duration := time.Since(start)
-		if err != nil {
-			// Keep UI responsive even if detection fails
-			return StatusUpdateMsg{Statuses: nil, Time: time.Now(), Duration: duration, Err: err, Gen: gen}
+		observedAt := observation.ObservedAt
+		if observedAt.IsZero() {
+			observedAt = time.Now()
 		}
-		return StatusUpdateMsg{Statuses: statuses, Time: time.Now(), Duration: duration, Gen: gen}
+		if err != nil {
+			return StatusUpdateMsg{Observation: observation, Time: observedAt, Duration: duration, Err: err, Gen: gen}
+		}
+		return StatusUpdateMsg{Observation: observation, Time: observedAt, Duration: duration, Gen: gen}
 	}
 }
 
@@ -2318,35 +2329,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				prevSelectedID = m.panes[m.cursor].ID
 			}
 
-			// Build old pane ID to index lookup BEFORE updating panes
-			// This is used to migrate paneStatus entries to new indices
-			oldPaneIDToIdx := make(map[string]int, len(m.panes))
-			for _, p := range m.panes {
-				oldPaneIDToIdx[p.ID] = p.Index
-			}
-
-			sort.Slice(msg.Panes, func(i, j int) bool {
-				return msg.Panes[i].Index < msg.Panes[j].Index
-			})
-
-			m.panes = msg.Panes
+			m.panes = tmux.SortPanesByTopology(msg.Panes)
 			if m.historyPanel != nil {
 				m.historyPanel.SetPanes(m.panes)
 			}
 
-			// Migrate paneStatus entries from old indices to new indices by pane ID
-			// This prevents stale data when pane indices change (add/remove/reorder)
-			newPaneIDToIdx := make(map[string]int, len(m.panes))
+			// Retain status only for panes still present. Stable tmux pane IDs keep
+			// state attached to the same physical pane across index/window moves.
+			newPaneStatus := make(map[string]PaneStatus, len(m.panes))
 			for _, p := range m.panes {
-				newPaneIDToIdx[p.ID] = p.Index
-			}
-			newPaneStatus := make(map[int]PaneStatus, len(m.panes))
-			for paneID, newIdx := range newPaneIDToIdx {
-				if oldIdx, exists := oldPaneIDToIdx[paneID]; exists {
-					// Pane still exists - migrate its status to new index
-					if ps, ok := m.paneStatus[oldIdx]; ok {
-						newPaneStatus[newIdx] = ps
-					}
+				key := paneStatusKey(p)
+				if ps, ok := m.paneStatus[key]; ok {
+					newPaneStatus[key] = ps
 				}
 			}
 			m.paneStatus = newPaneStatus
@@ -2399,6 +2393,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					delete(m.renderedOutputCache, id)
 				}
 			}
+			for id := range m.paneObservations {
+				if !validPaneIDs[id] {
+					delete(m.paneObservations, id)
+				}
+			}
 
 			// Process compaction checks, context tracking, AND live status updates
 			timelineUpdated := false
@@ -2418,9 +2417,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						break
 					}
 				}
+				if !found {
+					continue
+				}
 
 				// Map type string to model name for context limits
-				statusAgentType := data.AgentType
+				statusAgentType := data.Observation.AgentType
 				modelName := ""
 				switch data.AgentType {
 				case string(tmux.AgentClaude):
@@ -2470,7 +2472,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Update output caches after cost tracking
-				if data.PaneID != "" {
+				if data.PaneID != "" && data.Observation.Current.Freshness == status.FreshnessFresh {
 					m.paneOutputCache[data.PaneID] = data.Output
 					if !data.LastActivity.IsZero() {
 						m.paneOutputLastCaptured[data.PaneID] = data.LastActivity
@@ -2478,7 +2480,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Get or create pane status
-				ps := m.paneStatus[data.PaneIndex]
+				paneKey := paneStatusKey(currentPane)
+				ps := m.paneStatus[paneKey]
 
 				// Local agent performance (Ollama): best-effort token rate + latency tracking.
 				// This is based on output deltas and prompt history timestamps, not on Ollama's
@@ -2510,8 +2513,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 
-				// Update LIVE STATUS using local analysis (avoid waiting for slow full fetch)
-				st := m.detector.Analyze(data.PaneID, currentPane.Title, statusAgentType, data.Output, data.LastActivity)
+				// Apply the same canonical observation used by full status refreshes;
+				// the capture command has already incorporated it into the persistent
+				// observer's current/last-known state machine.
+				st := data.Observation.Current.Status
 
 				state := string(st.State)
 				// Rate limit check
@@ -2523,6 +2528,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ps.State = state
 				ps.TokenVelocity = m.paneTokenVelocity(st)
 				m.agentStatuses[st.PaneID] = st
+				m.paneObservations[st.PaneID] = data.Observation
 				if m.recordTimelineStatus(currentPane, st) {
 					timelineUpdated = true
 				}
@@ -2551,7 +2557,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// detection nor recovery prompts on this pane.
 				var event *status.CompactionEvent
 				var recoverySent bool
-				if m.cfg == nil || m.cfg.ContextRotation.Recovery.Enabled {
+				if data.Observation.Current.Freshness == status.FreshnessFresh && (m.cfg == nil || m.cfg.ContextRotation.Recovery.Enabled) {
 					event, recoverySent, _ = m.compaction.CheckAndRecover(data.Output, statusAgentType, m.session, data.PaneIndex)
 				}
 
@@ -2562,7 +2568,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					ps.State = "compacted"
 				}
 
-				m.paneStatus[data.PaneIndex] = ps
+				m.paneStatus[paneKey] = ps
 			}
 			m.recordVelocitySnapshot()
 			if timelineUpdated {
@@ -2656,11 +2662,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		followUp := m.finishStatusesFetch()
 		m.statusFetchLatency = msg.Duration
 		m.statusFetchErr = msg.Err
-		// Build index lookup for current panes
-		paneIndexByID := make(map[string]int)
 		paneByID := make(map[string]tmux.Pane)
 		for _, p := range m.panes {
-			paneIndexByID[p.ID] = p.Index
 			paneByID[p.ID] = p
 		}
 
@@ -2684,13 +2687,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clearAllPaneLiveStatus()
 
 		timelineUpdated := false
-		for _, st := range msg.Statuses {
-			idx, ok := paneIndexByID[st.PaneID]
+		for _, paneObservation := range msg.Observation.Panes {
+			st := paneObservation.Current.Status
+			pane, ok := paneByID[st.PaneID]
 			if !ok {
 				continue
 			}
 
-			ps := m.paneStatus[idx]
+			paneKey := paneStatusKey(pane)
+			ps := m.paneStatus[paneKey]
 			state := string(st.State)
 
 			// Rate limit should be shown with special indicator
@@ -2706,7 +2711,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ps.TokenVelocity = m.paneTokenVelocity(st)
 
 			// Local perf snapshot + memory enrichment (Ollama panes only).
-			if pane, ok := paneByID[st.PaneID]; ok && string(pane.Type) == "ollama" {
+			if string(pane.Type) == "ollama" {
 				if tr := m.ensureLocalPerfTracker(st.PaneID); tr != nil {
 					tps, total, lastLat, avgLat := tr.snapshot()
 					ps.LocalTokensPerSecond = tps
@@ -2722,9 +2727,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			m.paneStatus[idx] = ps
+			m.paneStatus[paneKey] = ps
 			m.agentStatuses[st.PaneID] = st
-			if m.recordTimelineStatus(paneByID[st.PaneID], st) {
+			m.paneObservations[st.PaneID] = paneObservation
+			if m.recordTimelineStatus(pane, st) {
 				timelineUpdated = true
 			}
 
@@ -2757,25 +2763,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Build index lookup for current panes.
-		paneIndexByID := make(map[string]int)
+		// Build physical-pane lookup for the current topology.
+		paneByID := make(map[string]tmux.Pane)
 		for _, p := range m.panes {
-			paneIndexByID[p.ID] = p.Index
+			paneByID[p.ID] = p
 		}
 
 		// Apply the latest authoritative health snapshot.
 		for paneID, healthInfo := range msg.Health {
-			idx, ok := paneIndexByID[paneID]
+			pane, ok := paneByID[paneID]
 			if !ok {
 				continue
 			}
 
-			ps := m.paneStatus[idx]
+			paneKey := paneStatusKey(pane)
+			ps := m.paneStatus[paneKey]
 			ps.HealthStatus = healthInfo.Status
 			ps.HealthIssues = healthInfo.Issues
 			ps.RestartCount = healthInfo.RestartCount
 			ps.UptimeSeconds = healthInfo.Uptime
-			m.paneStatus[idx] = ps
+			m.paneStatus[paneKey] = ps
 		}
 		return m, nil
 
@@ -2905,10 +2912,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.paneStatus[idx] = ps
 		}
 
-		// Build index lookup for current panes
-		paneIndexByID := make(map[string]int)
+		// Build physical-pane lookup for the current topology.
+		paneByID := make(map[string]tmux.Pane)
 		for _, p := range m.panes {
-			paneIndexByID[p.ID] = p.Index
+			paneByID[p.ID] = p
 		}
 
 		// Calculate totals and update per-pane status.
@@ -2946,11 +2953,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			unread += paneUnread
 			urgent += paneUrgent
 
-			if idx, ok := paneIndexByID[paneID]; ok {
-				ps := m.paneStatus[idx]
+			if pane, ok := paneByID[paneID]; ok {
+				paneKey := paneStatusKey(pane)
+				ps := m.paneStatus[paneKey]
 				ps.MailUnread = paneUnread
 				ps.MailUrgent = paneUrgent
-				m.paneStatus[idx] = ps
+				m.paneStatus[paneKey] = ps
 			}
 		}
 		m.agentMailUnread = unread
@@ -3667,11 +3675,7 @@ func (m *Model) seedInitialPanes(panesWithActivity []tmux.PaneActivity) {
 	for _, pane := range panesWithActivity {
 		seeded = append(seeded, pane.Pane)
 	}
-	sort.Slice(seeded, func(i, j int) bool {
-		return seeded[i].Index < seeded[j].Index
-	})
-
-	m.panes = seeded
+	m.panes = tmux.SortPanesByTopology(seeded)
 	if m.historyPanel != nil {
 		m.historyPanel.SetPanes(m.panes)
 	}
@@ -3922,7 +3926,7 @@ func (m Model) renderPaneGrid() string {
 	for i, p := range m.panes {
 		row := rows[i]
 		isSelected := i == m.cursor
-		ps, hasPaneStatus := m.paneStatus[p.Index]
+		ps, hasPaneStatus := m.paneStatus[paneStatusKey(p)]
 
 		// Determine card colors based on agent type
 		var borderColor, iconColor lipgloss.Color
@@ -3993,7 +3997,7 @@ func (m Model) renderPaneGrid() string {
 		cardContent.WriteString(statusStyled + " " + iconStyled + " " + profileStyled + "\n")
 
 		// Index badge + compact badges
-		numBadge := cachedStyledText(fmt.Sprintf("#%d", p.Index), t.Overlay, false, false)
+		numBadge := cachedStyledText("#"+row.Address, t.Overlay, false, false)
 		cardContent.WriteString(numBadge)
 		if p.Variant != "" {
 			label := layout.TruncateWidthDefault(p.Variant, 12)
@@ -4006,7 +4010,7 @@ func (m Model) renderPaneGrid() string {
 			cardContent.WriteString(modelBadge)
 		}
 		if showExtendedInfo {
-			if rank, ok := contextRanks[p.Index]; ok && rank > 0 {
+			if rank, ok := contextRanks[paneStatusKey(p)]; ok && rank > 0 {
 				rankBadge := cachedTextBadge(fmt.Sprintf("rank%d", rank), t.Mauve, t.Base, styles.BadgeOptions{
 					Style:    styles.BadgeStyleCompact,
 					Bold:     false,
@@ -5526,12 +5530,13 @@ func (m *Model) renderPaneList(width int) string {
 				model = row.ModelVariant
 			}
 			tableRows = append(tableRows, components.PaneTableRow{
-				PaneIndex:  row.Index,
-				Type:       row.Type,
-				Status:     row.Status,
-				ContextPct: row.ContextPct,
-				Model:      model,
-				Command:    row.Command,
+				PaneIndex:   row.Index,
+				PaneAddress: row.Address,
+				Type:        row.Type,
+				Status:      row.Status,
+				ContextPct:  row.ContextPct,
+				Model:       model,
+				Command:     row.Command,
 			})
 		}
 
@@ -5575,18 +5580,19 @@ func (m *Model) renderPaneList(width int) string {
 	return strings.Join(lines, "\n")
 }
 
-// computeContextRanks returns a 1-based rank per pane index based on context usage (desc).
+// computeContextRanks returns a 1-based rank per physical pane based on context usage (desc).
 // Ties share the same rank.
-func (m Model) computeContextRanks() map[int]int {
+func (m Model) computeContextRanks() map[string]int {
 	type pair struct {
-		idx int
+		key string
 		pct float64
 	}
 
 	var pairs []pair
 	for _, p := range m.panes {
-		if ps, ok := m.paneStatus[p.Index]; ok {
-			pairs = append(pairs, pair{idx: p.Index, pct: ps.ContextPercent})
+		key := paneStatusKey(p)
+		if ps, ok := m.paneStatus[key]; ok {
+			pairs = append(pairs, pair{key: key, pct: ps.ContextPercent})
 		}
 	}
 
@@ -5594,7 +5600,7 @@ func (m Model) computeContextRanks() map[int]int {
 		return pairs[i].pct > pairs[j].pct
 	})
 
-	ranks := make(map[int]int, len(pairs))
+	ranks := make(map[string]int, len(pairs))
 	prevPct := -1.0
 	currentRank := 0
 	for i, pr := range pairs {
@@ -5602,7 +5608,7 @@ func (m Model) computeContextRanks() map[int]int {
 			currentRank = i + 1
 			prevPct = pr.pct
 		}
-		ranks[pr.idx] = currentRank
+		ranks[pr.key] = currentRank
 	}
 	return ranks
 }
@@ -5624,7 +5630,7 @@ func (m Model) renderPaneDetail(width int) string {
 	}
 
 	p := m.panes[m.cursor]
-	ps := m.paneStatus[p.Index]
+	ps := m.paneStatus[paneStatusKey(p)]
 	var lines []string
 
 	// Header with profile name as primary identifier

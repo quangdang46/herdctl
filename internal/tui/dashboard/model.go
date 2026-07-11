@@ -149,14 +149,16 @@ type Model struct {
 	// Compaction detection and recovery
 	compaction *status.CompactionRecoveryIntegration
 
-	// Per-pane status tracking
-	paneStatus map[int]PaneStatus
+	// Per-pane status tracking, keyed by tmux's stable physical pane identity.
+	// Pane.Index is window-local and therefore cannot distinguish 0.0 from 1.0.
+	paneStatus map[string]PaneStatus
 
 	// Live status detection
-	detector      *status.UnifiedDetector
-	agentStatuses map[string]status.AgentStatus // keyed by pane ID
-	lastRefresh   time.Time
-	refreshPaused bool
+	observer         *status.SessionObserver
+	agentStatuses    map[string]status.AgentStatus     // current state keyed by pane ID
+	paneObservations map[string]status.PaneObservation // current plus separate last-known evidence
+	lastRefresh      time.Time
+	refreshPaused    bool
 
 	// Refresh sequencing (prevents stale async updates)
 	refreshSeq  [refreshSourceCount]uint64
@@ -526,6 +528,7 @@ func New(session, projectDir string) Model {
 	t := theme.Current()
 	theme.ApplyLipGlossDefaults(t)
 	ic := icons.Current()
+	detector := status.NewDetector()
 
 	m := Model{
 		session:                    session,
@@ -536,9 +539,10 @@ func New(session, projectDir string) Model {
 		theme:                      t,
 		icons:                      ic,
 		compaction:                 status.NewCompactionRecoveryIntegrationDefault(),
-		paneStatus:                 make(map[int]PaneStatus),
-		detector:                   status.NewDetector(),
+		paneStatus:                 make(map[string]PaneStatus),
+		observer:                   status.NewSessionObserver(detector),
 		agentStatuses:              make(map[string]status.AgentStatus),
+		paneObservations:           make(map[string]status.PaneObservation),
 		velocityByPaneID:           make(map[string]velocitySample),
 		costInputTokens:            make(map[string]int),
 		costOutputTokens:           make(map[string]int),

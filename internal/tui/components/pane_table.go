@@ -12,12 +12,13 @@ import (
 
 // PaneTableRow describes a single pane row for the dashboard table view.
 type PaneTableRow struct {
-	PaneIndex  int
-	Type       string
-	Status     string
-	ContextPct float64
-	Model      string
-	Command    string
+	PaneIndex   int
+	PaneAddress string
+	Type        string
+	Status      string
+	ContextPct  float64
+	Model       string
+	Command     string
 }
 
 // PaneTable wraps bubbles/table.Model for the dashboard pane list.
@@ -160,8 +161,12 @@ func (p *PaneTable) renderRows(cols []table.Column) []table.Row {
 
 	rows := make([]table.Row, 0, len(p.rows))
 	for _, row := range p.rows {
+		address := row.PaneAddress
+		if address == "" {
+			address = fmt.Sprintf("%d", row.PaneIndex)
+		}
 		rows = append(rows, table.Row{
-			fmt.Sprintf("%d", row.PaneIndex),
+			address,
 			truncateCell(row.Type, cols[1].Width),
 			truncateCell(statusLabel(row.Status), cols[2].Width),
 			fmt.Sprintf("%.0f%%", row.ContextPct),

@@ -1011,9 +1011,17 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	statusCtx, cancelStatus := context.WithTimeout(context.Background(), 6*time.Second)
+	observation, err := status.NewSessionObserver(status.NewDetector()).Observe(statusCtx, session)
+	cancelStatus()
 	if err != nil {
 		return outputError(err)
+	}
+	panes := make([]tmux.Pane, 0, len(observation.Panes))
+	statusByPaneID := make(map[string]status.AgentStatus, len(observation.Panes))
+	for _, paneObservation := range observation.Panes {
+		panes = append(panes, paneObservation.Metadata)
+		statusByPaneID[paneObservation.Pane.ID] = paneObservation.Current.Status
 	}
 
 	// Filter panes by tag
@@ -1170,9 +1178,6 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 	fmt.Fprintf(w, "  %sPanes%s\n", bold, reset)
 	fmt.Fprintf(w, "  %s%s%s\n", surface, "─────────────────────────────────────────────────────────", reset)
 
-	// Create status detector for agent state detection
-	detector := status.NewDetector()
-
 	// Get error color for status display
 	errorColor := color(t.Error)
 
@@ -1188,8 +1193,11 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 			num = "  "
 		}
 
-		// Detect agent status
-		agentStatus, _ := detector.Detect(p.ID)
+		// The bounded session observation is shared by display and suggestions.
+		agentStatus, ok := statusByPaneID[p.ID]
+		if !ok {
+			agentStatus = status.AgentStatus{PaneID: p.ID, PaneName: p.Title, AgentType: string(p.Type), State: status.StateUnknown}
+		}
 		stateIcon := agentStatus.State.Icon()
 		stateColor := overlay
 		stateText := ""
@@ -1525,7 +1533,10 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 		if p.Type == tmux.AgentUser {
 			continue
 		}
-		st, _ := detector.Detect(p.ID)
+		st, ok := statusByPaneID[p.ID]
+		if !ok {
+			continue
+		}
 		switch st.State {
 		case status.StateWorking:
 			busyAgents++

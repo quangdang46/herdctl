@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/assignment"
+	statuspkg "github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -34,6 +35,8 @@ const (
 // CompletionEvent represents a detected completion
 type CompletionEvent struct {
 	Pane       int             `json:"pane"`
+	PaneID     string          `json:"pane_id,omitempty"`
+	PaneTarget string          `json:"pane_target,omitempty"`
 	AgentType  string          `json:"agent_type"`
 	BeadID     string          `json:"bead_id"`
 	Method     DetectionMethod `json:"method"`
@@ -79,9 +82,10 @@ type CompletionDetector struct {
 	FailPattern []*regexp.Regexp // Failure patterns
 
 	mu              sync.RWMutex
-	activityTracker map[int]*activityState // pane -> activity state
-	recentEvents    map[string]time.Time   // assignment attempt key -> last event time (for dedup)
-	brAvailable     *bool                  // nil = unknown, cached after first check
+	activityTracker map[string]*activityState // durable pane target -> activity state
+	recentEvents    map[string]time.Time      // assignment attempt key -> last event time (for dedup)
+	brAvailable     *bool                     // nil = unknown, cached after first check
+	observer        *statuspkg.SessionObserver
 }
 
 // activityState tracks output activity per pane
@@ -128,8 +132,9 @@ func NewWithConfig(session string, store *assignment.AssignmentStore, cfg Detect
 		Session:         session,
 		Config:          cfg,
 		Store:           store,
-		activityTracker: make(map[int]*activityState),
+		activityTracker: make(map[string]*activityState),
 		recentEvents:    make(map[string]time.Time),
+		observer:        statuspkg.NewSessionObserver(statuspkg.NewDetector()),
 	}
 
 	// Compile default patterns
@@ -230,7 +235,7 @@ func (d *CompletionDetector) checkAll(ctx context.Context, events chan<- Complet
 					d.mu.Unlock()
 					continue
 				}
-				delete(d.activityTracker, a.Pane)
+				delete(d.activityTracker, assignmentTargetKey(a))
 				d.mu.Unlock()
 
 				// Update assignment store
@@ -261,34 +266,33 @@ func (d *CompletionDetector) checkAssignment(ctx context.Context, a *assignment.
 		startTime = *a.StartedAt
 	}
 
-	// Build tmux target
-	target := fmt.Sprintf("%s.%d", d.Session, a.Pane)
-
 	// 1. Check if pane exists
-	panes, err := tmux.GetPanesContext(ctx, d.Session)
+	paneActivities, err := tmux.GetPanesWithActivityContext(ctx, d.Session)
 	if err != nil {
 		return nil // Can't check, try later
 	}
-
-	paneExists := false
-	for _, p := range panes {
-		if p.Index == a.Pane {
-			paneExists = true
-			break
-		}
+	panes := make([]tmux.Pane, 0, len(paneActivities))
+	for _, activity := range paneActivities {
+		panes = append(panes, activity.Pane)
 	}
 
-	if !paneExists {
+	pane, err := resolveAssignmentPane(d.Session, a, panes)
+	if err != nil {
 		return &CompletionEvent{
 			Pane:       a.Pane,
+			PaneTarget: strings.TrimSpace(a.DispatchTarget),
 			AgentType:  a.AgentType,
 			BeadID:     a.BeadID,
 			Method:     MethodPaneLost,
 			Timestamp:  time.Now(),
 			Duration:   time.Since(startTime),
 			IsFailed:   true,
-			FailReason: "pane no longer exists (agent crashed)",
+			FailReason: fmt.Sprintf("pane target cannot be resolved safely: %v", err),
 		}
+	}
+	target := pane.ID
+	if target == "" {
+		target = fmt.Sprintf("%s:%s", d.Session, pane.Ref().Physical())
 	}
 
 	// 2. Check bead status via br (most reliable)
@@ -296,13 +300,15 @@ func (d *CompletionDetector) checkAssignment(ctx context.Context, a *assignment.
 		if closed, err := d.checkBeadClosed(ctx, a.BeadID); err == nil && closed {
 			output, _ := tmux.CapturePaneOutputContext(ctx, target, d.Config.CaptureLines)
 			return &CompletionEvent{
-				Pane:      a.Pane,
-				AgentType: a.AgentType,
-				BeadID:    a.BeadID,
-				Method:    MethodBeadClosed,
-				Timestamp: time.Now(),
-				Duration:  time.Since(startTime),
-				Output:    truncateOutput(output, 500),
+				Pane:       a.Pane,
+				PaneID:     pane.ID,
+				PaneTarget: pane.Ref().Physical(),
+				AgentType:  a.AgentType,
+				BeadID:     a.BeadID,
+				Method:     MethodBeadClosed,
+				Timestamp:  time.Now(),
+				Duration:   time.Since(startTime),
+				Output:     truncateOutput(output, 500),
 			}
 		}
 	}
@@ -313,11 +319,21 @@ func (d *CompletionDetector) checkAssignment(ctx context.Context, a *assignment.
 		// Can't capture, rely on bead polling
 		return nil
 	}
+	paneActivity := tmux.PaneActivity{Pane: pane}
+	for _, activity := range paneActivities {
+		if activity.Pane.ID == pane.ID {
+			paneActivity = activity
+			break
+		}
+	}
+	paneObservation := d.observer.ObservePaneCapture(d.Session, paneActivity, output, nil)
 
 	// 4. Check for failure patterns
 	if reason := d.matchFailurePatterns(output); reason != "" {
 		return &CompletionEvent{
 			Pane:       a.Pane,
+			PaneID:     pane.ID,
+			PaneTarget: pane.Ref().Physical(),
 			AgentType:  a.AgentType,
 			BeadID:     a.BeadID,
 			Method:     MethodPatternMatch,
@@ -344,13 +360,15 @@ func (d *CompletionDetector) checkAssignment(ctx context.Context, a *assignment.
 		if d.isBrAvailable() {
 			if closed, err := d.checkBeadClosed(ctx, a.BeadID); err == nil && closed {
 				return &CompletionEvent{
-					Pane:      a.Pane,
-					AgentType: a.AgentType,
-					BeadID:    a.BeadID,
-					Method:    MethodPatternMatch,
-					Timestamp: time.Now(),
-					Duration:  time.Since(startTime),
-					Output:    truncateOutput(output, 500),
+					Pane:       a.Pane,
+					PaneID:     pane.ID,
+					PaneTarget: pane.Ref().Physical(),
+					AgentType:  a.AgentType,
+					BeadID:     a.BeadID,
+					Method:     MethodPatternMatch,
+					Timestamp:  time.Now(),
+					Duration:   time.Since(startTime),
+					Output:     truncateOutput(output, 500),
 				}
 			}
 		}
@@ -365,7 +383,9 @@ func (d *CompletionDetector) checkAssignment(ctx context.Context, a *assignment.
 	// Re-confirm against br to be safe (the bead may have closed between the
 	// step-2 check and now), then report FAILED so the pane is released and
 	// the bead can be reassigned instead of being silently marked complete.
-	if event := d.checkIdle(a, output, startTime); event != nil {
+	if event := d.checkIdleWhenSafe(a, output, startTime, paneObservation); event != nil {
+		event.PaneID = pane.ID
+		event.PaneTarget = pane.Ref().Physical()
 		if d.isBrAvailable() {
 			if closed, err := d.checkBeadClosed(ctx, a.BeadID); err == nil && closed {
 				event.Method = MethodBeadClosed
@@ -382,6 +402,20 @@ func (d *CompletionDetector) checkAssignment(ctx context.Context, a *assignment.
 	return nil
 }
 
+// checkIdleWhenSafe starts and advances the inactivity timer only while the
+// canonical current observation is fresh, confident, and idle. Active,
+// unknown, stale, and weak-heuristic output clears the timer so unchanged
+// scrollback can never fail work that SessionObserver still classifies busy.
+func (d *CompletionDetector) checkIdleWhenSafe(a *assignment.Assignment, output string, startTime time.Time, observation statuspkg.PaneObservation) *CompletionEvent {
+	if !observation.SafeToDispatch() {
+		d.mu.Lock()
+		delete(d.activityTracker, assignmentTargetKey(a))
+		d.mu.Unlock()
+		return nil
+	}
+	return d.checkIdle(a, output, startTime)
+}
+
 func assignmentAttemptKey(a *assignment.Assignment) string {
 	if a == nil {
 		return ""
@@ -392,10 +426,52 @@ func assignmentAttemptKey(a *assignment.Assignment) string {
 		if a.StartedAt != nil {
 			timestamp = *a.StartedAt
 		} else {
-			return fmt.Sprintf("%s:%d", a.BeadID, a.Pane)
+			return fmt.Sprintf("%s:%s", a.BeadID, assignmentTargetKey(a))
 		}
 	}
-	return fmt.Sprintf("%s:%d:%s", a.BeadID, a.Pane, timestamp.UTC().Format(time.RFC3339Nano))
+	return fmt.Sprintf("%s:%s:%s", a.BeadID, assignmentTargetKey(a), timestamp.UTC().Format(time.RFC3339Nano))
+}
+
+func assignmentTargetKey(a *assignment.Assignment) string {
+	if a == nil {
+		return ""
+	}
+	if target := strings.TrimSpace(a.DispatchTarget); target != "" {
+		return target
+	}
+	return fmt.Sprintf("legacy-pane-%d", a.Pane)
+}
+
+func resolveAssignmentPane(session string, a *assignment.Assignment, panes []tmux.Pane) (tmux.Pane, error) {
+	if a == nil {
+		return tmux.Pane{}, fmt.Errorf("assignment is required")
+	}
+	target := strings.TrimSpace(a.DispatchTarget)
+	if prefix := strings.TrimSpace(session) + ":"; target != "" && strings.HasPrefix(target, prefix) {
+		target = strings.TrimPrefix(target, prefix)
+	}
+	if target != "" {
+		resolved, err := tmux.ResolvePaneSelectors(panes, []string{target}, true)
+		if err != nil {
+			return tmux.Pane{}, err
+		}
+		return resolved[0], nil
+	}
+
+	var matches []tmux.Pane
+	for _, pane := range panes {
+		if pane.Index == a.Pane {
+			matches = append(matches, pane)
+		}
+	}
+	switch len(matches) {
+	case 0:
+		return tmux.Pane{}, fmt.Errorf("legacy pane index %d not found", a.Pane)
+	case 1:
+		return matches[0], nil
+	default:
+		return tmux.Pane{}, fmt.Errorf("legacy pane index %d is ambiguous across %d windows; persist pane ID or window.pane", a.Pane, len(matches))
+	}
 }
 
 func (d *CompletionDetector) pruneExpiredRecentEventsLocked(now time.Time) {
@@ -427,21 +503,23 @@ func (d *CompletionDetector) CheckNow(pane int) (*CompletionEvent, error) {
 	}
 
 	// Find assignment for this pane
-	var target *assignment.Assignment
+	var targets []*assignment.Assignment
 	for _, a := range d.Store.ListActive() {
 		if a.Pane == pane {
-			target = a
-			break
+			targets = append(targets, a)
 		}
 	}
 
-	if target == nil {
+	if len(targets) == 0 {
 		return nil, fmt.Errorf("no active assignment for pane %d", pane)
+	}
+	if len(targets) > 1 {
+		return nil, fmt.Errorf("pane index %d has %d active assignments; use durable pane targets", pane, len(targets))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return d.checkAssignment(ctx, target), nil
+	return d.checkAssignment(ctx, targets[0]), nil
 }
 
 // isBrAvailable checks if the br CLI is available (cached)
@@ -523,7 +601,8 @@ func (d *CompletionDetector) checkIdle(a *assignment.Assignment, output string, 
 	defer d.mu.Unlock()
 
 	key := assignmentAttemptKey(a)
-	state, exists := d.activityTracker[a.Pane]
+	targetKey := assignmentTargetKey(a)
+	state, exists := d.activityTracker[targetKey]
 	if !exists || state.assignmentKey != key {
 		state = &activityState{
 			assignmentKey:  key,
@@ -532,7 +611,7 @@ func (d *CompletionDetector) checkIdle(a *assignment.Assignment, output string, 
 			burstActive:    true, // Start active so we can detect if it never outputs anything
 			burstStarted:   time.Now(),
 		}
-		d.activityTracker[a.Pane] = state
+		d.activityTracker[targetKey] = state
 		return nil
 	}
 
@@ -556,13 +635,14 @@ func (d *CompletionDetector) checkIdle(a *assignment.Assignment, output string, 
 		state.burstActive = false
 
 		return &CompletionEvent{
-			Pane:      a.Pane,
-			AgentType: a.AgentType,
-			BeadID:    a.BeadID,
-			Method:    MethodIdle,
-			Timestamp: time.Now(),
-			Duration:  time.Since(startTime),
-			Output:    truncateOutput(output, 500),
+			Pane:       a.Pane,
+			PaneTarget: strings.TrimSpace(a.DispatchTarget),
+			AgentType:  a.AgentType,
+			BeadID:     a.BeadID,
+			Method:     MethodIdle,
+			Timestamp:  time.Now(),
+			Duration:   time.Since(startTime),
+			Output:     truncateOutput(output, 500),
 		}
 	}
 

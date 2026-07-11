@@ -10,8 +10,84 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
+
+func TestCheckAgentObservationFailsClosedAndKeepsLastKnownSeparate(t *testing.T) {
+	t.Parallel()
+
+	priorAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	failureAt := priorAt.Add(time.Minute)
+	observation := status.PaneObservation{
+		Pane:      tmux.PaneRef{ID: "%1", PaneIndex: 1},
+		PaneName:  "s__cc_1",
+		AgentType: "cc",
+		Metadata:  tmux.Pane{ID: "%1", Index: 1, Title: "s__cc_1", Type: tmux.AgentClaude, PID: 123},
+		Current: status.StateObservation{
+			Status: status.AgentStatus{
+				PaneID:     "%1",
+				PaneName:   "s__cc_1",
+				AgentType:  "cc",
+				State:      status.StateUnknown,
+				LastActive: priorAt,
+				UpdatedAt:  failureAt,
+			},
+			ObservedAt: failureAt,
+			Freshness:  status.FreshnessUnavailable,
+			Error:      "capture failed",
+		},
+		LastKnown: &status.StateObservation{
+			Status:     status.AgentStatus{PaneID: "%1", State: status.StateIdle, UpdatedAt: priorAt},
+			ObservedAt: priorAt,
+			Freshness:  status.FreshnessStale,
+			Confidence: 0.95,
+		},
+	}
+
+	got := checkAgentObservation(observation)
+	if got.Status != StatusUnknown || got.ProcessStatus != ProcessUnknown || got.Activity != ActivityUnknown {
+		t.Fatalf("failed current health = %+v", got)
+	}
+	if got.ObservedState != status.StateUnknown || got.LastKnownState != status.StateIdle || got.ObservationFreshness != status.FreshnessUnavailable || got.ObservationConfidence != 0 || got.SafeToDispatch {
+		t.Fatalf("failed observation metadata = %+v", got)
+	}
+}
+
+func TestCheckAgentObservationUsesFreshPrivateOutput(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now().UTC()
+	observation := status.PaneObservation{
+		Pane:      tmux.PaneRef{ID: "%1", PaneIndex: 1},
+		PaneName:  "s__cc_1",
+		AgentType: "cc",
+		Metadata:  tmux.Pane{ID: "%1", Index: 1, Title: "s__cc_1", Type: tmux.AgentClaude, Command: "claude"},
+		RawOutput: "Request stopped\nRate limit exceeded; retry in 60s",
+		Current: status.StateObservation{
+			Status: status.AgentStatus{
+				PaneID:     "%1",
+				PaneName:   "s__cc_1",
+				AgentType:  "cc",
+				State:      status.StateError,
+				ErrorType:  status.ErrorRateLimit,
+				LastActive: now,
+				UpdatedAt:  now,
+			},
+			ObservedAt: now,
+			Freshness:  status.FreshnessFresh,
+			Confidence: 0.95,
+		},
+	}
+
+	got := checkAgentObservation(observation)
+	if got.Status != StatusWarning || !got.RateLimited || got.WaitSeconds != 60 {
+		t.Fatalf("fresh health analysis = %+v", got)
+	}
+	if got.ObservedState != status.StateError || got.ObservationFreshness != status.FreshnessFresh || got.ObservationConfidence != 0.95 || got.SafeToDispatch {
+		t.Fatalf("fresh observation metadata = %+v", got)
+	}
+}
 
 func TestParseWaitTime(t *testing.T) {
 	tests := []struct {

@@ -105,11 +105,15 @@ func (d *paneDelegate) SetDims(dims LayoutDimensions) {
 }
 
 // toPaneItems converts panes and their statuses to list items.
-func toPaneItems(panes []tmux.Pane, statuses map[int]PaneStatus, beads []bv.BeadPreview, t theme.Theme) []list.Item {
+func toPaneItems(panes []tmux.Pane, statuses map[string]PaneStatus, beads []bv.BeadPreview, t theme.Theme) []list.Item {
 	items := make([]list.Item, len(panes))
+	multiWindow := tmux.PanesSpanMultipleWindows(panes)
 	for i, pane := range panes {
-		ps := statuses[pane.Index]
+		ps := statuses[paneStatusKey(pane)]
 		row := BuildPaneTableRow(pane, ps, beads, nil)
+		row.WindowIndex = pane.WindowIndex
+		row.PaneID = pane.ID
+		row.Address = pane.Ref().Canonical(multiWindow)
 		row.BorderColor = AgentBorderColor(string(pane.Type), t)
 		items[i] = paneItem{pane: pane, row: row}
 	}

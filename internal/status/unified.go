@@ -2,7 +2,9 @@ package status
 
 import (
 	"context"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agent"
@@ -37,18 +39,27 @@ func (d *UnifiedDetector) Config() DetectorConfig {
 // Analyze determines status from provided output and metadata without calling tmux.
 // This allows reusing output captured for other purposes (e.g. live view).
 func (d *UnifiedDetector) Analyze(paneID, paneName, agentType string, output string, lastActivity time.Time) AgentStatus {
+	return d.AnalyzeAt(paneID, paneName, agentType, output, lastActivity, time.Now())
+}
+
+// AnalyzeAt is the deterministic form of Analyze. observedAt controls both the
+// result timestamp and activity-recency classification for replayable snapshots.
+func (d *UnifiedDetector) AnalyzeAt(paneID, paneName, agentType string, output string, lastActivity, observedAt time.Time) AgentStatus {
+	if observedAt.IsZero() {
+		observedAt = time.Now()
+	}
 	normalizedAgentType := string(agent.AgentType(agentType).Canonical())
 	status := AgentStatus{
 		PaneID:     paneID,
 		PaneName:   paneName,
 		AgentType:  normalizedAgentType,
 		LastActive: lastActivity,
-		UpdatedAt:  time.Now(),
+		UpdatedAt:  observedAt,
 		State:      StateUnknown,
 		LastOutput: truncateOutput(output, d.config.OutputPreviewLength),
 	}
 
-	state, errType := d.determineState(output, normalizedAgentType, lastActivity)
+	state, errType := d.determineStateAt(output, normalizedAgentType, lastActivity, observedAt)
 	status.State = state
 	status.ErrorType = errType
 
@@ -70,6 +81,10 @@ func (d *UnifiedDetector) Analyze(paneID, paneName, agentType string, output str
 
 // determineState calculates state based on output and activity
 func (d *UnifiedDetector) determineState(output, agentType string, lastActivity time.Time) (AgentState, ErrorType) {
+	return d.determineStateAt(output, agentType, lastActivity, time.Now())
+}
+
+func (d *UnifiedDetector) determineStateAt(output, agentType string, lastActivity, observedAt time.Time) (AgentState, ErrorType) {
 	// Detection priority:
 	// 1. Check for idle prompt when velocity is low (agent waiting for input)
 	// 2. Check for errors (but only if not clearly at a prompt)
@@ -82,7 +97,7 @@ func (d *UnifiedDetector) determineState(output, agentType string, lastActivity 
 	// when the agent has clearly recovered and is now waiting for input.
 
 	threshold := time.Duration(d.config.ActivityThreshold) * time.Second
-	isLowVelocity := time.Since(lastActivity) >= threshold
+	isLowVelocity := observedAt.Sub(lastActivity) >= threshold
 
 	// Claude Code: the live-tail spinner classifier is authoritative and must
 	// outrank the velocity heuristic. A long "thinking" turn produces no new
@@ -302,92 +317,449 @@ func (d *UnifiedDetector) DetectAll(session string) ([]AgentStatus, error) {
 // DetectAllContext returns status for all panes in a session with cancellation support.
 // Errors on individual panes don't fail the entire operation.
 func (d *UnifiedDetector) DetectAllContext(ctx context.Context, session string) ([]AgentStatus, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	panes, err := tmux.GetPanesWithActivityContext(ctx, session)
+	observation, err := NewSessionObserver(d).Observe(ctx, session)
 	if err != nil {
 		return nil, err
 	}
-
-	// Capture outputs in parallel
-	type captureResult struct {
-		paneID string
-		output string
-		err    error
+	statuses := make([]AgentStatus, 0, len(observation.Panes))
+	for _, pane := range observation.Panes {
+		statuses = append(statuses, pane.Current.Status)
 	}
-
-	resultsCh := make(chan captureResult, len(panes))
-
-	// Create a worker pool or just spawn per pane (assuming pane count is reasonable < 50)
-	// For simplicity and typical tmux usage, one goroutine per pane is fine.
-	for _, pane := range panes {
-		go func(pID string) {
-			// Use a short timeout for individual captures to avoid hanging the whole batch
-			capCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
-			defer cancel()
-
-			output, err := tmux.CapturePaneOutputContext(capCtx, pID, d.config.ScanLines)
-			resultsCh <- captureResult{paneID: pID, output: output, err: err}
-		}(pane.Pane.ID)
-	}
-
-	// Collect results
-	outputs := make(map[string]string)
-	for i := 0; i < len(panes); i++ {
-		select {
-		case res := <-resultsCh:
-			if res.err == nil {
-				outputs[res.paneID] = res.output
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-
-	statuses := make([]AgentStatus, 0, len(panes))
-	for _, pane := range panes {
-		status := AgentStatus{
-			PaneID:     pane.Pane.ID,
-			PaneName:   pane.Pane.Title,
-			AgentType:  string(pane.Pane.Type),
-			LastActive: pane.LastActivity,
-			UpdatedAt:  time.Now(),
-			State:      StateUnknown,
-		}
-
-		output, ok := outputs[pane.Pane.ID]
-		if !ok {
-			// Capture failed or timed out, keep unknown state but preserve metadata
-			statuses = append(statuses, status)
-			continue
-		}
-
-		status.LastOutput = truncateOutput(output, d.config.OutputPreviewLength)
-
-		// Use shared logic
-		state, errType := d.determineState(output, status.AgentType, status.LastActive)
-		status.State = state
-		status.ErrorType = errType
-
-		// Extract metrics using agent parser
-		if isKnownAgentType(status.AgentType) {
-			parser := agent.NewParser()
-			if parsed, err := parser.ParseWithHint(output, agent.AgentType(status.AgentType)); err == nil {
-				if parsed.ContextRemaining != nil {
-					status.ContextUsage = 100.0 - *parsed.ContextRemaining
-				}
-				if parsed.TokensUsed != nil {
-					status.TokensUsed = *parsed.TokensUsed
-				}
-			}
-		}
-
-		statuses = append(statuses, status)
-	}
-
 	return statuses, nil
+}
+
+const (
+	defaultObservationCaptureTimeout = 2 * time.Second
+	defaultObservationMaxConcurrent  = 8
+	defaultObservationMaxBytes       = 128 * 1024
+	hardObservationMaxLines          = 500
+	hardObservationMaxConcurrent     = 32
+	hardObservationMaxBytes          = 1024 * 1024
+	hardObservationMaxTimeout        = 10 * time.Second
+)
+
+// SessionObserverConfig bounds the work and memory used by one observation.
+type SessionObserverConfig struct {
+	CaptureLines          int
+	CaptureTimeout        time.Duration
+	MaxConcurrentCaptures int
+	MaxCaptureBytes       int
+}
+
+// DefaultSessionObserverConfig derives the line budget from the detector and
+// supplies conservative hard bounds for concurrency, duration, and output.
+func DefaultSessionObserverConfig(detectorConfig DetectorConfig) SessionObserverConfig {
+	return SessionObserverConfig{
+		CaptureLines:          detectorConfig.ScanLines,
+		CaptureTimeout:        defaultObservationCaptureTimeout,
+		MaxConcurrentCaptures: defaultObservationMaxConcurrent,
+		MaxCaptureBytes:       defaultObservationMaxBytes,
+	}
+}
+
+// SessionObserverDependencies makes topology, capture, and time injectable for
+// deterministic tests and alternate tmux clients.
+type SessionObserverDependencies struct {
+	ListPanes   func(context.Context, string) ([]tmux.PaneActivity, error)
+	CapturePane func(context.Context, string, int) (string, error)
+	Now         func() time.Time
+}
+
+// SessionObserver produces canonical session observations and retains only the
+// last successful known state for each currently present pane.
+type SessionObserver struct {
+	detector *UnifiedDetector
+	config   SessionObserverConfig
+	deps     SessionObserverDependencies
+	mu       sync.Mutex
+	sessions map[string]*sessionObservationCache
+}
+
+type sessionObservationCache struct {
+	mu           sync.Mutex
+	lastKnown    map[string]StateObservation
+	lastTopology []tmux.PaneActivity
+}
+
+// NewSessionObserver creates an observer backed by the default tmux client.
+func NewSessionObserver(detector *UnifiedDetector) *SessionObserver {
+	if detector == nil {
+		detector = NewDetector()
+	}
+	return NewSessionObserverWithDependencies(
+		detector,
+		DefaultSessionObserverConfig(detector.Config()),
+		SessionObserverDependencies{},
+	)
+}
+
+// NewSessionObserverWithDependencies creates an observer with explicit,
+// normalized bounds and injectable I/O.
+func NewSessionObserverWithDependencies(detector *UnifiedDetector, config SessionObserverConfig, deps SessionObserverDependencies) *SessionObserver {
+	if detector == nil {
+		detector = NewDetector()
+	}
+	config = normalizeSessionObserverConfig(config, detector.Config())
+	if deps.ListPanes == nil {
+		deps.ListPanes = tmux.GetPanesWithActivityContext
+	}
+	if deps.CapturePane == nil {
+		deps.CapturePane = tmux.CapturePaneOutputContext
+	}
+	if deps.Now == nil {
+		deps.Now = time.Now
+	}
+	return &SessionObserver{
+		detector: detector,
+		config:   config,
+		deps:     deps,
+		sessions: make(map[string]*sessionObservationCache),
+	}
+}
+
+func normalizeSessionObserverConfig(config SessionObserverConfig, detectorConfig DetectorConfig) SessionObserverConfig {
+	if config.CaptureLines <= 0 {
+		config.CaptureLines = detectorConfig.ScanLines
+	}
+	if config.CaptureLines <= 0 {
+		config.CaptureLines = DefaultConfig().ScanLines
+	}
+	if config.CaptureLines > hardObservationMaxLines {
+		config.CaptureLines = hardObservationMaxLines
+	}
+	if config.CaptureTimeout <= 0 {
+		config.CaptureTimeout = defaultObservationCaptureTimeout
+	}
+	if config.CaptureTimeout > hardObservationMaxTimeout {
+		config.CaptureTimeout = hardObservationMaxTimeout
+	}
+	if config.MaxConcurrentCaptures <= 0 {
+		config.MaxConcurrentCaptures = defaultObservationMaxConcurrent
+	}
+	if config.MaxConcurrentCaptures > hardObservationMaxConcurrent {
+		config.MaxConcurrentCaptures = hardObservationMaxConcurrent
+	}
+	if config.MaxCaptureBytes <= 0 {
+		config.MaxCaptureBytes = defaultObservationMaxBytes
+	}
+	if config.MaxCaptureBytes > hardObservationMaxBytes {
+		config.MaxCaptureBytes = hardObservationMaxBytes
+	}
+	return config
+}
+
+type observationCaptureResult struct {
+	index  int
+	output string
+	err    error
+}
+
+// Observe captures a deterministic session snapshot. A topology failure is the
+// only operation-level error. Individual capture failures remain explicit pane
+// observations so successful siblings are never discarded.
+func (o *SessionObserver) Observe(ctx context.Context, session string) (SessionObservation, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	cache := o.sessionCache(session)
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+
+	observedAt := o.deps.Now().UTC()
+	result := SessionObservation{
+		Session:    session,
+		ObservedAt: observedAt,
+		Complete:   false,
+		Panes:      make([]PaneObservation, 0),
+		Failures:   make([]ObservationFailure, 0),
+	}
+
+	panes, err := o.deps.ListPanes(ctx, session)
+	if err != nil {
+		result.Failures = append(result.Failures, ObservationFailure{Stage: "topology", Error: err.Error()})
+		if len(cache.lastTopology) == 0 {
+			return result, err
+		}
+		result.Panes = make([]PaneObservation, 0, len(cache.lastTopology))
+		for _, pane := range cache.lastTopology {
+			result.Panes = append(result.Panes, o.buildUnavailablePaneObservation(cache, pane, "topology", err, observedAt))
+		}
+		return result, err
+	}
+	panes = append([]tmux.PaneActivity(nil), panes...)
+	sortPaneActivities(panes)
+	if len(panes) == 0 {
+		cache.lastKnown = make(map[string]StateObservation)
+		cache.lastTopology = nil
+		result.Complete = true
+		return result, nil
+	}
+	cache.lastTopology = append([]tmux.PaneActivity(nil), panes...)
+
+	captures := o.captureAll(ctx, panes)
+	currentKeys := make(map[string]struct{}, len(panes))
+	result.Panes = make([]PaneObservation, 0, len(panes))
+	for index, pane := range panes {
+		key := pane.Pane.Ref().StableKey()
+		currentKeys[key] = struct{}{}
+		capture := captures[index]
+		observation := o.buildPaneObservation(cache, pane, capture.output, capture.err, observedAt)
+		result.Panes = append(result.Panes, observation)
+		if capture.err != nil {
+			result.Failures = append(result.Failures, ObservationFailure{
+				PaneID: pane.Pane.ID,
+				Stage:  "capture",
+				Error:  capture.err.Error(),
+			})
+		}
+	}
+	for key := range cache.lastKnown {
+		if _, ok := currentKeys[key]; !ok {
+			delete(cache.lastKnown, key)
+		}
+	}
+	result.Complete = len(result.Failures) == 0
+	return result, nil
+}
+
+// ObservePaneCapture incorporates output already captured by another consumer
+// into the same last-known state machine without issuing another tmux command.
+// It is safe to call concurrently with Observe; calls are serialized so the
+// last-known cache remains race-free.
+func (o *SessionObserver) ObservePaneCapture(session string, pane tmux.PaneActivity, output string, captureErr error) PaneObservation {
+	cache := o.sessionCache(session)
+	cache.mu.Lock()
+	defer cache.mu.Unlock()
+	upsertCachedTopology(cache, pane)
+	return o.buildPaneObservation(cache, pane, truncateOutput(output, o.config.MaxCaptureBytes), captureErr, o.deps.Now().UTC())
+}
+
+func (o *SessionObserver) sessionCache(session string) *sessionObservationCache {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	cache := o.sessions[session]
+	if cache == nil {
+		cache = &sessionObservationCache{lastKnown: make(map[string]StateObservation)}
+		o.sessions[session] = cache
+	}
+	return cache
+}
+
+func upsertCachedTopology(cache *sessionObservationCache, pane tmux.PaneActivity) {
+	key := pane.Pane.Ref().StableKey()
+	for index := range cache.lastTopology {
+		if cache.lastTopology[index].Pane.Ref().StableKey() == key {
+			cache.lastTopology[index] = pane
+			sortPaneActivities(cache.lastTopology)
+			return
+		}
+	}
+	cache.lastTopology = append(cache.lastTopology, pane)
+	sortPaneActivities(cache.lastTopology)
+}
+
+func (o *SessionObserver) captureAll(ctx context.Context, panes []tmux.PaneActivity) []observationCaptureResult {
+	results := make([]observationCaptureResult, len(panes))
+	jobs := make(chan int, len(panes))
+	completed := make(chan observationCaptureResult, len(panes))
+	for index := range panes {
+		jobs <- index
+	}
+	close(jobs)
+
+	workerCount := o.config.MaxConcurrentCaptures
+	if workerCount > len(panes) {
+		workerCount = len(panes)
+	}
+	var workers sync.WaitGroup
+	workers.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer workers.Done()
+			for index := range jobs {
+				captureCtx, cancel := context.WithTimeout(ctx, o.config.CaptureTimeout)
+				output, err := o.deps.CapturePane(captureCtx, panes[index].Pane.ID, o.config.CaptureLines)
+				cancel()
+				if err == nil {
+					output = truncateOutput(output, o.config.MaxCaptureBytes)
+				}
+				completed <- observationCaptureResult{index: index, output: output, err: err}
+			}
+		}()
+	}
+	workers.Wait()
+	close(completed)
+	for capture := range completed {
+		results[capture.index] = capture
+	}
+	return results
+}
+
+func (o *SessionObserver) buildPaneObservation(cache *sessionObservationCache, pane tmux.PaneActivity, output string, captureErr error, observedAt time.Time) PaneObservation {
+	key := pane.Pane.Ref().StableKey()
+	normalizedAgentType := string(agent.AgentType(pane.Pane.Type).Canonical())
+	baseStatus := AgentStatus{
+		PaneID:     pane.Pane.ID,
+		PaneName:   pane.Pane.Title,
+		AgentType:  normalizedAgentType,
+		State:      StateUnknown,
+		LastActive: pane.LastActivity,
+		UpdatedAt:  observedAt,
+	}
+	topologyEvidence := ObservationEvidence{
+		Provenance: ProvenanceTMUXTopology,
+		ObservedAt: observedAt,
+		Freshness:  FreshnessFresh,
+		Confidence: 1,
+	}
+	observation := PaneObservation{
+		Pane:      pane.Pane.Ref(),
+		PaneName:  pane.Pane.Title,
+		AgentType: normalizedAgentType,
+		Metadata:  pane.Pane,
+	}
+	if captureErr != nil {
+		observation.Current = StateObservation{
+			Status:     baseStatus,
+			ObservedAt: observedAt,
+			Freshness:  FreshnessUnavailable,
+			Confidence: 0,
+			Evidence: []ObservationEvidence{
+				topologyEvidence,
+				{
+					Provenance: ProvenanceTMUXCapture,
+					ObservedAt: observedAt,
+					Freshness:  FreshnessUnavailable,
+					Confidence: 0,
+					Error:      captureErr.Error(),
+				},
+			},
+			Error: captureErr.Error(),
+		}
+		observation.LastKnown = staleStateObservation(cache.lastKnown[key], observedAt)
+		return observation
+	}
+
+	status := o.detector.AnalyzeAt(pane.Pane.ID, pane.Pane.Title, normalizedAgentType, output, pane.LastActivity, observedAt)
+	confidence := observationConfidence(status, output)
+	observation.Current = StateObservation{
+		Status:     status,
+		ObservedAt: observedAt,
+		Freshness:  FreshnessFresh,
+		Confidence: confidence,
+		Evidence: []ObservationEvidence{
+			topologyEvidence,
+			{
+				Provenance: ProvenanceTMUXCapture,
+				ObservedAt: observedAt,
+				Freshness:  FreshnessFresh,
+				Confidence: 1,
+			},
+			{
+				Provenance: ProvenanceDetector,
+				ObservedAt: observedAt,
+				Freshness:  FreshnessFresh,
+				Confidence: confidence,
+			},
+		},
+	}
+	observation.RawOutput = output
+	if status.State != StateUnknown {
+		cache.lastKnown[key] = cloneStateObservation(observation.Current)
+	} else {
+		observation.LastKnown = staleStateObservation(cache.lastKnown[key], observedAt)
+	}
+	return observation
+}
+
+func (o *SessionObserver) buildUnavailablePaneObservation(cache *sessionObservationCache, pane tmux.PaneActivity, stage string, observationErr error, observedAt time.Time) PaneObservation {
+	key := pane.Pane.Ref().StableKey()
+	normalizedAgentType := string(agent.AgentType(pane.Pane.Type).Canonical())
+	errorText := observationErr.Error()
+	return PaneObservation{
+		Pane:      pane.Pane.Ref(),
+		PaneName:  pane.Pane.Title,
+		AgentType: normalizedAgentType,
+		Metadata:  pane.Pane,
+		Current: StateObservation{
+			Status: AgentStatus{
+				PaneID:     pane.Pane.ID,
+				PaneName:   pane.Pane.Title,
+				AgentType:  normalizedAgentType,
+				State:      StateUnknown,
+				LastActive: pane.LastActivity,
+				UpdatedAt:  observedAt,
+			},
+			ObservedAt: observedAt,
+			Freshness:  FreshnessUnavailable,
+			Confidence: 0,
+			Evidence: []ObservationEvidence{{
+				Provenance: ProvenanceTMUXTopology,
+				ObservedAt: observedAt,
+				Freshness:  FreshnessUnavailable,
+				Confidence: 0,
+				Error:      stage + ": " + errorText,
+			}},
+			Error: errorText,
+		},
+		LastKnown: staleStateObservation(cache.lastKnown[key], observedAt),
+	}
+}
+
+func observationConfidence(status AgentStatus, output string) float64 {
+	if status.State == StateUnknown {
+		return 0.25
+	}
+	if status.State == StateIdle && !DetectIdleFromOutput(output, status.AgentType) {
+		// The detector's fallback idle heuristics intentionally improve display
+		// quality for quiet panes, but a short line or a generic "done" marker is
+		// not strong enough evidence to authorize dispatching more work.
+		return 0.5
+	}
+	return 0.95
+}
+
+func cloneStateObservation(input StateObservation) StateObservation {
+	copy := input
+	copy.Evidence = append([]ObservationEvidence(nil), input.Evidence...)
+	return copy
+}
+
+func staleStateObservation(input StateObservation, observedAt time.Time) *StateObservation {
+	if input.ObservedAt.IsZero() {
+		return nil
+	}
+	stale := cloneStateObservation(input)
+	stale.Freshness = FreshnessStale
+	stale.Evidence = append(stale.Evidence, ObservationEvidence{
+		Provenance: ProvenanceLastKnown,
+		ObservedAt: observedAt,
+		Freshness:  FreshnessStale,
+		Confidence: stale.Confidence,
+	})
+	return &stale
+}
+
+func sortPaneActivities(panes []tmux.PaneActivity) {
+	sort.SliceStable(panes, func(i, j int) bool {
+		left, right := panes[i], panes[j]
+		if left.Pane.WindowIndex != right.Pane.WindowIndex {
+			return left.Pane.WindowIndex < right.Pane.WindowIndex
+		}
+		if left.Pane.Index != right.Pane.Index {
+			return left.Pane.Index < right.Pane.Index
+		}
+		if left.Pane.ID != right.Pane.ID {
+			return left.Pane.ID < right.Pane.ID
+		}
+		if left.Pane.Title != right.Pane.Title {
+			return left.Pane.Title < right.Pane.Title
+		}
+		if left.Pane.Type != right.Pane.Type {
+			return left.Pane.Type < right.Pane.Type
+		}
+		return left.LastActivity.Before(right.LastActivity)
+	})
 }
 
 // truncateOutput returns the last n bytes of output, respecting UTF-8 boundaries.

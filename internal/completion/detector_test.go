@@ -7,11 +7,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/assignment"
+	statuspkg "github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -306,6 +308,41 @@ func TestIdleDetection(t *testing.T) {
 	}
 }
 
+func TestIdleDetectionRequiresContinuousSafeObservation(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.IdleThreshold = 10 * time.Millisecond
+	d := NewWithConfig("test-session", assignment.NewStore("test-session"), cfg)
+	now := time.Now()
+	a := &assignment.Assignment{BeadID: "bd-safe", Pane: 0, AssignedAt: now}
+	safe := statuspkg.PaneObservation{Current: statuspkg.StateObservation{
+		Status:     statuspkg.AgentStatus{State: statuspkg.StateIdle},
+		Freshness:  statuspkg.FreshnessFresh,
+		Confidence: 0.95,
+	}}
+	working := safe
+	working.Current.Status.State = statuspkg.StateWorking
+
+	if event := d.checkIdleWhenSafe(a, "unchanged", now, safe); event != nil {
+		t.Fatalf("first safe observation should only initialize tracking: %+v", event)
+	}
+	time.Sleep(15 * time.Millisecond)
+	if event := d.checkIdleWhenSafe(a, "unchanged", now, working); event != nil {
+		t.Fatalf("working observation must suppress idle failure: %+v", event)
+	}
+	if len(d.activityTracker) != 0 {
+		t.Fatalf("working observation retained stale idle timer: %+v", d.activityTracker)
+	}
+
+	time.Sleep(15 * time.Millisecond)
+	if event := d.checkIdleWhenSafe(a, "unchanged", now, safe); event != nil {
+		t.Fatalf("new safe interval inherited stale timeout: %+v", event)
+	}
+	time.Sleep(15 * time.Millisecond)
+	if event := d.checkIdleWhenSafe(a, "unchanged", now, safe); event == nil || event.Method != MethodIdle {
+		t.Fatalf("continuous safe idle interval did not produce idle event: %+v", event)
+	}
+}
+
 func TestIdleDetectionResetsForNewAssignmentOnSamePane(t *testing.T) {
 	store := assignment.NewStore("test-session")
 	cfg := DefaultConfig()
@@ -421,6 +458,51 @@ func TestRecordEventLockedScopesDedupToAssignmentAttempt(t *testing.T) {
 	}
 }
 
+func TestResolveAssignmentPaneUsesDurableIdentityAcrossWindows(t *testing.T) {
+	panes := []tmux.Pane{
+		{ID: "%1", WindowIndex: 0, Index: 0},
+		{ID: "%9", WindowIndex: 1, Index: 0},
+	}
+
+	byID, err := resolveAssignmentPane("proj", &assignment.Assignment{Pane: 0, DispatchTarget: "%9"}, panes)
+	if err != nil {
+		t.Fatalf("resolve by ID: %v", err)
+	}
+	if byID.ID != "%9" || byID.WindowIndex != 1 {
+		t.Fatalf("resolved by ID=%+v", byID)
+	}
+
+	byAddress, err := resolveAssignmentPane("proj", &assignment.Assignment{Pane: 0, DispatchTarget: "proj:1.0"}, panes)
+	if err != nil {
+		t.Fatalf("resolve by canonical address: %v", err)
+	}
+	if byAddress.ID != "%9" {
+		t.Fatalf("resolved by address=%+v", byAddress)
+	}
+}
+
+func TestResolveAssignmentPaneRejectsAmbiguousLegacyIndex(t *testing.T) {
+	panes := []tmux.Pane{
+		{ID: "%1", WindowIndex: 0, Index: 0},
+		{ID: "%9", WindowIndex: 1, Index: 0},
+	}
+	_, err := resolveAssignmentPane("proj", &assignment.Assignment{Pane: 0}, panes)
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("resolve legacy error=%v, want ambiguity", err)
+	}
+}
+
+func TestCheckNowRejectsDuplicateLegacyPaneAssignments(t *testing.T) {
+	store := assignment.NewStore("completion-ambiguous")
+	now := time.Now().UTC()
+	store.Assignments["bd-a"] = &assignment.Assignment{BeadID: "bd-a", Pane: 0, Status: assignment.StatusAssigned, AssignedAt: now}
+	store.Assignments["bd-b"] = &assignment.Assignment{BeadID: "bd-b", Pane: 0, Status: assignment.StatusAssigned, AssignedAt: now}
+	detector := New("completion-ambiguous", store)
+	if _, err := detector.CheckNow(0); err == nil || !strings.Contains(err.Error(), "2 active assignments") {
+		t.Fatalf("CheckNow error=%v, want explicit ambiguity", err)
+	}
+}
+
 func TestBrAvailableCaching(t *testing.T) {
 	d := New("test-session", nil)
 
@@ -525,18 +607,19 @@ func TestConcurrentActivityTracking(t *testing.T) {
 		wg.Add(1)
 		go func(pane int) {
 			defer wg.Done()
+			key := fmt.Sprintf("%%%d", pane)
 			for j := 0; j < operationsPerGoroutine; j++ {
 				d.mu.Lock()
-				if d.activityTracker[pane] == nil {
-					d.activityTracker[pane] = &activityState{}
+				if d.activityTracker[key] == nil {
+					d.activityTracker[key] = &activityState{}
 				}
-				d.activityTracker[pane].lastOutputTime = time.Now()
-				d.activityTracker[pane].lastOutput = fmt.Sprintf("output-%d", j)
+				d.activityTracker[key].lastOutputTime = time.Now()
+				d.activityTracker[key].lastOutput = fmt.Sprintf("output-%d", j)
 				d.mu.Unlock()
 
 				// Concurrent read
 				d.mu.RLock()
-				_ = d.activityTracker[pane]
+				_ = d.activityTracker[key]
 				d.mu.RUnlock()
 			}
 		}(i)

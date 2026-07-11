@@ -294,6 +294,9 @@ func RenderContextMiniBarWithHistory(percent float64, history []float64, width i
 // PaneTableRow represents a single row in the pane table
 type PaneTableRow struct {
 	Index            int
+	WindowIndex      int
+	PaneID           string
+	Address          string
 	Type             string
 	Variant          string
 	ModelVariant     string
@@ -323,7 +326,7 @@ type PaneTableRow struct {
 func BuildPaneTableRows(
 	panes []tmux.Pane,
 	statuses map[string]status.AgentStatus,
-	paneStatus map[int]PaneStatus,
+	paneStatus map[string]PaneStatus,
 	beads *bv.BeadsSummary,
 	fileChanges []tracker.RecordedFileChange,
 	healthStates map[string]*pt.AgentState,
@@ -331,14 +334,18 @@ func BuildPaneTableRows(
 	t theme.Theme,
 ) []PaneTableRow {
 	changeCounts := fileChangesByPane(panes, fileChanges)
+	multiWindow := tmux.PanesSpanMultipleWindows(panes)
 
 	rows := make([]PaneTableRow, 0, len(panes))
 	for _, pane := range panes {
 		st, hasStatus := statuses[pane.ID]
-		ps := paneStatus[pane.Index]
+		ps := paneStatus[paneStatusKey(pane)]
 		row := PaneTableRow{
 			Tick:           tick,
 			Index:          pane.Index,
+			WindowIndex:    pane.WindowIndex,
+			PaneID:         pane.ID,
+			Address:        pane.Ref().Canonical(multiWindow),
 			Type:           string(pane.Type),
 			Variant:        pane.Variant,
 			ModelVariant:   pane.Variant,
@@ -376,7 +383,11 @@ func BuildPaneTableRows(
 			if row.ModelVariant == "" {
 				row.ModelVariant = st.AgentType
 			}
-		} else if ps.State != "" {
+		}
+		// PaneStatus is the dashboard's presentation state and carries derived
+		// states such as rate_limited and compacted that AgentStatus intentionally
+		// represents as their underlying error/activity state.
+		if ps.State != "" {
 			row.Status = ps.State
 		}
 
@@ -424,6 +435,14 @@ func paneKey(pane tmux.Pane) string {
 		return pane.Title
 	}
 	return pane.ID
+}
+
+// paneStatusKey returns the stable physical identity used by all dashboard
+// state. Real tmux panes are keyed by %ID, so moving a pane between windows
+// does not discard or misattribute its status. Synthetic test/preview panes
+// without an ID fall back to their explicit window.pane address.
+func paneStatusKey(pane tmux.Pane) string {
+	return pane.Ref().StableKey()
 }
 
 func currentBeadForPane(pane tmux.Pane, beads *bv.BeadsSummary) string {
@@ -609,7 +628,11 @@ func RenderPaneRow(row PaneTableRow, dims LayoutDimensions, t theme.Theme) strin
 
 	// Index badge
 	idxStyle := lipgloss.NewStyle().Foreground(t.Overlay)
-	parts = append(parts, idxStyle.Render(fmt.Sprintf("%2d", row.Index)))
+	address := row.Address
+	if address == "" {
+		address = fmt.Sprintf("%d", row.Index)
+	}
+	parts = append(parts, idxStyle.Render(fmt.Sprintf("%2s", address)))
 
 	typeColor, typeIcon := agentRowTypePresentation(row.Type, t)
 

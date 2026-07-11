@@ -1,8 +1,13 @@
 package status
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"os/exec"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -992,5 +997,700 @@ codex> `
 	}
 	if status.TokensUsed != 150000 {
 		t.Fatalf("TokensUsed = %d, want 150000", status.TokensUsed)
+	}
+}
+
+func TestAnalyzeAtUsesInjectedObservationClock(t *testing.T) {
+	t.Parallel()
+
+	detector := NewDetector()
+	observedAt := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+	output := "Still processing a sufficiently long operation without a recognized prompt"
+
+	recent := detector.AnalyzeAt("%1", "agent", "cod", output, observedAt.Add(-time.Second), observedAt)
+	if recent.State != StateWorking {
+		t.Fatalf("recent historical replay state = %s, want working", recent.State)
+	}
+	if recent.UpdatedAt != observedAt {
+		t.Fatalf("UpdatedAt = %v, want injected %v", recent.UpdatedAt, observedAt)
+	}
+
+	stale := detector.AnalyzeAt("%1", "agent", "cod", output, observedAt.Add(-time.Hour), observedAt)
+	if stale.State != StateUnknown {
+		t.Fatalf("stale historical replay state = %s, want unknown", stale.State)
+	}
+}
+
+func TestPaneObservationSafeToDispatchFailsClosed(t *testing.T) {
+	t.Parallel()
+
+	base := PaneObservation{Current: StateObservation{
+		Status:     AgentStatus{State: StateIdle},
+		Freshness:  FreshnessFresh,
+		Confidence: 0.95,
+	}}
+	if !base.SafeToDispatch() {
+		t.Fatal("fresh, confident idle observation should be dispatchable")
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(*PaneObservation)
+	}{
+		{name: "stale", mutate: func(p *PaneObservation) { p.Current.Freshness = FreshnessStale }},
+		{name: "unavailable", mutate: func(p *PaneObservation) { p.Current.Freshness = FreshnessUnavailable }},
+		{name: "low confidence", mutate: func(p *PaneObservation) { p.Current.Confidence = minimumDispatchConfidence - 0.01 }},
+		{name: "invalid high confidence", mutate: func(p *PaneObservation) { p.Current.Confidence = 1.01 }},
+		{name: "capture error", mutate: func(p *PaneObservation) { p.Current.Error = "capture failed" }},
+		{name: "working", mutate: func(p *PaneObservation) { p.Current.Status.State = StateWorking }},
+		{name: "error", mutate: func(p *PaneObservation) { p.Current.Status.State = StateError }},
+		{name: "unknown", mutate: func(p *PaneObservation) { p.Current.Status.State = StateUnknown }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			candidate := base
+			test.mutate(&candidate)
+			if candidate.SafeToDispatch() {
+				t.Fatal("unsafe observation was accepted for dispatch")
+			}
+		})
+	}
+}
+
+func TestSessionObserverWeightsIdleConfidenceByEvidence(t *testing.T) {
+	t.Parallel()
+
+	observedAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name         string
+		output       string
+		wantDispatch bool
+	}{
+		{name: "explicit agent prompt", output: "completed\ncodex>", wantDispatch: true},
+		{name: "short heuristic line", output: "Thinking...", wantDispatch: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			observer := NewSessionObserverWithDependencies(NewDetector(), DefaultSessionObserverConfig(DefaultConfig()), SessionObserverDependencies{
+				ListPanes: func(context.Context, string) ([]tmux.PaneActivity, error) {
+					return []tmux.PaneActivity{{
+						Pane:         tmux.Pane{ID: "%1", Index: 1, Title: "s__cod_1", Type: tmux.AgentCodex},
+						LastActivity: observedAt.Add(-time.Minute),
+					}}, nil
+				},
+				CapturePane: func(context.Context, string, int) (string, error) {
+					return test.output, nil
+				},
+				Now: func() time.Time { return observedAt },
+			})
+
+			observation, err := observer.Observe(context.Background(), "s")
+			if err != nil {
+				t.Fatalf("Observe() error = %v", err)
+			}
+			pane, ok := observation.PaneByID("%1")
+			if !ok {
+				t.Fatal("observed pane missing")
+			}
+			if pane.Current.Status.State != StateIdle {
+				t.Fatalf("state = %q, want idle", pane.Current.Status.State)
+			}
+			if pane.SafeToDispatch() != test.wantDispatch {
+				t.Fatalf("SafeToDispatch() = %v, want %v (confidence %.2f)", pane.SafeToDispatch(), test.wantDispatch, pane.Current.Confidence)
+			}
+			if !test.wantDispatch && pane.Current.Confidence >= minimumDispatchConfidence {
+				t.Fatalf("weak idle confidence = %.2f, must be below %.2f", pane.Current.Confidence, minimumDispatchConfidence)
+			}
+		})
+	}
+}
+
+func TestSessionObservationSafeToDispatchRequiresUniquePane(t *testing.T) {
+	t.Parallel()
+
+	safe := PaneObservation{
+		Pane: tmux.PaneRef{ID: "%1"},
+		Current: StateObservation{
+			Status:     AgentStatus{State: StateIdle},
+			Freshness:  FreshnessFresh,
+			Confidence: 0.95,
+		},
+	}
+	observation := SessionObservation{Panes: []PaneObservation{safe}}
+	if !observation.SafeToDispatch("%1") {
+		t.Fatal("unique safe pane should be dispatchable")
+	}
+	if observation.SafeToDispatch("%missing") {
+		t.Fatal("missing pane must fail closed")
+	}
+	if observation.SafeToDispatch("") {
+		t.Fatal("empty pane identity must fail closed")
+	}
+	observation.Panes = append(observation.Panes, safe)
+	if observation.SafeToDispatch("%1") {
+		t.Fatal("duplicate pane identity must fail closed")
+	}
+}
+
+func TestPaneObservationRawOutputIsPrivate(t *testing.T) {
+	t.Parallel()
+
+	pane := PaneObservation{
+		Pane:      tmux.PaneRef{ID: "%1"},
+		Metadata:  tmux.Pane{ID: "%1", Command: "PRIVATE-COMMAND-METADATA"},
+		RawOutput: "TOP-SECRET-RAW-PANE-OUTPUT",
+		Current: StateObservation{
+			Status:     AgentStatus{State: StateIdle, LastOutput: "bounded preview"},
+			Freshness:  FreshnessFresh,
+			Confidence: 0.95,
+		},
+	}
+	encoded, err := json.Marshal(pane)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if strings.Contains(string(encoded), "TOP-SECRET") || strings.Contains(string(encoded), "PRIVATE-COMMAND") || strings.Contains(string(encoded), "RawOutput") || strings.Contains(string(encoded), "raw_output") {
+		t.Fatalf("serialized observation leaked raw output: %s", encoded)
+	}
+	if !strings.Contains(string(encoded), "bounded preview") {
+		t.Fatalf("serialized observation omitted bounded preview: %s", encoded)
+	}
+}
+
+func TestSessionObserverPartialFailureKeepsLastKnownSeparate(t *testing.T) {
+	t.Parallel()
+
+	firstObservedAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	secondObservedAt := firstObservedAt.Add(time.Minute)
+	thirdObservedAt := secondObservedAt.Add(time.Minute)
+	nowValues := []time.Time{firstObservedAt, secondObservedAt, thirdObservedAt}
+	nowIndex := 0
+	phase := 0
+	lastActivity := firstObservedAt.Add(-time.Hour)
+	panes := []tmux.PaneActivity{
+		{Pane: tmux.Pane{ID: "%2", WindowIndex: 0, Index: 2, Title: "s__cod_1", Type: tmux.AgentCodex}, LastActivity: lastActivity},
+		{Pane: tmux.Pane{ID: "%1", WindowIndex: 0, Index: 1, Title: "s__cc_1", Type: tmux.AgentClaude}, LastActivity: lastActivity},
+	}
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{
+		CaptureLines:          12,
+		CaptureTimeout:        time.Second,
+		MaxConcurrentCaptures: 1,
+		MaxCaptureBytes:       1024,
+	}, SessionObserverDependencies{
+		ListPanes: func(context.Context, string) ([]tmux.PaneActivity, error) {
+			return panes, nil
+		},
+		CapturePane: func(_ context.Context, paneID string, _ int) (string, error) {
+			switch {
+			case phase == 1 && paneID == "%1":
+				return "", errors.New("capture failed")
+			case phase == 2 && paneID == "%1":
+				return "this is a sufficiently long line with no recognized terminal prompt", nil
+			default:
+				return "task complete\n>", nil
+			}
+		},
+		Now: func() time.Time {
+			value := nowValues[nowIndex]
+			nowIndex++
+			return value
+		},
+	})
+
+	first, err := observer.Observe(context.Background(), "s")
+	if err != nil {
+		t.Fatalf("first Observe: %v", err)
+	}
+	if !first.Complete || len(first.Failures) != 0 {
+		t.Fatalf("first observation = %+v, want complete", first)
+	}
+	if got := []string{first.Panes[0].Pane.ID, first.Panes[1].Pane.ID}; got[0] != "%1" || got[1] != "%2" {
+		t.Fatalf("pane order = %v, want [%%1 %%2]", got)
+	}
+	if !first.SafeToDispatch("%1") {
+		t.Fatal("first idle observation should be dispatchable")
+	}
+	firstPane, _ := first.PaneByID("%1")
+	if got := []ObservationProvenance{
+		firstPane.Current.Evidence[0].Provenance,
+		firstPane.Current.Evidence[1].Provenance,
+		firstPane.Current.Evidence[2].Provenance,
+	}; got[0] != ProvenanceTMUXTopology || got[1] != ProvenanceTMUXCapture || got[2] != ProvenanceDetector {
+		t.Fatalf("fresh evidence provenance = %v", got)
+	}
+
+	phase = 1
+	second, err := observer.Observe(context.Background(), "s")
+	if err != nil {
+		t.Fatalf("second Observe: %v", err)
+	}
+	if second.Complete || len(second.Failures) != 1 || second.Failures[0].PaneID != "%1" {
+		t.Fatalf("second failures = %+v, want one %%1 capture failure", second.Failures)
+	}
+	failed, ok := second.PaneByID("%1")
+	if !ok {
+		t.Fatal("failed pane missing from partial observation")
+	}
+	if failed.Current.Status.State != StateUnknown || failed.Current.Freshness != FreshnessUnavailable || failed.Current.Confidence != 0 {
+		t.Fatalf("failed current estimate = %+v, want unavailable unknown", failed.Current)
+	}
+	if failed.Current.Status.UpdatedAt != secondObservedAt {
+		t.Fatalf("failed current UpdatedAt = %v, want failure observation time %v", failed.Current.Status.UpdatedAt, secondObservedAt)
+	}
+	if failed.LastKnown == nil || failed.LastKnown.Status.State != StateIdle || failed.LastKnown.Freshness != FreshnessStale {
+		t.Fatalf("failed last-known = %+v, want stale idle", failed.LastKnown)
+	}
+	if failed.LastKnown.ObservedAt != firstObservedAt {
+		t.Fatalf("last-known timestamp refreshed: got %v want %v", failed.LastKnown.ObservedAt, firstObservedAt)
+	}
+	if got := failed.Current.Evidence; len(got) != 2 || got[0].Provenance != ProvenanceTMUXTopology || got[1].Provenance != ProvenanceTMUXCapture || got[1].Error != "capture failed" {
+		t.Fatalf("failed current evidence = %+v", got)
+	}
+	lastEvidence := failed.LastKnown.Evidence[len(failed.LastKnown.Evidence)-1]
+	if lastEvidence.Provenance != ProvenanceLastKnown || lastEvidence.Freshness != FreshnessStale {
+		t.Fatalf("last-known provenance = %+v", lastEvidence)
+	}
+	if failed.RawOutput != "" || second.SafeToDispatch("%1") {
+		t.Fatal("failed capture retained output or remained dispatchable")
+	}
+	if !second.SafeToDispatch("%2") {
+		t.Fatal("successful sibling should remain independently dispatchable")
+	}
+
+	phase = 2
+	third, err := observer.Observe(context.Background(), "s")
+	if err != nil {
+		t.Fatalf("third Observe: %v", err)
+	}
+	unknown, ok := third.PaneByID("%1")
+	if !ok {
+		t.Fatal("unknown pane missing")
+	}
+	if unknown.Current.Freshness != FreshnessFresh || unknown.Current.Status.State != StateUnknown {
+		t.Fatalf("fresh unknown current = %+v", unknown.Current)
+	}
+	if unknown.LastKnown == nil || unknown.LastKnown.ObservedAt != firstObservedAt || unknown.LastKnown.Status.State != StateIdle {
+		t.Fatalf("unknown classification replaced last-known state: %+v", unknown.LastKnown)
+	}
+	if third.SafeToDispatch("%1") {
+		t.Fatal("fresh but unknown classification must fail closed")
+	}
+}
+
+func TestSessionObserverBoundsCaptureAndOrdersTopology(t *testing.T) {
+	t.Parallel()
+
+	panes := []tmux.PaneActivity{
+		{Pane: tmux.Pane{ID: "%4", WindowIndex: 1, Index: 1, Type: tmux.AgentCodex}},
+		{Pane: tmux.Pane{ID: "%2", WindowIndex: 0, Index: 2, Type: tmux.AgentCodex}},
+		{Pane: tmux.Pane{ID: "%5", WindowIndex: 2, Index: 0, Type: tmux.AgentCodex}},
+		{Pane: tmux.Pane{ID: "%1", WindowIndex: 0, Index: 1, Type: tmux.AgentCodex}},
+		{Pane: tmux.Pane{ID: "%3", WindowIndex: 1, Index: 0, Type: tmux.AgentCodex}},
+		{Pane: tmux.Pane{ID: "%0", WindowIndex: 0, Index: 0, Type: tmux.AgentCodex}},
+	}
+	var active atomic.Int64
+	var peak atomic.Int64
+	var wrongLineBudget atomic.Bool
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{
+		CaptureLines:          7,
+		CaptureTimeout:        time.Second,
+		MaxConcurrentCaptures: 2,
+		MaxCaptureBytes:       17,
+	}, SessionObserverDependencies{
+		ListPanes: func(context.Context, string) ([]tmux.PaneActivity, error) {
+			return panes, nil
+		},
+		CapturePane: func(ctx context.Context, _ string, lines int) (string, error) {
+			if lines != 7 {
+				wrongLineBudget.Store(true)
+			}
+			if _, ok := ctx.Deadline(); !ok {
+				t.Error("capture context has no timeout")
+			}
+			current := active.Add(1)
+			for {
+				prior := peak.Load()
+				if current <= prior || peak.CompareAndSwap(prior, current) {
+					break
+				}
+			}
+			time.Sleep(10 * time.Millisecond)
+			active.Add(-1)
+			return strings.Repeat("x", 100), nil
+		},
+		Now: func() time.Time { return time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC) },
+	})
+
+	observation, err := observer.Observe(context.Background(), "s")
+	if err != nil {
+		t.Fatalf("Observe: %v", err)
+	}
+	if !observation.Complete || wrongLineBudget.Load() {
+		t.Fatalf("observation complete=%v wrongLineBudget=%v failures=%v", observation.Complete, wrongLineBudget.Load(), observation.Failures)
+	}
+	if peak.Load() != 2 {
+		t.Fatalf("peak capture concurrency = %d, want exactly 2", peak.Load())
+	}
+	wantOrder := []string{"%0", "%1", "%2", "%3", "%4", "%5"}
+	for index, pane := range observation.Panes {
+		if pane.Pane.ID != wantOrder[index] {
+			t.Fatalf("pane[%d] = %s, want %s", index, pane.Pane.ID, wantOrder[index])
+		}
+		if len(pane.RawOutput) != 17 {
+			t.Fatalf("pane %s raw output bytes = %d, want 17", pane.Pane.ID, len(pane.RawOutput))
+		}
+	}
+}
+
+func TestSessionObserverDoesNotSerializeIndependentSessions(t *testing.T) {
+	t.Parallel()
+
+	slowStarted := make(chan struct{})
+	releaseSlow := make(chan struct{})
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(releaseSlow) })
+
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{
+		CaptureTimeout:        5 * time.Second,
+		MaxConcurrentCaptures: 1,
+	}, SessionObserverDependencies{
+		ListPanes: func(_ context.Context, session string) ([]tmux.PaneActivity, error) {
+			return []tmux.PaneActivity{{
+				Pane:         tmux.Pane{ID: "%" + session, Type: tmux.AgentCodex},
+				LastActivity: time.Now().Add(-time.Hour),
+			}}, nil
+		},
+		CapturePane: func(ctx context.Context, paneID string, _ int) (string, error) {
+			if paneID == "%slow" {
+				close(slowStarted)
+				select {
+				case <-releaseSlow:
+				case <-ctx.Done():
+					return "", ctx.Err()
+				}
+			}
+			return "task complete\n>", nil
+		},
+	})
+
+	slowDone := make(chan error, 1)
+	go func() {
+		_, err := observer.Observe(context.Background(), "slow")
+		slowDone <- err
+	}()
+	select {
+	case <-slowStarted:
+	case <-time.After(time.Second):
+		t.Fatal("slow observation did not start")
+	}
+
+	fastDone := make(chan error, 1)
+	go func() {
+		_, err := observer.Observe(context.Background(), "fast")
+		fastDone <- err
+	}()
+	select {
+	case err := <-fastDone:
+		if err != nil {
+			t.Fatalf("independent observation failed: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("independent session was blocked by slow observation")
+	}
+
+	releaseOnce.Do(func() { close(releaseSlow) })
+	if err := <-slowDone; err != nil {
+		t.Fatalf("slow observation failed after release: %v", err)
+	}
+}
+
+func TestSessionObserverTopologyFailureDoesNotEraseLastKnown(t *testing.T) {
+	t.Parallel()
+
+	phase := 0
+	observedAt := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	pane := tmux.PaneActivity{
+		Pane:         tmux.Pane{ID: "%1", Index: 1, Type: tmux.AgentClaude},
+		LastActivity: observedAt.Add(-time.Hour),
+	}
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{
+		MaxConcurrentCaptures: 1,
+	}, SessionObserverDependencies{
+		ListPanes: func(context.Context, string) ([]tmux.PaneActivity, error) {
+			if phase == 1 {
+				return nil, errors.New("topology unavailable")
+			}
+			return []tmux.PaneActivity{pane}, nil
+		},
+		CapturePane: func(context.Context, string, int) (string, error) {
+			if phase == 2 {
+				return "", errors.New("capture unavailable")
+			}
+			return "task complete\n>", nil
+		},
+		Now: func() time.Time {
+			return observedAt.Add(time.Duration(phase) * time.Minute)
+		},
+	})
+
+	first, err := observer.Observe(context.Background(), "s")
+	if err != nil || !first.SafeToDispatch("%1") {
+		t.Fatalf("initial observation err=%v observation=%+v", err, first)
+	}
+	phase = 1
+	failed, err := observer.Observe(context.Background(), "s")
+	if err == nil || failed.Complete || len(failed.Panes) != 1 || len(failed.Failures) != 1 || failed.Failures[0].Stage != "topology" {
+		t.Fatalf("topology failure = %+v err=%v", failed, err)
+	}
+	failedPane, ok := failed.PaneByID("%1")
+	if !ok || failedPane.Current.Status.State != StateUnknown || failedPane.Current.Freshness != FreshnessUnavailable || failedPane.SafeToDispatch() {
+		t.Fatalf("topology failure current pane = %+v", failedPane)
+	}
+	if failedPane.LastKnown == nil || failedPane.LastKnown.Status.State != StateIdle || failedPane.LastKnown.Freshness != FreshnessStale || failedPane.LastKnown.ObservedAt != observedAt {
+		t.Fatalf("topology failure last-known = %+v", failedPane.LastKnown)
+	}
+	phase = 2
+	after, err := observer.Observe(context.Background(), "s")
+	if err != nil {
+		t.Fatalf("post-failure Observe: %v", err)
+	}
+	got, ok := after.PaneByID("%1")
+	if !ok || got.LastKnown == nil || got.LastKnown.ObservedAt != observedAt || got.LastKnown.Status.State != StateIdle {
+		t.Fatalf("topology failure erased/refreshed last-known: %+v", got.LastKnown)
+	}
+}
+
+func TestSessionObserverScopesTopologyAndLastKnownBySession(t *testing.T) {
+	t.Parallel()
+
+	step := 0
+	observedAt := time.Date(2026, 7, 11, 14, 0, 0, 0, time.UTC)
+	panes := map[string][]tmux.PaneActivity{
+		"a": {{Pane: tmux.Pane{ID: "%1", WindowIndex: 0, Index: 1, Type: tmux.AgentCodex}, LastActivity: observedAt.Add(-time.Hour)}},
+		"b": {{Pane: tmux.Pane{ID: "%2", WindowIndex: 2, Index: 0, Type: tmux.AgentCodex}, LastActivity: observedAt.Add(-time.Hour)}},
+	}
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{MaxConcurrentCaptures: 1}, SessionObserverDependencies{
+		ListPanes: func(_ context.Context, session string) ([]tmux.PaneActivity, error) {
+			if (step == 1 && session == "b") || (step == 3 && session == "a") {
+				return nil, errors.New("topology unavailable")
+			}
+			return panes[session], nil
+		},
+		CapturePane: func(context.Context, string, int) (string, error) {
+			return "task complete\n>", nil
+		},
+		Now: func() time.Time { return observedAt.Add(time.Duration(step) * time.Minute) },
+	})
+
+	firstA, err := observer.Observe(context.Background(), "a")
+	if err != nil || !firstA.SafeToDispatch("%1") {
+		t.Fatalf("initial session a observation err=%v observation=%+v", err, firstA)
+	}
+
+	step = 1
+	failedB, err := observer.Observe(context.Background(), "b")
+	if err == nil || len(failedB.Panes) != 0 {
+		t.Fatalf("unseen session b topology failure replayed foreign panes: %+v err=%v", failedB, err)
+	}
+
+	step = 2
+	firstB, err := observer.Observe(context.Background(), "b")
+	if err != nil || !firstB.SafeToDispatch("%2") {
+		t.Fatalf("initial session b observation err=%v observation=%+v", err, firstB)
+	}
+
+	step = 3
+	failedA, err := observer.Observe(context.Background(), "a")
+	if err == nil || len(failedA.Panes) != 1 || failedA.Panes[0].Pane.ID != "%1" {
+		t.Fatalf("session a failure used wrong topology: %+v err=%v", failedA, err)
+	}
+	if failedA.Panes[0].LastKnown == nil || failedA.Panes[0].LastKnown.Status.State != StateIdle {
+		t.Fatalf("session a last-known state missing after alternating sessions: %+v", failedA.Panes[0].LastKnown)
+	}
+}
+
+func TestSessionObserverObservePaneCaptureUsesSharedLastKnownState(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	call := 0
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{}, SessionObserverDependencies{
+		Now: func() time.Time {
+			result := now.Add(time.Duration(call) * time.Minute)
+			call++
+			return result
+		},
+	})
+	pane := tmux.PaneActivity{
+		Pane:         tmux.Pane{ID: "%1", Index: 1, Title: "s__cc_1", Type: tmux.AgentClaude},
+		LastActivity: now.Add(-time.Minute),
+	}
+
+	fresh := observer.ObservePaneCapture("s", pane, "completed\n────────────\n❯ \n────────────", nil)
+	if !fresh.SafeToDispatch() || fresh.LastKnown != nil {
+		t.Fatalf("fresh pre-captured observation = %+v", fresh)
+	}
+	failed := observer.ObservePaneCapture("s", pane, "ignored partial output", errors.New("capture failed"))
+	if failed.Current.Status.State != StateUnknown || failed.Current.Freshness != FreshnessUnavailable || failed.RawOutput != "" || failed.SafeToDispatch() {
+		t.Fatalf("failed pre-captured current = %+v", failed)
+	}
+	if failed.LastKnown == nil || failed.LastKnown.Status.State != StateIdle || failed.LastKnown.ObservedAt != now || failed.LastKnown.Freshness != FreshnessStale {
+		t.Fatalf("failed pre-captured last-known = %+v", failed.LastKnown)
+	}
+	foreign := observer.ObservePaneCapture("other", pane, "ignored partial output", errors.New("capture failed"))
+	if foreign.LastKnown != nil {
+		t.Fatalf("pre-captured last-known leaked across sessions: %+v", foreign.LastKnown)
+	}
+}
+
+func TestSessionObserverConfigHasHardBounds(t *testing.T) {
+	t.Parallel()
+
+	observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{
+		CaptureLines:          hardObservationMaxLines + 1,
+		CaptureTimeout:        hardObservationMaxTimeout + time.Second,
+		MaxConcurrentCaptures: hardObservationMaxConcurrent + 1,
+		MaxCaptureBytes:       hardObservationMaxBytes + 1,
+	}, SessionObserverDependencies{})
+	if observer.config.CaptureLines != hardObservationMaxLines ||
+		observer.config.CaptureTimeout != hardObservationMaxTimeout ||
+		observer.config.MaxConcurrentCaptures != hardObservationMaxConcurrent ||
+		observer.config.MaxCaptureBytes != hardObservationMaxBytes {
+		t.Fatalf("observer config not hard-bounded: %+v", observer.config)
+	}
+}
+
+// These source labels deliberately identify sanitized, CASS-derived replay
+// shapes without embedding transcript paths, pane contents, process IDs, or
+// other session-specific material in production observations.
+func TestSessionObserverCASSDerivedSanitizedReplays(t *testing.T) {
+	t.Parallel()
+
+	const sourceLabel = "cass-derived-sanitized"
+	baseTime := time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name                string
+		source              string
+		currentCapture      string
+		currentError        error
+		excludedOldEvidence []string
+		seedLastKnown       bool
+		wantState           AgentState
+		wantErrorType       ErrorType
+		wantFreshness       ObservationFreshness
+		wantLastKnown       AgentState
+		wantDispatch        bool
+	}{
+		{
+			name:           "old process rate limit and frozen timer excluded from fresh idle pane",
+			source:         sourceLabel,
+			currentCapture: "────────────\n❯ \n────────────\n  permissions enabled",
+			excludedOldEvidence: []string{
+				"Rate limited in prior process",
+				"elapsed timer frozen in prior process",
+				"process search matched its own command",
+			},
+			wantState:     StateIdle,
+			wantErrorType: ErrorNone,
+			wantFreshness: FreshnessFresh,
+			wantDispatch:  true,
+		},
+		{
+			name:           "current live tail rate limit is an error",
+			source:         sourceLabel,
+			currentCapture: "Request stopped\nRate limit exceeded; retry after the reset window.",
+			wantState:      StateError,
+			wantErrorType:  ErrorRateLimit,
+			wantFreshness:  FreshnessFresh,
+		},
+		{
+			name:           "fresh active spinner is working",
+			source:         sourceLabel,
+			currentCapture: "● applying changes\n✻ Churning… (ctrl+c to interrupt · 4s · thinking)\n────────────\n❯ \n────────────",
+			wantState:      StateWorking,
+			wantErrorType:  ErrorNone,
+			wantFreshness:  FreshnessFresh,
+		},
+		{
+			name:          "capture failure is unknown with stale last known",
+			source:        sourceLabel,
+			currentError:  errors.New("sanitized capture failure"),
+			seedLastKnown: true,
+			wantState:     StateUnknown,
+			wantErrorType: ErrorNone,
+			wantFreshness: FreshnessUnavailable,
+			wantLastKnown: StateIdle,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if test.source != sourceLabel {
+				t.Fatalf("fixture source = %q, want explicit sanitized CASS provenance", test.source)
+			}
+			phase := 1
+			if test.seedLastKnown {
+				phase = 0
+			}
+			observer := NewSessionObserverWithDependencies(NewDetector(), SessionObserverConfig{
+				MaxConcurrentCaptures: 1,
+			}, SessionObserverDependencies{
+				ListPanes: func(context.Context, string) ([]tmux.PaneActivity, error) {
+					return []tmux.PaneActivity{{
+						Pane:         tmux.Pane{ID: "%1", Index: 1, Title: "s__cc_1", Type: tmux.AgentClaude},
+						LastActivity: baseTime.Add(-time.Minute),
+					}}, nil
+				},
+				CapturePane: func(context.Context, string, int) (string, error) {
+					if phase == 0 {
+						return "completed\n────────────\n❯ \n────────────", nil
+					}
+					return test.currentCapture, test.currentError
+				},
+				Now: func() time.Time { return baseTime.Add(time.Duration(phase) * time.Minute) },
+			})
+			if test.seedLastKnown {
+				seed, err := observer.Observe(context.Background(), "s")
+				if err != nil || !seed.SafeToDispatch("%1") {
+					t.Fatalf("seed observation err=%v observation=%+v", err, seed)
+				}
+				phase = 1
+			}
+
+			observation, err := observer.Observe(context.Background(), "s")
+			if err != nil {
+				t.Fatalf("Observe: %v", err)
+			}
+			pane, ok := observation.PaneByID("%1")
+			if !ok {
+				t.Fatal("observed pane missing")
+			}
+			if pane.Current.Status.State != test.wantState || pane.Current.Status.ErrorType != test.wantErrorType || pane.Current.Freshness != test.wantFreshness {
+				t.Fatalf("current = state %q error %q freshness %q, want %q/%q/%q", pane.Current.Status.State, pane.Current.Status.ErrorType, pane.Current.Freshness, test.wantState, test.wantErrorType, test.wantFreshness)
+			}
+			if pane.SafeToDispatch() != test.wantDispatch {
+				t.Fatalf("SafeToDispatch = %v, want %v", pane.SafeToDispatch(), test.wantDispatch)
+			}
+			if test.wantLastKnown != "" {
+				if pane.LastKnown == nil || pane.LastKnown.Status.State != test.wantLastKnown {
+					t.Fatalf("last-known = %+v, want %q", pane.LastKnown, test.wantLastKnown)
+				}
+			} else if pane.LastKnown != nil {
+				t.Fatalf("fresh known current duplicated into last-known: %+v", pane.LastKnown)
+			}
+			for _, excluded := range test.excludedOldEvidence {
+				if strings.Contains(pane.RawOutput, excluded) || strings.Contains(pane.Current.Status.LastOutput, excluded) {
+					t.Fatalf("old-process evidence %q contaminated current observation", excluded)
+				}
+			}
+			encoded, err := json.Marshal(observation)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+			if strings.Contains(string(encoded), sourceLabel) || strings.Contains(string(encoded), "transcript") {
+				t.Fatalf("production observation leaked fixture provenance: %s", encoded)
+			}
+		})
 	}
 }

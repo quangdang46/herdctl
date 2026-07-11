@@ -770,10 +770,11 @@ func (m Model) renderAttentionBadge() string {
 func (m Model) renderRateLimitAlert() string {
 	t := m.theme
 
-	var rateLimitedPanes []int
+	multiWindow := tmux.PanesSpanMultipleWindows(m.panes)
+	var rateLimitedPanes []tmux.Pane
 	for _, p := range m.panes {
-		if ps, ok := m.paneStatus[p.Index]; ok && ps.State == "rate_limited" {
-			rateLimitedPanes = append(rateLimitedPanes, p.Index)
+		if ps, ok := m.paneStatus[paneStatusKey(p)]; ok && ps.State == "rate_limited" {
+			rateLimitedPanes = append(rateLimitedPanes, p)
 		}
 	}
 	if len(rateLimitedPanes) == 0 {
@@ -782,10 +783,20 @@ func (m Model) renderRateLimitAlert() string {
 
 	var msg string
 	if len(rateLimitedPanes) == 1 {
-		msg = fmt.Sprintf("⏳ Rate limit hit on pane %d! Run: ntm rotate %s --pane=%d",
-			rateLimitedPanes[0], m.session, rateLimitedPanes[0])
+		pane := rateLimitedPanes[0]
+		address := pane.Ref().Canonical(multiWindow)
+		if multiWindow {
+			msg = fmt.Sprintf("⏳ Rate limit hit on pane %s! Press 'r' to rotate", address)
+		} else {
+			msg = fmt.Sprintf("⏳ Rate limit hit on pane %s! Run: ntm rotate %s --pane=%s",
+				address, m.session, address)
+		}
 	} else {
-		msg = fmt.Sprintf("⏳ Rate limit hit on panes %v! Press 'r' to rotate", rateLimitedPanes)
+		addresses := make([]string, 0, len(rateLimitedPanes))
+		for _, pane := range rateLimitedPanes {
+			addresses = append(addresses, pane.Ref().Canonical(multiWindow))
+		}
+		msg = fmt.Sprintf("⏳ Rate limit hit on panes %v! Press 'r' to rotate", addresses)
 	}
 
 	alertStyle := lipgloss.NewStyle().
@@ -1256,17 +1267,17 @@ func (m Model) renderHeaderContextWarningLine(width int) string {
 		model   string
 	}
 
-	paneByIndex := make(map[int]tmux.Pane, len(m.panes))
+	paneByKey := make(map[string]tmux.Pane, len(m.panes))
 	for _, pane := range m.panes {
-		paneByIndex[pane.Index] = pane
+		paneByKey[paneStatusKey(pane)] = pane
 	}
 
 	var alerts []contextAlert
-	for idx, ps := range m.paneStatus {
+	for key, ps := range m.paneStatus {
 		if ps.ContextLimit <= 0 || ps.ContextPercent < 70 {
 			continue
 		}
-		pane, ok := paneByIndex[idx]
+		pane, ok := paneByKey[key]
 		if !ok {
 			continue
 		}
