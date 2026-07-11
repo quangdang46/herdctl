@@ -113,6 +113,14 @@ func completePaneIndexes(cmd *cobra.Command, args []string, toComplete string) (
 	return completeCommaSeparated(listPaneIndexes(session), toComplete), cobra.ShellCompDirectiveNoFileComp
 }
 
+func completeSendPaneSelector(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	session := sessionFromArgsOrFlag(cmd, args)
+	if session == "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+	return filterByPrefix(listSendPaneSelectors(session), toComplete), cobra.ShellCompDirectiveNoFileComp
+}
+
 func completeSendPaneSelectors(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	session := sessionFromArgsOrFlag(cmd, args)
 	if session == "" {

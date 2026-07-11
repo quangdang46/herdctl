@@ -1057,6 +1057,103 @@ func TestResolveShellSendSelectorsTopologyAware(t *testing.T) {
 	}
 }
 
+func TestSendDryRunTargetsRealMultiWindowSession(t *testing.T) {
+	testutil.RequireTmuxThrottled(t)
+
+	tmpDir := t.TempDir()
+	oldCfg := cfg
+	oldJSONOutput := jsonOutput
+	defer func() {
+		cfg = oldCfg
+		jsonOutput = oldJSONOutput
+	}()
+	cfg = newTmuxIntegrationTestConfig(tmpDir)
+	cfg.Checkpoints.Enabled = false
+	jsonOutput = true
+
+	sessionName := fmt.Sprintf("ntm-test-send-multi-window-%d", time.Now().UnixNano())
+	if err := tmux.CreateSession(sessionName, tmpDir); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	defer func() { _ = tmux.KillSession(sessionName) }()
+
+	paneID, err := tmux.DefaultClient.Run("new-window", "-d", "-t", sessionName, "-c", tmpDir, "-P", "-F", "#{pane_id}", "cat")
+	if err != nil {
+		t.Fatalf("creating second window: %v", err)
+	}
+	paneID = strings.TrimSpace(paneID)
+	if err := tmux.SetPaneTitle(paneID, sessionName+"__cc_1_test-model"); err != nil {
+		t.Fatalf("setting second-window pane title: %v", err)
+	}
+
+	panes, err := tmux.GetPanes(sessionName)
+	if err != nil {
+		t.Fatalf("GetPanes failed: %v", err)
+	}
+	if !tmux.PanesSpanMultipleWindows(panes) {
+		t.Fatalf("fixture panes do not span multiple windows: %+v", panes)
+	}
+	var target tmux.Pane
+	found := false
+	for _, pane := range panes {
+		if pane.ID == paneID {
+			target = pane
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("second-window pane %s not found in %+v", paneID, panes)
+	}
+	wantRef := fmt.Sprintf("%d.%d", target.WindowIndex, target.Index)
+
+	dryRun := func(opts SendOptions) SendDryRunResult {
+		t.Helper()
+		opts.Session = sessionName
+		opts.Prompt = "topology-safe dry run"
+		opts.PromptSource = "args"
+		opts.DryRun = true
+		opts.NoHooks = true
+
+		oldStdout := os.Stdout
+		r, w, pipeErr := os.Pipe()
+		if pipeErr != nil {
+			t.Fatalf("creating stdout pipe: %v", pipeErr)
+		}
+		os.Stdout = w
+		defer func() {
+			os.Stdout = oldStdout
+			_ = r.Close()
+		}()
+
+		sendErr := runSendWithTargets(opts)
+		_ = w.Close()
+		os.Stdout = oldStdout
+		output, readErr := io.ReadAll(r)
+		if readErr != nil {
+			t.Fatalf("reading dry-run output: %v", readErr)
+		}
+		if sendErr != nil {
+			t.Fatalf("dry run failed: %v (stdout=%q)", sendErr, strings.TrimSpace(string(output)))
+		}
+		var result SendDryRunResult
+		if err := json.Unmarshal(output, &result); err != nil {
+			t.Fatalf("parsing dry-run JSON: %v (stdout=%q)", err, strings.TrimSpace(string(output)))
+		}
+		return result
+	}
+
+	exact := dryRun(SendOptions{PaneSelector: wantRef})
+	if exact.Total != 1 || len(exact.WouldSend) != 1 || exact.WouldSend[0].Pane != wantRef || exact.WouldSend[0].PaneID != paneID {
+		t.Fatalf("exact selector result = %+v, want pane %s (%s)", exact, wantRef, paneID)
+	}
+
+	bareWindow := dryRun(SendOptions{PaneSelectors: []string{fmt.Sprint(target.WindowIndex)}, PanesSpecified: true})
+	if bareWindow.Total != 1 || len(bareWindow.WouldSend) != 1 || bareWindow.WouldSend[0].Pane != wantRef {
+		t.Fatalf("bare window selector result = %+v, want only %s", bareWindow, wantRef)
+	}
+}
+
 func TestParseShellPaneSelectorsStrict(t *testing.T) {
 	selectors, err := parseShellPaneSelectors("0, 1.2, %7")
 	if err != nil {
@@ -1086,6 +1183,8 @@ func TestSendCommandRejectsIncompatiblePaneSelectors(t *testing.T) {
 		{name: "all token", args: []string{"session", "prompt", "--panes=all"}, wantErr: "invalid pane selector"},
 		{name: "batch explicit pane", args: []string{"session", "--batch=batch.txt", "--pane=1"}, wantErr: "cannot combine --batch"},
 		{name: "distribute explicit pane", args: []string{"session", "--distribute", "--pane=1"}, wantErr: "cannot combine --distribute"},
+		{name: "distribute skip first", args: []string{"session", "--distribute", "--skip-first"}, wantErr: "cannot combine --distribute with --skip-first"},
+		{name: "smart skip first", args: []string{"session", "prompt", "--smart", "--skip-first"}, wantErr: "cannot combine --skip-first with --smart"},
 		{name: "codex goal plural", args: []string{"session", "goal", "--codex-goal", "--panes=1"}, wantErr: "requires exactly one --pane"},
 	}
 	for _, test := range tests {

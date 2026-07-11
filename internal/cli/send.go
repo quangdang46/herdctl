@@ -870,7 +870,7 @@ func newSendCmd() *cobra.Command {
 			"receipt. Requires --pane and a codex-live pane. Use with --file for the packet.")
 
 	cmd.ValidArgsFunction = completeSessionArgs
-	_ = cmd.RegisterFlagCompletionFunc("pane", completeSendPaneSelectors)
+	_ = cmd.RegisterFlagCompletionFunc("pane", completeSendPaneSelector)
 	_ = cmd.RegisterFlagCompletionFunc("panes", completeSendPaneSelectors)
 
 	return cmd

@@ -63,8 +63,8 @@ State inspection (read-only, safe to call in a loop; note the flag forms vary):
 - ntm mail inbox {{.Session}} --json                       - Check Agent Mail inbox for pending messages
 
 Actions (mutating; use deliberately):
-- ntm send {{.Session}} --pane N "message"                 - Send message to a single pane (the message is a positional argument)
-- ntm send {{.Session}} --panes=1,2 "message"              - Send to multiple panes
+- ntm send {{.Session}} --pane W.P "message"               - Send to one exact pane (also accepts %pane_id; bare N is topology-dependent)
+- ntm send {{.Session}} --panes=W.P,%N "message"            - Send to exact panes without window-local index collisions
 - ntm --robot-send={{.Session}} --panes=N --msg="..."      - Robot equivalent with structured JSON response
 - ntm --robot-interrupt={{.Session}} --panes=N             - Interrupt a pane without killing it
 
