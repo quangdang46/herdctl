@@ -68,6 +68,7 @@ func resetFlags() {
 	robotSendExclude = ""
 	robotSendDelay = 0
 	robotAssignStrategy = "balanced"
+	robotBulkAssignStrategy = "impact"
 	robotDiff = ""
 	robotDiffSince = "15m"
 	robotHistorySince = ""
@@ -4750,6 +4751,42 @@ func TestResolveRobotSharedFlagUsesCanonicalSharedValueWhenSpecificHasDefault(t 
 	if got := resolveRobotRouteStrategy(cmd); got != "balanced" {
 		t.Fatalf("resolveRobotRouteStrategy() = %q, want %q", got, "balanced")
 	}
+}
+
+func TestResolveRobotBulkAssignStrategySupportsCanonicalAndDeprecatedFlags(t *testing.T) {
+	t.Run("canonical strategy", func(t *testing.T) {
+		resetFlags()
+		t.Cleanup(resetFlags)
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().String("strategy", "balanced", "")
+		cmd.Flags().String("bulk-strategy", "impact", "")
+		robotAssignStrategy = "ready"
+		if err := cmd.Flags().Set("strategy", robotAssignStrategy); err != nil {
+			t.Fatalf("set strategy: %v", err)
+		}
+		if got := resolveRobotBulkAssignStrategy(cmd); got != "ready" {
+			t.Fatalf("resolveRobotBulkAssignStrategy() = %q, want ready", got)
+		}
+	})
+
+	t.Run("explicit deprecated alias wins", func(t *testing.T) {
+		resetFlags()
+		t.Cleanup(resetFlags)
+		cmd := &cobra.Command{Use: "test"}
+		cmd.Flags().String("strategy", "balanced", "")
+		cmd.Flags().String("bulk-strategy", "impact", "")
+		robotAssignStrategy = "ready"
+		robotBulkAssignStrategy = "stale"
+		if err := cmd.Flags().Set("strategy", robotAssignStrategy); err != nil {
+			t.Fatalf("set strategy: %v", err)
+		}
+		if err := cmd.Flags().Set("bulk-strategy", robotBulkAssignStrategy); err != nil {
+			t.Fatalf("set bulk-strategy: %v", err)
+		}
+		if got := resolveRobotBulkAssignStrategy(cmd); got != "stale" {
+			t.Fatalf("resolveRobotBulkAssignStrategy() = %q, want stale", got)
+		}
+	})
 }
 
 func TestResolveRobotProviderUsesSharedCanonicalFlags(t *testing.T) {

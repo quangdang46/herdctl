@@ -1692,10 +1692,11 @@ Shell Integration:
 				failRobotCommand(err, robot.ErrCodeInvalidFlag, "Use comma-separated non-empty project-relative path globs", "robot-bulk-assign")
 				return
 			}
+			strategy := resolveRobotBulkAssignStrategy(cmd)
 			opts := robot.BulkAssignOptions{
 				Session:            session,
 				FromBV:             robotBulkAssignFromBV,
-				Strategy:           robotBulkAssignStrategy,
+				Strategy:           strategy,
 				AllocationJSON:     robotBulkAssignAlloc,
 				DryRun:             robotDryRunEffective,
 				SkipPaneSelectors:  skipSelectors,
@@ -4289,6 +4290,10 @@ func resolveRobotRouteType(cmd *cobra.Command) string {
 
 func resolveRobotRouteStrategy(cmd *cobra.Command) string {
 	return resolveRobotSharedFlag(cmd, "route-strategy", robotRouteStrategy, "strategy", robotAssignStrategy)
+}
+
+func resolveRobotBulkAssignStrategy(cmd *cobra.Command) string {
+	return resolveRobotSharedFlag(cmd, "bulk-strategy", robotBulkAssignStrategy, "strategy", robotAssignStrategy)
 }
 
 func resolveRobotRouteExclude(cmd *cobra.Command) string {
