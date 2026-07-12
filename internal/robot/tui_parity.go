@@ -2630,8 +2630,9 @@ type ReplayOutput struct {
 	HistoryID   string      `json:"history_id"`
 	OriginalCmd string      `json:"original_command"`
 	Session     string      `json:"session"`
-	TargetPanes []int       `json:"target_panes"`
+	TargetPanes []string    `json:"target_panes"`
 	Replayed    bool        `json:"replayed"`
+	SendResult  *SendOutput `json:"send_result,omitempty"`
 	AgentHints  *AgentHints `json:"_agent_hints,omitempty"`
 }
 
@@ -2644,15 +2645,16 @@ type ReplayOptions struct {
 
 var getReplaySend = GetSend
 
-// GetReplay returns either replay metadata or the send result produced by an
-// executed replay. Exactly one output is non-nil on success.
-func GetReplay(opts ReplayOptions) (*ReplayOutput, *SendOutput, error) {
+// GetReplay returns one stable envelope for both dry-run and execution. An
+// executed replay includes the already-completed send result without issuing a
+// second dispatch.
+func GetReplay(opts ReplayOptions) (*ReplayOutput, error) {
 	targetSession := strings.TrimSpace(opts.Session)
 	output := &ReplayOutput{
 		RobotResponse: NewRobotResponse(true),
 		Session:       targetSession,
 		HistoryID:     opts.HistoryID,
-		TargetPanes:   []int{},
+		TargetPanes:   []string{},
 	}
 
 	// Get history entries
@@ -2665,8 +2667,8 @@ func GetReplay(opts ReplayOptions) (*ReplayOutput, *SendOutput, error) {
 				"History is recorded during send operations",
 			),
 			HistoryID:   opts.HistoryID,
-			TargetPanes: []int{},
-		}, nil, nil
+			TargetPanes: []string{},
+		}, nil
 	}
 
 	// Find the history entry
@@ -2686,8 +2688,8 @@ func GetReplay(opts ReplayOptions) (*ReplayOutput, *SendOutput, error) {
 				"Use --robot-history to see available entries",
 			),
 			HistoryID:   opts.HistoryID,
-			TargetPanes: []int{},
-		}, nil, nil
+			TargetPanes: []string{},
+		}, nil
 	}
 
 	if targetSession == "" {
@@ -2696,12 +2698,9 @@ func GetReplay(opts ReplayOptions) (*ReplayOutput, *SendOutput, error) {
 	}
 
 	output.OriginalCmd = target.Prompt
-	// Convert string targets to int
-	for _, t := range target.Targets {
-		// Targets are stored as strings, but we expose as ints
-		var idx int
-		if _, err := fmt.Sscanf(t, "%d", &idx); err == nil {
-			output.TargetPanes = append(output.TargetPanes, idx)
+	for _, targetPane := range target.Targets {
+		if targetPane = strings.TrimSpace(targetPane); targetPane != "" {
+			output.TargetPanes = append(output.TargetPanes, targetPane)
 		}
 	}
 
@@ -2711,7 +2710,7 @@ func GetReplay(opts ReplayOptions) (*ReplayOutput, *SendOutput, error) {
 			Summary: fmt.Sprintf("Would replay: %s", truncateString(target.Prompt, 50)),
 			Notes:   []string{"Use without --replay-dry-run to execute"},
 		}
-		return output, nil, nil
+		return output, nil
 	}
 
 	// Execute the replay by calling send logic
@@ -2727,20 +2726,20 @@ func GetReplay(opts ReplayOptions) (*ReplayOutput, *SendOutput, error) {
 	// Execute the send - GetSend handles the actual operation
 	sendOutput, err := getReplaySend(sendOpts)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	return nil, sendOutput, nil
+	output.RobotResponse = sendOutput.RobotResponse
+	output.Replayed = true
+	output.SendResult = sendOutput
+	return output, nil
 }
 
 // PrintReplay outputs replay operation result.
 // This is a thin wrapper around GetReplay() for CLI output.
 func PrintReplay(opts ReplayOptions) error {
-	replayOutput, sendOutput, err := GetReplay(opts)
+	replayOutput, err := GetReplay(opts)
 	if err != nil {
 		return err
-	}
-	if sendOutput != nil {
-		return encodeTerminalRobotOutput(sendOutput, sendOutput.RobotResponse, "robot replay send failed")
 	}
 	if replayOutput == nil {
 		return EncodeErrorJSON(errors.New("replay produced no output"), ErrCodeInternalError, "Retry the replay and inspect history if the problem persists", "robot-replay")
@@ -3783,7 +3782,7 @@ func PrintBeadClaim(opts BeadClaimOptions) error {
 	if err != nil {
 		return err
 	}
-	return encodeJSON(output)
+	return encodeTerminalRobotOutput(output, output.RobotResponse, "robot bead claim failed")
 }
 
 // BeadCreateOutput represents the result of creating a bead

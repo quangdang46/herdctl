@@ -235,6 +235,7 @@ func GetIsWorking(opts IsWorkingOptions) (*IsWorkingOutput, error) {
 		RobotResponse: NewRobotResponse(true),
 		Session:       opts.Session,
 		Query: IsWorkingQuery{
+			PanesRequested:     []string{},
 			SelectorsRequested: append([]string(nil), opts.PaneSelectors...),
 			LinesCaptured:      opts.LinesCaptured,
 		},

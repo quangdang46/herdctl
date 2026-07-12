@@ -384,6 +384,23 @@ func TestGetSchema_NewlyWiredRobotTypes(t *testing.T) {
 	}
 }
 
+func TestGetSchema_ReplayMatchesExecutedEnvelope(t *testing.T) {
+	output, err := GetSchema("replay")
+	if err != nil {
+		t.Fatalf("GetSchema(replay): %v", err)
+	}
+	if output.Schema == nil {
+		t.Fatal("GetSchema(replay) returned nil schema")
+	}
+	targets := output.Schema.Properties["target_panes"]
+	if targets == nil || targets.Type != "array" || targets.Items == nil || targets.Items.Type != "string" {
+		t.Fatalf("replay target_panes schema = %+v, want array of strings", targets)
+	}
+	if sendResult := output.Schema.Properties["send_result"]; sendResult == nil {
+		t.Fatal("replay schema omitted executed send_result")
+	}
+}
+
 func TestGetSchema_UsesRegistrySurfaceMetadata(t *testing.T) {
 	output, err := GetSchema("inspect_session")
 	if err != nil {

@@ -1805,6 +1805,9 @@ Shell Integration:
 				TimeoutMs: int(interruptTimeout.Milliseconds()),
 				DryRun:    robotDryRunEffective,
 			}
+			if cfg != nil {
+				opts.Redaction = cfg.Redaction.ToRedactionLibConfig()
+			}
 			if err := robot.PrintInterrupt(opts); err != nil {
 				recordRobotProcessExit(err)
 			}

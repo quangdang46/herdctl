@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/redaction"
 	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
@@ -185,6 +186,37 @@ func TestGetInterruptUnknownSessionFailsLoud(t *testing.T) {
 	if out.ErrorCode != ErrCodeSessionNotFound {
 		t.Errorf("expected error_code=%q, got %q", ErrCodeSessionNotFound, out.ErrorCode)
 	}
+}
+
+func TestInterruptFollowUpAppliesRedactionBeforeSideEffects(t *testing.T) {
+	const secret = "hunter2hunter2"
+	input := "continue with password=" + secret
+
+	t.Run("block", func(t *testing.T) {
+		opts := InterruptOptions{Message: input, Redaction: redaction.Config{Mode: redaction.ModeBlock}}
+		output := &InterruptOutput{RobotResponse: NewRobotResponse(true), Failed: []InterruptError{}}
+		if !interruptMessageBlocked(&opts, output) {
+			t.Fatal("block mode authorized interrupt follow-up")
+		}
+		if opts.Message != "" || output.Success || output.ErrorCode != "SENSITIVE_DATA_BLOCKED" || output.Redaction == nil || output.Redaction.Action != "block" {
+			t.Fatalf("blocked interrupt output=%+v opts=%+v", output, opts)
+		}
+		if strings.Contains(output.Message, secret) || strings.Contains(output.Error, secret) {
+			t.Fatalf("blocked interrupt leaked secret: %+v", output)
+		}
+	})
+
+	t.Run("redact", func(t *testing.T) {
+		opts := InterruptOptions{Message: input, Redaction: redaction.Config{Mode: redaction.ModeRedact}}
+		output := &InterruptOutput{RobotResponse: NewRobotResponse(true), Failed: []InterruptError{}}
+		if interruptMessageBlocked(&opts, output) {
+			t.Fatal("redact mode blocked sanitized follow-up")
+		}
+		if strings.Contains(opts.Message, secret) || strings.Contains(output.Message, secret) ||
+			!strings.Contains(opts.Message, "[REDACTED:PASSWORD:") || output.Redaction == nil || output.Redaction.Action != "redact" {
+			t.Fatalf("redacted interrupt output=%+v opts=%+v", output, opts)
+		}
+	})
 }
 
 func TestObserveInterruptPollRefreshesActivityAndFailsClosed(t *testing.T) {

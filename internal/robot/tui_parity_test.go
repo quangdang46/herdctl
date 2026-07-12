@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2039,9 +2040,9 @@ func TestPrintReplayUsesRequestedSession(t *testing.T) {
 		t.Fatalf("PrintReplay error = %T %v, want written exit-1 ProcessExitError", err, err)
 	}
 
-	var result SendOutput
+	var result ReplayOutput
 	if err := json.Unmarshal([]byte(output), &result); err != nil {
-		t.Fatalf("failed to parse replay send output: %v", err)
+		t.Fatalf("failed to parse replay output: %v", err)
 	}
 	if result.Session != "target-session" {
 		t.Fatalf("Session = %q, want %q", result.Session, "target-session")
@@ -2051,6 +2052,9 @@ func TestPrintReplayUsesRequestedSession(t *testing.T) {
 	}
 	if result.ErrorCode != ErrCodeSessionNotFound {
 		t.Fatalf("ErrorCode = %q, want %q", result.ErrorCode, ErrCodeSessionNotFound)
+	}
+	if !result.Replayed || result.SendResult == nil || result.SendResult.ErrorCode != ErrCodeSessionNotFound {
+		t.Fatalf("executed replay did not preserve failed send result: %+v", result)
 	}
 }
 
@@ -2095,12 +2099,41 @@ func TestPrintReplayEmitsExecutedSendResultOnce(t *testing.T) {
 		t.Fatalf("replay send calls = %d, want exactly 1", sendCalls)
 	}
 
-	var result SendOutput
+	var result ReplayOutput
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("decode replay send output: %v\noutput=%s", err, stdout)
+		t.Fatalf("decode replay output: %v\noutput=%s", err, stdout)
 	}
-	if !result.Success || result.Session != "target-session" || len(result.Successful) != 1 || result.Successful[0] != "%42" {
+	if !result.Success || !result.Replayed || result.Session != "target-session" ||
+		len(result.TargetPanes) != 1 || result.TargetPanes[0] != "%42" ||
+		result.SendResult == nil || len(result.SendResult.Successful) != 1 || result.SendResult.Successful[0] != "%42" {
 		t.Fatalf("replay output = %+v, want the executed send result", result)
+	}
+}
+
+func TestPrintReplayPreservesCanonicalTargetStrings(t *testing.T) {
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	if err := history.Clear(); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+
+	entry := history.NewEntry("target-session", []string{"1.0", "%42"}, "echo targets", history.SourceCLI)
+	entry.SetSuccess()
+	if err := history.Append(entry); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	stdout, err := captureStdout(t, func() error {
+		return PrintReplay(ReplayOptions{Session: "target-session", HistoryID: entry.ID, DryRun: true})
+	})
+	if err != nil {
+		t.Fatalf("PrintReplay dry-run: %v", err)
+	}
+	var result ReplayOutput
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("decode replay output: %v\noutput=%s", err, stdout)
+	}
+	if result.Replayed || result.SendResult != nil || !reflect.DeepEqual(result.TargetPanes, []string{"1.0", "%42"}) {
+		t.Fatalf("canonical replay targets = %+v", result)
 	}
 }
 
@@ -2112,19 +2145,61 @@ func TestPrintReplayRealTmuxDeliversOnce(t *testing.T) {
 	}
 
 	sessionName := fmt.Sprintf("ntm_replay_once_%d", time.Now().UnixNano())
-	if err := tmux.CreateSession(sessionName, ""); err != nil {
-		t.Fatalf("CreateSession: %v", err)
+	projectDir := t.TempDir()
+	paneID, err := tmux.DefaultClient.Run(
+		"new-session", "-d", "-s", sessionName, "-c", projectDir,
+		"-P", "-F", "#{pane_id}", "/bin/bash --noprofile --norc -i",
+	)
+	if err != nil {
+		t.Fatalf("create replay session: %v", err)
+	}
+	paneID = strings.TrimSpace(paneID)
+	if paneID == "" {
+		t.Fatal("create replay session returned an empty pane ID")
 	}
 	t.Cleanup(func() { _ = tmux.KillSession(sessionName) })
 
-	panes, err := tmux.GetPanes(sessionName)
-	if err != nil || len(panes) == 0 {
-		t.Fatalf("GetPanes: panes=%v err=%v", panes, err)
+	shellDeadline := time.Now().Add(5 * time.Second)
+	var shellOutput string
+	for {
+		shellOutput, err = tmux.CapturePaneOutput(paneID, 20)
+		if err == nil && strings.TrimSpace(shellOutput) != "" {
+			break
+		}
+		if time.Now().After(shellDeadline) {
+			t.Fatalf("timed out waiting for replay pane shell: output=%q err=%v", shellOutput, err)
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
+
+	readyPath := filepath.Join(t.TempDir(), "pane-ready")
+	if err := tmux.PasteKeysWithDelay(
+		paneID,
+		fmt.Sprintf("printf ready > %q", readyPath),
+		true,
+		500*time.Millisecond,
+	); err != nil {
+		t.Fatalf("prepare replay pane: %v", err)
+	}
+	readyDeadline := time.Now().Add(5 * time.Second)
+	for {
+		data, readErr := os.ReadFile(readyPath)
+		if readErr == nil && string(data) == "ready" {
+			break
+		}
+		if readErr != nil && !os.IsNotExist(readErr) {
+			t.Fatalf("read replay pane readiness marker: %v", readErr)
+		}
+		if time.Now().After(readyDeadline) {
+			t.Fatalf("timed out waiting for replay pane readiness marker at %s", readyPath)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
 	marker := fmt.Sprintf("replay-once-%d", time.Now().UnixNano())
 	markerPath := filepath.Join(t.TempDir(), "replay-markers.txt")
 	prompt := fmt.Sprintf("printf '%%s\\n' %q >> %q", marker, markerPath)
-	entry := history.NewEntry(sessionName, []string{panes[0].ID}, prompt, history.SourceCLI)
+	entry := history.NewEntry(sessionName, []string{paneID}, prompt, history.SourceCLI)
 	entry.SetSuccess()
 	if err := history.Append(entry); err != nil {
 		t.Fatalf("Append: %v", err)
@@ -2136,11 +2211,11 @@ func TestPrintReplayRealTmuxDeliversOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PrintReplay: %v\noutput=%s", err, stdout)
 	}
-	var result SendOutput
+	var result ReplayOutput
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
-		t.Fatalf("decode replay send output: %v\noutput=%s", err, stdout)
+		t.Fatalf("decode replay output: %v\noutput=%s", err, stdout)
 	}
-	if !result.Success || len(result.Successful) != 1 {
+	if !result.Success || !result.Replayed || result.SendResult == nil || len(result.SendResult.Successful) != 1 {
 		t.Fatalf("replay send output = %+v, want one successful target", result)
 	}
 
@@ -2177,7 +2252,7 @@ func TestReplayOutputStructure(t *testing.T) {
 		Session:       "test",
 		HistoryID:     "1234567890-abcd",
 		OriginalCmd:   "echo hello",
-		TargetPanes:   []int{0, 1},
+		TargetPanes:   []string{"0", "1.0"},
 		Replayed:      true,
 	}
 
@@ -2260,8 +2335,9 @@ func TestPrintBeadClaimMissingID(t *testing.T) {
 	output, err := captureStdout(t, func() error {
 		return PrintBeadClaim(opts)
 	})
-	if err != nil {
-		t.Fatalf("PrintBeadClaim returned error: %v", err)
+	var exitErr *ProcessExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !exitErr.JSONWritten() {
+		t.Fatalf("PrintBeadClaim error = %T %v, want written exit-1 ProcessExitError", err, err)
 	}
 
 	var result BeadClaimOutput
@@ -2273,6 +2349,28 @@ func TestPrintBeadClaimMissingID(t *testing.T) {
 	}
 	if result.ErrorCode != ErrCodeInvalidFlag {
 		t.Errorf("expected error_code %s, got %s", ErrCodeInvalidFlag, result.ErrorCode)
+	}
+}
+
+func TestPrintBeadClaimConflictReturnsTypedProcessFailure(t *testing.T) {
+	stdout, err := captureStdout(t, func() error {
+		return PrintBeadClaim(BeadClaimOptions{
+			BeadID: "ntm-owned", Assignee: "RedStone",
+			Deps: &BeadClaimDependencies{ClaimBead: func(context.Context, string, string, string) (bv.BeadClaimResult, error) {
+				return bv.BeadClaimResult{}, bv.ErrBeadAlreadyClaimed
+			}},
+		})
+	})
+	var exitErr *ProcessExitError
+	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 || !exitErr.JSONWritten() {
+		t.Fatalf("PrintBeadClaim error = %T %v, want written exit-1 ProcessExitError", err, err)
+	}
+	var output BeadClaimOutput
+	if decodeErr := json.Unmarshal([]byte(stdout), &output); decodeErr != nil {
+		t.Fatalf("decode conflict output: %v", decodeErr)
+	}
+	if output.Success || output.ErrorCode != ErrCodeResourceBusy || output.Actor != "RedStone" {
+		t.Fatalf("conflict output = %+v", output)
 	}
 }
 

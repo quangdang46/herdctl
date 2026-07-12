@@ -26,6 +26,8 @@ type InterruptOutput struct {
 	Method         string               `json:"method"`
 	MessageSent    bool                 `json:"message_sent"`
 	Message        string               `json:"message,omitempty"`
+	Redaction      *RedactionSummary    `json:"redaction,omitempty"`
+	Warnings       []string             `json:"warnings,omitempty"`
 	ReadyForInput  []string             `json:"ready_for_input"`
 	Failed         []InterruptError     `json:"failed"`
 	TimeoutMs      int                  `json:"timeout_ms"`
@@ -67,6 +69,7 @@ type InterruptOptions struct {
 	RequestID      string   // External request identifier for REST parity
 	CorrelationID  string   // Correlation identifier for tracing request/outcome/verification
 	IdempotencyKey string   // Idempotency key when provided by an upstream caller
+	Redaction      redaction.Config
 }
 
 // GetInterrupt sends Ctrl+C to panes and optionally a follow-up message, returning the result.
@@ -95,9 +98,9 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 		TimedOut:       false,
 	}
 
-	if opts.Message != "" {
-		output.Method = "ctrl_c_then_send"
-		output.Message = truncateMessage(opts.Message)
+	if interruptMessageBlocked(&opts, output) {
+		output.CompletedAt = time.Now().UTC()
+		return finalizeTerminalInterruptActuation(trace, opts, nil, output), nil
 	}
 
 	if !tmux.SessionExists(opts.Session) {
@@ -319,7 +322,7 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 				dispatchPanes[i].Tags = append([]string(nil), pane.Tags...)
 				dispatchPanes[i].Type = interruptPaneTMUXAgentType(pane)
 			}
-			service, _, serviceErr := newRobotDispatchService(redaction.Config{Mode: redaction.ModeOff}, nil, nil)
+			service, _, serviceErr := newRobotDispatchService(opts.Redaction, nil, nil)
 			if serviceErr != nil {
 				output.Failed = append(output.Failed, InterruptError{Pane: "dispatch", Reason: fmt.Sprintf("failed to initialize message dispatch: %v", serviceErr)})
 			} else {
@@ -351,6 +354,32 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 	publishInterruptActuationVerification(trace, opts, targetKeys, output)
 	output.CompletedAt = time.Now().UTC()
 	return output, nil
+}
+
+func interruptMessageBlocked(opts *InterruptOptions, output *InterruptOutput) bool {
+	if opts == nil || output == nil || opts.Message == "" {
+		return false
+	}
+	output.Method = "ctrl_c_then_send"
+	message, preview, summary, warnings, blocked := applySendMessageRedaction(opts.Message, opts.Redaction)
+	opts.Message = message
+	output.Message = preview
+	output.Redaction = &summary
+	output.Warnings = warnings
+	if !blocked {
+		return false
+	}
+	errMsg := "refusing to interrupt: follow-up message contains potential secrets"
+	if parts := formatRedactionCategoryCounts(summary.Categories); parts != "" {
+		errMsg = fmt.Sprintf("%s (%s)", errMsg, parts)
+	}
+	output.RobotResponse = NewErrorResponse(
+		errors.New(errMsg),
+		"SENSITIVE_DATA_BLOCKED",
+		"Remove the secret, use redaction mode, or omit the follow-up message",
+	)
+	output.Failed = append(output.Failed, InterruptError{Pane: "dispatch", Reason: errMsg})
+	return true
 }
 
 func observeInterruptPoll(

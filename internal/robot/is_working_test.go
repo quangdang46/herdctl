@@ -39,12 +39,15 @@ func TestPrintIsWorkingFailureReturnsTypedErrorAndRawJSON(t *testing.T) {
 	if err == nil {
 		t.Fatal("PrintIsWorking() error = nil, want typed terminal failure")
 	}
-	var response RobotResponse
+	var response IsWorkingOutput
 	if json.Unmarshal([]byte(stdout), &response) != nil {
 		t.Fatalf("stdout is not raw JSON: %q", stdout)
 	}
 	if response.Success || response.ErrorCode != ErrCodeSessionNotFound || response.OutputFormat != string(FormatJSON) {
 		t.Fatalf("response = %+v, want SESSION_NOT_FOUND JSON failure", response)
+	}
+	if response.Query.PanesRequested == nil || response.Panes == nil || response.Summary.ByRecommendation == nil {
+		t.Fatalf("critical collections must be empty, not null: %+v", response)
 	}
 }
 
