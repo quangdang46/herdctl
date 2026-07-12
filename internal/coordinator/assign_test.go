@@ -11,6 +11,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
+	"github.com/Dicklesworthstone/ntm/internal/status"
 )
 
 func TestWorkAssignmentStruct(t *testing.T) {
@@ -265,6 +266,57 @@ func TestAttemptAssignmentAtomicSuccessPersistsReceipt(t *testing.T) {
 	if stored == nil || stored.DispatchState != assignmentstore.DispatchSent || stored.DispatchReceiptID != "mail-91" ||
 		stored.ClaimActor != result.ClaimActor || stored.IdempotencyKey != result.IdempotencyKey || stored.OccupancyKey != "%9" {
 		t.Fatalf("durable coordinator assignment = %+v", stored)
+	}
+}
+
+func TestAssignWorkSkipsPersistedActiveRecommendation(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	const session = "coordinator-active-filter"
+	store := assignmentstore.NewStore(session)
+	if _, err := store.Assign("ntm-active", "Already assigned", 1, "cod", "BlueLake", "work"); err != nil {
+		t.Fatalf("Assign: %v", err)
+	}
+	c := New(session, t.TempDir(), nil, "CoordinatorAgent")
+	c.config.AutoAssign = true
+	c.config.IdleThreshold = 0
+	now := time.Now().UTC()
+	c.agents["%1"] = &AgentState{
+		PaneID: "%1", PaneIndex: 1, AgentType: "cod", AgentMailName: "BlueLake",
+		Status: robot.StateWaiting, Healthy: true, SafeToDispatch: true,
+		LastActivity: now.Add(-time.Minute), ObservedAt: now, ObservationFreshness: status.FreshnessFresh,
+	}
+	c.triageFn = func(string) (*bv.TriageResponse, error) {
+		return &bv.TriageResponse{Triage: bv.TriageData{Recommendations: []bv.TriageRecommendation{{
+			ID: "ntm-active", Title: "Already assigned", Status: "open", Priority: 1, Score: 1,
+		}}}}, nil
+	}
+	results, err := c.AssignWork(t.Context())
+	if err != nil {
+		t.Fatalf("AssignWork: %v", err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("active recommendation produced assignments: %+v", results)
+	}
+}
+
+func TestFilterOccupiedAgentsUsesCanonicalAndLegacyTargets(t *testing.T) {
+	agents := []*AgentState{
+		{PaneID: "%1", PaneIndex: 1},
+		{PaneID: "%2", PaneIndex: 2},
+		{PaneID: "%3", PaneIndex: 3},
+	}
+	active := []*assignmentstore.Assignment{
+		{BeadID: "canonical", Pane: 9, OccupancyKey: "%1"},
+		{BeadID: "dispatch", Pane: 8, DispatchTarget: "%2"},
+		{BeadID: "legacy", Pane: 3},
+	}
+	if got := filterOccupiedAgents(agents, active); len(got) != 0 {
+		t.Fatalf("occupied agents remained eligible: %+v", got)
+	}
+
+	got := filterOccupiedAgents(agents, []*assignmentstore.Assignment{{BeadID: "canonical", OccupancyKey: "%2"}})
+	if len(got) != 2 || got[0].PaneID != "%1" || got[1].PaneID != "%3" {
+		t.Fatalf("eligible agents = %+v", got)
 	}
 }
 

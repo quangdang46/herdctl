@@ -12,6 +12,7 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	assignmentstore "github.com/Dicklesworthstone/ntm/internal/assignment"
+	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/events"
 	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
@@ -39,6 +40,7 @@ type SessionCoordinator struct {
 
 	atomicCoordinatorFactory func(*assignmentstore.AssignmentStore) *assignmentstore.AtomicCoordinator
 	assignWorkFn             func(context.Context) ([]AssignmentResult, error)
+	triageFn                 func(string) (*bv.TriageResponse, error)
 
 	// Agent tracking
 	agents     map[string]*AgentState
@@ -214,8 +216,8 @@ func (c *SessionCoordinator) Start(ctx context.Context) error {
 	// Initialize monitor
 	c.monitor = NewAgentMonitor(c.session, c.mailClient, c.projectKey)
 
-	// Perform initial update synchronously to ensure state is ready
-	c.updateAgentStates()
+	// Perform initial update synchronously to ensure state is ready.
+	c.updateAgentStatesContext(ctx)
 
 	// Start monitoring goroutine
 	c.wg.Add(1)
@@ -320,20 +322,33 @@ func (c *SessionCoordinator) monitorLoop(ctx context.Context, stopCh <-chan stru
 		case <-stopCh:
 			return
 		case <-ticker.C:
-			c.updateAgentStates()
-			if c.config.AutoAssign {
-				c.runAssignmentCycle(ctx)
-			}
+			results, err := c.RunCycle(ctx)
+			c.reportAssignmentCycle(results, err)
 		}
 	}
 }
 
-func (c *SessionCoordinator) runAssignmentCycle(ctx context.Context) {
+// RunCycle refreshes the canonical session observation and, when enabled,
+// performs one auto-assignment pass from that exact fresh snapshot.
+func (c *SessionCoordinator) RunCycle(ctx context.Context) ([]AssignmentResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if c.monitor == nil {
+		c.monitor = NewAgentMonitor(c.session, c.mailClient, c.projectKey)
+	}
+	c.updateAgentStatesContext(ctx)
+	if !c.config.AutoAssign {
+		return nil, nil
+	}
 	assignWork := c.AssignWork
 	if c.assignWorkFn != nil {
 		assignWork = c.assignWorkFn
 	}
-	results, err := assignWork(ctx)
+	return assignWork(ctx)
+}
+
+func (c *SessionCoordinator) reportAssignmentCycle(results []AssignmentResult, err error) {
 	if err != nil {
 		slog.Warn("coordinator auto-assignment failed", "session", c.session, "error", err)
 		return
@@ -351,10 +366,14 @@ func (c *SessionCoordinator) runAssignmentCycle(ctx context.Context) {
 
 // updateAgentStates refreshes the state of all agents.
 func (c *SessionCoordinator) updateAgentStates() {
+	c.updateAgentStatesContext(context.Background())
+}
+
+func (c *SessionCoordinator) updateAgentStatesContext(ctx context.Context) {
 	if c.monitor == nil {
 		return
 	}
-	observation, err := c.monitor.ObserveSession(context.Background())
+	observation, err := c.monitor.ObserveSession(ctx)
 	if err != nil {
 		c.markAgentObservationsUnavailable(observation.ObservedAt, err)
 		return
@@ -362,6 +381,7 @@ func (c *SessionCoordinator) updateAgentStates() {
 
 	type agentUpdate struct {
 		paneID    string
+		paneTitle string
 		paneIndex int
 		agentType string
 		status    AgentStatusResult
@@ -373,10 +393,15 @@ func (c *SessionCoordinator) updateAgentStates() {
 		}
 		updates = append(updates, agentUpdate{
 			paneID:    pane.Pane.ID,
+			paneTitle: pane.Metadata.Title,
 			paneIndex: pane.Pane.PaneIndex,
 			agentType: pane.AgentType,
 			status:    c.monitor.resultFromPaneObservation(pane),
 		})
+	}
+	registry, registryErr := agentmail.LoadSessionAgentRegistry(c.session, c.projectKey)
+	if registryErr != nil {
+		slog.Warn("coordinator could not load Agent Mail pane registry", "session", c.session, "error", registryErr)
 	}
 
 	c.mu.Lock()
@@ -429,6 +454,13 @@ func (c *SessionCoordinator) updateAgentStates() {
 		agent.ObservationError = state.ErrorMessage
 		agent.SafeToDispatch = state.SafeToDispatch
 		agent.Healthy = state.Healthy
+		if registry != nil {
+			if agentName, ok := registry.GetAgent(update.paneTitle, update.paneID); ok {
+				agent.AgentMailName = agentName
+			} else {
+				agent.AgentMailName = ""
+			}
+		}
 
 		// Track events for state transitions
 		if exists && prevStatus != agent.Status {

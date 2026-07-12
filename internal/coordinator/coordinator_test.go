@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/events"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/status"
@@ -336,6 +337,48 @@ func TestUpdateAgentStates_UsesFreshObservationForDispatchSafety(t *testing.T) {
 	idleAgents := c.GetIdleAgents()
 	if len(idleAgents) != 1 || idleAgents[0].PaneID != "%1" {
 		t.Fatalf("idle agents = %+v, want only %%1", idleAgents)
+	}
+}
+
+func TestUpdateAgentStatesLoadsPersistedAgentMailIdentity(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	projectKey := t.TempDir()
+	const session = "registry-identity-session"
+	const paneID = "%17"
+	const paneTitle = "registry-identity-session__cod_1"
+	registry := agentmail.NewSessionAgentRegistry(session, projectKey)
+	registry.AddAgent(paneTitle, paneID, "BlueLake")
+	if err := agentmail.SaveSessionAgentRegistry(registry); err != nil {
+		t.Fatalf("SaveSessionAgentRegistry: %v", err)
+	}
+
+	originalGetPanes := getPanesWithActivity
+	originalCapture := captureForHealthCheckWithCtx
+	t.Cleanup(func() {
+		getPanesWithActivity = originalGetPanes
+		captureForHealthCheckWithCtx = originalCapture
+	})
+	lastActivity := time.Now().Add(-time.Minute).UTC()
+	getPanesWithActivity = func(string) ([]tmux.PaneActivity, error) {
+		return []tmux.PaneActivity{{
+			Pane:         tmux.Pane{ID: paneID, Index: 1, Title: paneTitle, Type: tmux.AgentCodex},
+			LastActivity: lastActivity,
+		}}, nil
+	}
+	captureForHealthCheckWithCtx = func(context.Context, string) (string, error) {
+		return "completed\n────────────\n› \n────────────", nil
+	}
+
+	c := New(session, projectKey, nil, "TestAgent")
+	c.config.IdleThreshold = 0
+	c.monitor = NewAgentMonitor(session, nil, projectKey)
+	c.updateAgentStates()
+	agent := c.GetAgentByPaneID(paneID)
+	if agent == nil || agent.AgentMailName != "BlueLake" {
+		t.Fatalf("persisted pane identity was not loaded: %+v", agent)
+	}
+	if idle := c.GetIdleAgents(); len(idle) != 1 || idle[0].AgentMailName != "BlueLake" {
+		t.Fatalf("idle identity projection = %+v", idle)
 	}
 }
 

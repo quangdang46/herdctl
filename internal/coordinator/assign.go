@@ -126,12 +126,39 @@ func (c *SessionCoordinator) AssignWork(ctx context.Context) ([]AssignmentResult
 	}
 
 	// Get triage recommendations
-	triage, err := bv.GetTriage(c.projectKey)
+	getTriage := bv.GetTriage
+	if c.triageFn != nil {
+		getTriage = c.triageFn
+	}
+	triage, err := getTriage(c.projectKey)
 	if err != nil {
 		return nil, fmt.Errorf("getting triage: %w", err)
 	}
 
 	if triage == nil || len(triage.Triage.Recommendations) == 0 {
+		return nil, nil
+	}
+	store, err := assignmentstore.LoadStoreStrict(c.session)
+	if err != nil {
+		return nil, fmt.Errorf("loading assignment ledger: %w", err)
+	}
+	activeBeads := make(map[string]struct{})
+	activeAssignments := store.ListActive()
+	for _, active := range activeAssignments {
+		activeBeads[active.BeadID] = struct{}{}
+	}
+	idleAgents = filterOccupiedAgents(idleAgents, activeAssignments)
+	if len(idleAgents) == 0 {
+		return nil, nil
+	}
+	filtered := triage.Triage.Recommendations[:0]
+	for _, recommendation := range triage.Triage.Recommendations {
+		if _, alreadyAssigned := activeBeads[recommendation.ID]; !alreadyAssigned {
+			filtered = append(filtered, recommendation)
+		}
+	}
+	triage.Triage.Recommendations = filtered
+	if len(filtered) == 0 {
 		return nil, nil
 	}
 
@@ -176,6 +203,39 @@ func (c *SessionCoordinator) AssignWork(ctx context.Context) ([]AssignmentResult
 	}
 
 	return results, nil
+}
+
+func filterOccupiedAgents(agents []*AgentState, activeAssignments []*assignmentstore.Assignment) []*AgentState {
+	occupiedTargets := make(map[string]struct{})
+	occupiedLegacyPanes := make(map[int]struct{})
+	for _, active := range activeAssignments {
+		if active == nil {
+			continue
+		}
+		target := strings.TrimSpace(active.OccupancyKey)
+		if target == "" {
+			target = strings.TrimSpace(active.DispatchTarget)
+		}
+		if target != "" {
+			occupiedTargets[target] = struct{}{}
+		} else {
+			occupiedLegacyPanes[active.Pane] = struct{}{}
+		}
+	}
+	filtered := make([]*AgentState, 0, len(agents))
+	for _, agent := range agents {
+		if agent == nil {
+			continue
+		}
+		if _, occupied := occupiedTargets[strings.TrimSpace(agent.PaneID)]; occupied {
+			continue
+		}
+		if _, occupied := occupiedLegacyPanes[agent.PaneIndex]; occupied {
+			continue
+		}
+		filtered = append(filtered, agent)
+	}
+	return filtered
 }
 
 // findBestMatch finds the best work recommendation for an agent.

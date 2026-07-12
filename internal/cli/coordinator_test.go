@@ -1,12 +1,44 @@
 package cli
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/coordinator"
 )
+
+func TestCoordinatorRunCommandExposesDeterministicOnceMode(t *testing.T) {
+	cmd := newCoordinatorRunCmd()
+	if cmd.Use != "run [session]" {
+		t.Fatalf("Use=%q", cmd.Use)
+	}
+	if flag := cmd.Flags().Lookup("once"); flag == nil || flag.DefValue != "false" {
+		t.Fatalf("--once flag = %+v", flag)
+	}
+}
+
+func TestCoordinatorRunFailureIncludesAssignmentFailures(t *testing.T) {
+	tests := []struct {
+		name        string
+		assignments []coordinator.AssignmentResult
+		cycleErr    error
+		wantError   bool
+	}{
+		{name: "empty success"},
+		{name: "assignment success", assignments: []coordinator.AssignmentResult{{Success: true}}},
+		{name: "assignment failure", assignments: []coordinator.AssignmentResult{{Success: false}}, wantError: true},
+		{name: "cycle failure", cycleErr: errors.New("observe failed"), wantError: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := coordinatorRunFailure(tc.assignments, tc.cycleErr); (got != nil) != tc.wantError {
+				t.Fatalf("coordinatorRunFailure()=%v, wantError=%t", got, tc.wantError)
+			}
+		})
+	}
+}
 
 // TestCoordinatorConfigFromTOMLPropagatesValues — translator passes through
 // every field when the TOML carries explicit values. Anchors the contract

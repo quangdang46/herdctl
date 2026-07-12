@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -45,6 +46,7 @@ Examples:
 	cmd.AddCommand(newCoordinatorDigestCmd())
 	cmd.AddCommand(newCoordinatorConflictsCmd())
 	cmd.AddCommand(newCoordinatorAssignCmd())
+	cmd.AddCommand(newCoordinatorRunCmd())
 	cmd.AddCommand(newCoordinatorEnableCmd())
 	cmd.AddCommand(newCoordinatorDisableCmd())
 
@@ -100,9 +102,14 @@ func runCoordinatorStatus(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("getting project root failed")
 	}
 
-	// Create coordinator to get status
+	coordConfig := loadCoordinatorRuntimeConfig()
+	runtimeConfig := coordConfig
+	runtimeConfig.AutoAssign = false
+	runtimeConfig.SendDigests = false
+
+	// Create coordinator to get status without enabling configured side effects.
 	mailClient := newAgentMailClient(projectKey)
-	coord := coordinator.New(session, projectKey, mailClient, "NTM-Coordinator")
+	coord := coordinator.New(session, projectKey, mailClient, "NTM-Coordinator").WithConfig(runtimeConfig)
 
 	// Get agent states
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -116,13 +123,6 @@ func runCoordinatorStatus(cmd *cobra.Command, args []string) error {
 
 	agents := coord.GetAgents()
 	idleAgents := coord.GetIdleAgents()
-
-	// Honor [coordinator] settings from ~/.config/ntm/config.toml. Fall back
-	// to runtime defaults if the config file is missing or fails to parse.
-	coordConfig := coordinator.DefaultCoordinatorConfig()
-	if cfg, err := config.Load(selectedConfigPath()); err == nil && cfg != nil {
-		coordConfig = coordinatorConfigFromTOML(cfg.Coordinator, coordConfig)
-	}
 
 	if jsonOutput {
 		return outputCoordinatorStatusJSON(session, agents, idleAgents, coordConfig)
@@ -304,7 +304,10 @@ func runCoordinatorDigest(cmd *cobra.Command, args []string, sendMail bool) erro
 	}
 
 	mailClient := newAgentMailClient(projectKey)
-	coord := coordinator.New(session, projectKey, mailClient, "NTM-Coordinator")
+	runtimeConfig := loadCoordinatorRuntimeConfig()
+	runtimeConfig.AutoAssign = false
+	runtimeConfig.SendDigests = false
+	coord := coordinator.New(session, projectKey, mailClient, "NTM-Coordinator").WithConfig(runtimeConfig)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -329,6 +332,138 @@ func runCoordinatorDigest(cmd *cobra.Command, args []string, sendMail bool) erro
 	}
 
 	return renderDigest(digest)
+}
+
+type coordinatorRunOutput struct {
+	Success     bool                           `json:"success"`
+	Session     string                         `json:"session"`
+	Timestamp   string                         `json:"timestamp"`
+	Once        bool                           `json:"once"`
+	AutoAssign  bool                           `json:"auto_assign"`
+	Assignments []coordinator.AssignmentResult `json:"assignments"`
+	ErrorCode   string                         `json:"error_code,omitempty"`
+	Error       string                         `json:"error,omitempty"`
+}
+
+func newCoordinatorRunCmd() *cobra.Command {
+	var once bool
+	cmd := &cobra.Command{
+		Use:   "run [session]",
+		Short: "Run the session coordinator until interrupted",
+		Long: `Run continuous session observation, configured digest delivery, and
+opt-in automatic assignment. The command exits cleanly on SIGINT or SIGTERM.
+
+Use --once to execute exactly one fresh observation and assignment cycle.`,
+		Args: cobra.MaximumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runCoordinatorRun(cmd, args, once)
+		},
+	}
+	cmd.Flags().BoolVar(&once, "once", false, "Run exactly one fresh coordinator cycle")
+	return cmd
+}
+
+func runCoordinatorRun(cmd *cobra.Command, args []string, once bool) error {
+	var session string
+	if len(args) > 0 {
+		session = args[0]
+	}
+	if err := tmux.EnsureInstalled(); err != nil {
+		return err
+	}
+	resolved, err := ResolveSession(session, cmd.OutOrStdout())
+	if err != nil {
+		return err
+	}
+	if resolved.Session == "" {
+		return nil
+	}
+	resolved.ExplainIfInferred(cmd.ErrOrStderr())
+	session = resolved.Session
+	projectKey, err := resolveAgentMailProjectKey(session)
+	if err != nil {
+		return err
+	}
+	if projectKey == "" {
+		return errors.New("getting project root failed")
+	}
+
+	runtimeConfig := loadCoordinatorRuntimeConfig()
+	coord := coordinator.New(session, projectKey, newAgentMailClient(projectKey), "NTM-Coordinator").WithConfig(runtimeConfig)
+	if once {
+		assignments, cycleErr := coord.RunCycle(cmd.Context())
+		runErr := coordinatorRunFailure(assignments, cycleErr)
+		output := coordinatorRunOutput{
+			Success: runErr == nil, Session: session, Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Once: true, AutoAssign: runtimeConfig.AutoAssign, Assignments: assignments,
+		}
+		if runErr != nil {
+			output.ErrorCode = "ASSIGNMENT_FAILED"
+			if cycleErr != nil {
+				output.ErrorCode = "COORDINATOR_CYCLE_FAILED"
+			}
+			output.Error = runErr.Error()
+		}
+		if output.Assignments == nil {
+			output.Assignments = []coordinator.AssignmentResult{}
+		}
+		if jsonOutput {
+			if err := json.NewEncoder(cmd.OutOrStdout()).Encode(output); err != nil {
+				return err
+			}
+			if runErr != nil {
+				return jsonFailureExit()
+			}
+			return nil
+		}
+		if runErr != nil {
+			return runErr
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Coordinator cycle complete for %s: %d assignment result(s)\n", session, len(assignments))
+		return nil
+	}
+
+	if err := coord.Start(cmd.Context()); err != nil {
+		return fmt.Errorf("starting coordinator: %w", err)
+	}
+	defer coord.Stop()
+	if jsonOutput {
+		output := coordinatorRunOutput{
+			Success: true, Session: session, Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Once: false, AutoAssign: runtimeConfig.AutoAssign, Assignments: []coordinator.AssignmentResult{},
+		}
+		if err := json.NewEncoder(cmd.OutOrStdout()).Encode(output); err != nil {
+			return err
+		}
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Coordinator running for %s (auto-assign=%t); press Ctrl-C to stop\n", session, runtimeConfig.AutoAssign)
+	}
+	<-cmd.Context().Done()
+	return nil
+}
+
+func coordinatorRunFailure(assignments []coordinator.AssignmentResult, cycleErr error) error {
+	if cycleErr != nil {
+		return cycleErr
+	}
+	failed := 0
+	for _, result := range assignments {
+		if !result.Success {
+			failed++
+		}
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d coordinator assignment attempt(s) failed", failed)
+	}
+	return nil
+}
+
+func loadCoordinatorRuntimeConfig() coordinator.CoordinatorConfig {
+	coordConfig := coordinator.DefaultCoordinatorConfig()
+	if loaded, err := config.Load(selectedConfigPath()); err == nil && loaded != nil {
+		coordConfig = coordinatorConfigFromTOML(loaded.Coordinator, coordConfig)
+	}
+	return coordConfig
 }
 
 func renderDigest(digest coordinator.DigestSummary) error {
