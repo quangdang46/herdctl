@@ -406,7 +406,11 @@ func runList(tags []string, project ...string) error {
 
 	// Text output
 	if len(resp.Sessions) == 0 {
-		fmt.Println("No tmux sessions running")
+		if muxBackendLabel() == "herdr" {
+				fmt.Println("No Herdr-backed sessions running")
+			} else {
+				fmt.Println("No tmux sessions running")
+			}
 		return nil
 	}
 
@@ -516,17 +520,20 @@ func coerceSessionListResponse(result any) (output.ListResponse, error) {
 }
 
 func buildSessionListResponse(tags []string, project string) (output.ListResponse, error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return output.ListResponse{}, err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return output.ListResponse{}, err
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := muxListSessions()
 	if err != nil {
 		return output.ListResponse{}, err
 	}
 
 	// Optimization: fetch all panes once
-	allPanes, err := tmux.GetAllPanes()
+	allPanes, err := muxGetAllPanes()
 	if err != nil {
 		return output.ListResponse{}, err
 	}

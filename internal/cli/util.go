@@ -20,6 +20,8 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/palette"
 	sessionPkg "github.com/Dicklesworthstone/ntm/internal/session"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	utilpkg "github.com/Dicklesworthstone/ntm/internal/util"
 )
@@ -168,10 +170,10 @@ func ResolveSession(session string, w io.Writer) (SessionResolution, error) {
 
 func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveOptions) (SessionResolution, error) {
 	if session != "" {
-		if err := tmux.ValidateSessionName(session); err != nil {
+		if err := muxValidateSessionName(session); err != nil {
 			return SessionResolution{}, fmt.Errorf("invalid session name: %w", err)
 		}
-		sessionList, err := tmux.ListSessions()
+		sessionList, err := muxListSessions()
 		if err != nil {
 			return SessionResolution{}, err
 		}
@@ -183,8 +185,16 @@ func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveO
 		return SessionResolution{Session: resolved, Reason: reason, Inferred: false}, nil
 	}
 
-	// Current tmux session is the most deterministic signal.
-	if tmux.InTmux() {
+	// Current session is the most deterministic signal.
+	if backend.IsHerdr() {
+		if current := herdr.GetCurrentSession(); current != "" {
+			return SessionResolution{
+				Session:  current,
+				Reason:   "current herdr session",
+				Inferred: true,
+			}, nil
+		}
+	} else if tmux.InTmux() {
 		if current := tmux.GetCurrentSession(); current != "" {
 			return SessionResolution{
 				Session:  current,
@@ -194,11 +204,14 @@ func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveO
 		}
 	}
 
-	sessionList, err := tmux.ListSessions()
+	sessionList, err := muxListSessions()
 	if err != nil {
 		return SessionResolution{}, err
 	}
 	if len(sessionList) == 0 {
+		if backend.IsHerdr() {
+			return SessionResolution{}, fmt.Errorf("no herdr-backed sessions found. Create one with: NTM_BACKEND=herdr ntm spawn <name>")
+		}
 		return SessionResolution{}, fmt.Errorf("no tmux sessions found. Create one with: ntm spawn <name>")
 	}
 
@@ -273,10 +286,10 @@ func normalizeExplicitLiveSessionName(session string, allowPrefix bool) (string,
 	if session == "" {
 		return "", fmt.Errorf("session is required")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
-	sessionList, err := tmux.ListSessions()
+	sessionList, err := muxListSessions()
 	if err != nil {
 		return "", err
 	}

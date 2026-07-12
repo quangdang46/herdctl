@@ -25,6 +25,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Dicklesworthstone/ntm/internal/audit"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
@@ -879,11 +880,11 @@ func newSendCmd() *cobra.Command {
 
 // runSendProject broadcasts a prompt to all sessions matching a base project (bd-3cu02.14).
 func runSendProject(cmd *cobra.Command, project string, args []string, targets SendTargets, targetAll, skipFirst bool, paneSelector string, paneSelectors []string, panesSpecified bool, tags []string, noHooks, dryRun, forceNonInteractive bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := muxListSessions()
 	if err != nil {
 		return err
 	}
@@ -1444,7 +1445,7 @@ func runSendInternal(opts SendOptions) (err error) {
 	multiWindow := false
 	explicitSingle := paneSelector != ""
 	if explicitSingle || opts.PanesSpecified {
-		panes, err = tmux.GetPanes(session)
+		panes, err = muxGetPanes(session)
 		if err != nil {
 			return outputError(err)
 		}
@@ -1559,7 +1560,7 @@ func runSendInternal(opts SendOptions) (err error) {
 	}
 
 	if panes == nil {
-		panes, err = tmux.GetPanes(session)
+		panes, err = muxGetPanes(session)
 		if err != nil {
 			return outputError(err)
 		}
@@ -1989,7 +1990,7 @@ func runInterrupt(session string, tags []string) error {
 		return output.PrintJSON(result)
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -2002,11 +2003,11 @@ func runInterrupt(session string, tags []string) error {
 	}
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return err
 	}
@@ -2022,7 +2023,7 @@ func runInterrupt(session string, tags []string) error {
 				}
 			}
 
-			if err := tmux.SendInterrupt(p.ID); err != nil {
+			if err := muxSendInterrupt(p.ID); err != nil {
 				return fmt.Errorf("interrupting pane %d: %w", p.Index, err)
 			}
 			count++
@@ -2036,7 +2037,7 @@ func runInterrupt(session string, tags []string) error {
 // buildInterruptResponse constructs the response for session interrupt.
 // Used by both kernel handler and direct CLI calls.
 func buildInterruptResponse(session string, tags []string) (*output.InterruptResponse, error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return nil, err
 	}
 	resolvedSession, err := normalizeExplicitLiveSessionName(session, true)
@@ -2045,11 +2046,11 @@ func buildInterruptResponse(session string, tags []string) (*output.InterruptRes
 	}
 	session = resolvedSession
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return nil, fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, err
 	}
@@ -2070,7 +2071,7 @@ func buildInterruptResponse(session string, tags []string) (*output.InterruptRes
 			}
 
 			targetedPanes = append(targetedPanes, p.Index)
-			if err := tmux.SendInterrupt(p.ID); err != nil {
+			if err := muxSendInterrupt(p.ID); err != nil {
 				return nil, fmt.Errorf("interrupting pane %d: %w", p.Index, err)
 			}
 			interrupted++
@@ -2146,7 +2147,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 		return output.PrintJSON(result)
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -2160,7 +2161,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 	session = res.Session
 	sessionInferred := res.Inferred
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -2260,7 +2261,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 
 	// If tags are provided, kill specific panes
 	if len(tags) > 0 {
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		if err != nil {
 			return err
 		}
@@ -2301,7 +2302,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 	}
 
 	if !force {
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		if err != nil {
 			return err
 		}
@@ -2315,7 +2316,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 		}
 	}
 
-	panesForStop, err := tmux.GetPanes(session)
+	panesForStop, err := muxGetPanes(session)
 	if err == nil {
 		addTimelineStopMarkers(session, panesForStop)
 	}
@@ -2483,11 +2484,11 @@ func reapOrphanProcesses(pids []int) {
 
 // runKillProject kills all sessions matching a base project name (bd-3cu02.14).
 func runKillProject(w io.Writer, project string, force bool, tags []string, noHooks bool, summarize bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := muxListSessions()
 	if err != nil {
 		return err
 	}
@@ -2535,7 +2536,7 @@ func runKillProject(w io.Writer, project string, force bool, tags []string, noHo
 // Used by both kernel handler and direct CLI calls.
 // In JSON/robot mode, force is effectively always true (no interactive confirmation).
 func buildKillResponse(session string, force bool, tags []string, noHooks bool, summarize bool) (resp *output.KillResponse, err error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return nil, err
 	}
 	resolvedSession, err := normalizeExplicitLiveSessionName(session, true)
@@ -2544,7 +2545,7 @@ func buildKillResponse(session string, force bool, tags []string, noHooks bool, 
 	}
 	session = resolvedSession
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return nil, fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -2657,7 +2658,7 @@ func buildKillResponse(session string, force bool, tags []string, noHooks bool, 
 
 	// If tags are provided, kill specific panes
 	if len(tags) > 0 {
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		if err != nil {
 			return nil, err
 		}
@@ -2703,7 +2704,7 @@ func buildKillResponse(session string, force bool, tags []string, noHooks bool, 
 		auditKilledPanes = len(toKill)
 		message = fmt.Sprintf("Killed %d pane(s) matching tags", len(toKill))
 	} else {
-		panesForStop, err := tmux.GetPanes(session)
+		panesForStop, err := muxGetPanes(session)
 		if err == nil {
 			addTimelineStopMarkers(session, panesForStop)
 		}
@@ -2769,7 +2770,7 @@ func buildKillResponse(session string, force bool, tags []string, noHooks bool, 
 // It captures pane outputs and runs them through the summary generator.
 func generateKillSummary(session string, inferred bool) (*summary.SessionSummary, error) {
 	// Get panes from session
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -3025,7 +3026,7 @@ func looksLikeShellCommand(line string) bool {
 
 func sendPromptToPane(session string, p tmux.Pane, prompt string) error {
 	if sendValueEqual(p.Type, tmux.AgentUser) {
-		if err := tmux.PasteKeys(p.ID, prompt, true); err != nil {
+		if err := muxPasteKeys(p.ID, prompt, true); err != nil {
 			return err
 		}
 		return nil
@@ -3078,7 +3079,7 @@ func shellDispatchOrderer(selected []tmux.Pane) dispatchsvc.TargetOrderer {
 func shellDispatchSelectors(selected []tmux.Pane) []string {
 	selectors := make([]string, 0, len(selected))
 	for _, pane := range selected {
-		if pane.ID != "" {
+		if pane.ID != "" && !backend.IsHerdr() {
 			selectors = append(selectors, pane.ID)
 		} else {
 			selectors = append(selectors, pane.Ref().Physical())
@@ -3259,7 +3260,7 @@ func runCodexGoalSend(session, paneSelector, body string) error {
 		return failErr
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 	if strings.TrimSpace(paneSelector) == "" {
@@ -3379,11 +3380,11 @@ func runCodexGoalSend(session, paneSelector, body string) error {
 
 func sendPromptWithDoubleEnter(paneID, prompt string) error {
 	// Default to AgentUnknown for backward compatibility
-	return tmux.SendKeysForAgentDoubleEnter(paneID, prompt, tmux.AgentUnknown)
+	return muxSendKeysForAgentDoubleEnter(paneID, prompt, tmux.AgentUnknown)
 }
 
 func sendPromptWithDoubleEnterForAgent(paneID, prompt string, agentType tmux.AgentType) error {
-	return tmux.SendKeysForAgentDoubleEnter(paneID, prompt, agentType)
+	return muxSendKeysForAgentDoubleEnter(paneID, prompt, agentType)
 }
 
 func addTimelinePromptMarker(session string, p tmux.Pane, prompt string) {
@@ -3510,7 +3511,7 @@ func logDCGBlocked(command, session string, panes []tmux.Pane, blocked *tools.Bl
 }
 
 func resolveSendSessionForCommand(session string) (string, bool, error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return "", false, err
 	}
 
@@ -3521,7 +3522,7 @@ func resolveSendSessionForCommand(session string) (string, bool, error) {
 	if res.Session == "" {
 		return "", false, fmt.Errorf("session is required")
 	}
-	if !tmux.SessionExists(res.Session) {
+	if !muxSessionExists(res.Session) {
 		return "", false, fmt.Errorf("session '%s' not found", res.Session)
 	}
 	return res.Session, res.Inferred, nil
@@ -3625,7 +3626,7 @@ func runDistributeMode(session, strategy string, limit int, autoExecute bool, dr
 	}
 
 	// Verify session exists
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return outputError(err)
 	}
 
@@ -3640,7 +3641,7 @@ func runDistributeMode(session, strategy string, limit int, autoExecute bool, dr
 		session = res.Session
 	}
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return outputError(fmt.Errorf("session '%s' not found", session))
 	}
 
@@ -3758,7 +3759,7 @@ func runDistributeMode(session, strategy string, limit int, autoExecute bool, dr
 	}
 
 	// Execute distribution - send each task to its assigned agent
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -4118,7 +4119,7 @@ func runSendBatch(opts SendOptions) error {
 	}
 
 	// Get available panes for round-robin targeting
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := muxGetPanes(opts.Session)
 	if err != nil {
 		return fmt.Errorf("getting session panes: %w", err)
 	}

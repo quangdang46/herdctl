@@ -24,6 +24,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/agent/ollama"
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/audit"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
 	"github.com/Dicklesworthstone/ntm/internal/cm"
@@ -1500,11 +1501,14 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 		return err
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return outputError(err)
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return outputError(err)
 	}
 
-	if err := tmux.ValidateSessionName(opts.Session); err != nil {
+	if err := muxValidateSessionName(opts.Session); err != nil {
 		return outputError(err)
 	}
 
@@ -1522,7 +1526,7 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 	}
 
 	// Safety check: fail if session already exists (when --safety is enabled)
-	if opts.Safety && tmux.SessionExists(opts.Session) {
+	if opts.Safety && muxSessionExists(opts.Session) {
 		return outputError(fmt.Errorf("session '%s' already exists (--safety mode prevents reuse; use 'ntm kill %s' first)", opts.Session, opts.Session))
 	}
 
@@ -1668,15 +1672,19 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 	// Create or use existing session
 	steps := output.NewSteps()
-	if !tmux.SessionExists(opts.Session) {
+	if !muxSessionExists(opts.Session) {
 		if !IsJSONOutput() {
-			steps.Start(fmt.Sprintf("Creating session '%s'", opts.Session))
+			label := fmt.Sprintf("Creating session '%s'", opts.Session)
+			if muxBackendLabel() == "herdr" {
+				label = fmt.Sprintf("Creating Herdr workspace session '%s'", opts.Session)
+			}
+			steps.Start(label)
 		}
 		historyLimit := tmux.DefaultHistoryLimit
 		if cfg != nil && cfg.Tmux.HistoryLimit > 0 {
 			historyLimit = cfg.Tmux.HistoryLimit
 		}
-		if err := tmux.CreateSessionWithHistoryLimit(opts.Session, dir, historyLimit); err != nil {
+		if err := muxCreateSessionWithHistoryLimit(opts.Session, dir, historyLimit); err != nil {
 			if !IsJSONOutput() {
 				steps.Fail()
 			}
@@ -1691,7 +1699,7 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 	getPanesWithRetry := func(session string, attempts int, delay time.Duration) ([]tmux.Pane, error) {
 		var lastErr error
 		for i := 0; i < attempts; i++ {
-			panes, err := tmux.GetPanes(session)
+			panes, err := muxGetPanes(session)
 			if err == nil {
 				return panes, nil
 			}
@@ -1700,7 +1708,8 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 				break
 			}
 			msg := err.Error()
-			if !strings.Contains(msg, "can't find window") && !strings.Contains(msg, "can't find session") {
+			if !strings.Contains(msg, "can't find window") && !strings.Contains(msg, "can't find session") &&
+				!strings.Contains(msg, "not found") {
 				break
 			}
 			time.Sleep(delay)
@@ -1757,8 +1766,18 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 	}
 	panesAdded := 0
 
-	// Add more panes if needed
-	if existingPanes < totalPanes {
+	// Add more panes if needed.
+	// On herdr backend, agent panes are created by `herdr agent start` (which splits
+	// as needed). Pre-creating empty shell panes would leave unused panes behind.
+	precreatePanes := existingPanes < totalPanes
+	if precreatePanes && backend.IsHerdr() && len(opts.Agents) > 0 {
+		// Keep only the root/user pane; agents are launched via StartAgent.
+		precreatePanes = false
+		if !IsJSONOutput() {
+			output.PrintInfo("herdr backend: agent panes will be created by agent.start")
+		}
+	}
+	if precreatePanes {
 		toAdd := totalPanes - existingPanes
 		panesAdded = toAdd
 		auditPanesAdded = panesAdded
@@ -1769,7 +1788,7 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 			if testPacing.paneDelay > 0 && i > 0 {
 				time.Sleep(testPacing.paneDelay)
 			}
-			if _, err := tmux.SplitWindow(opts.Session, dir); err != nil {
+			if _, err := muxSplitWindow(opts.Session, dir); err != nil {
 				if !IsJSONOutput() {
 					steps.Fail()
 				}
@@ -1919,11 +1938,16 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 	// Launch agents using flattened specs (preserves model info for pane naming)
 	for _, agent := range opts.Agents {
-		if agentNum >= len(panes) {
-			break
+		var pane tmux.Pane
+		if backend.IsHerdr() {
+			// Pane will be created by herdrLaunchAgent below.
+			pane = tmux.Pane{}
+		} else {
+			if agentNum >= len(panes) {
+				break
+			}
+			pane = panes[agentNum]
 		}
-
-		pane := panes[agentNum]
 
 		if testPacing.agentDelay > 0 && staggerAgentIdx > 0 {
 			time.Sleep(testPacing.agentDelay)
@@ -1931,9 +1955,11 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 		// Format pane title with optional model variant
 		// Format: {session}__{type}_{index} or {session}__{type}_{index}_{variant}
-		title := tmux.FormatPaneName(opts.Session, string(agent.Type), agent.Index, agent.Model)
-		if err := tmux.SetPaneTitle(pane.ID, title); err != nil {
-			return outputError(fmt.Errorf("setting pane title: %w", err))
+		title := muxFormatPaneName(opts.Session, string(agent.Type), agent.Index, agent.Model)
+		if pane.ID != "" {
+			if err := muxSetPaneTitle(pane.ID, title); err != nil {
+				return outputError(fmt.Errorf("setting pane title: %w", err))
+			}
 		}
 
 		// Get agent command template based on type
@@ -2126,8 +2152,8 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 		// Update pane title with profile name if assigned
 		if personaName != "" {
-			title = tmux.FormatPaneName(opts.Session, string(agent.Type), agent.Index, personaName)
-			if err := tmux.SetPaneTitle(pane.ID, title); err != nil {
+			title = muxFormatPaneName(opts.Session, string(agent.Type), agent.Index, personaName)
+			if err := muxSetPaneTitle(pane.ID, title); err != nil {
 				if !IsJSONOutput() {
 					fmt.Printf("⚠ Warning: could not update pane title with profile name: %v\n", err)
 				}
@@ -2198,13 +2224,40 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 			}
 		}
 
-		cmd, err := tmux.BuildPaneCommand(workingDir, safeAgentCmd)
-		if err != nil {
-			return outputError(fmt.Errorf("building %s agent command: %w", agent.Type, err))
-		}
-
-		if err := tmux.SendKeys(pane.ID, cmd, true); err != nil {
-			return outputError(fmt.Errorf("launching %s agent: %w", agent.Type, err))
+		// Herdr path: prefer agent.start with a clean argv. The tmux path injects
+		// env/hooks via a shell command string which is fragile over pane send-text.
+		if backend.IsHerdr() {
+			argv := herdrPreferredAgentArgv(agent.Type, resolvedModel)
+			if argv == nil {
+				argv = splitAgentArgv(safeAgentCmd)
+			}
+			if argv != nil {
+				launched, launchErr := herdrLaunchAgent(opts.Session, workingDir, agent, argv, title)
+				if launchErr != nil {
+					return outputError(fmt.Errorf("launching %s agent via herdr agent.start: %w", agent.Type, launchErr))
+				}
+				pane = launched
+				// Keep panes[agentNum] in sync for later prompt delivery.
+				if agentNum < len(panes) {
+					panes[agentNum] = pane
+				}
+			} else {
+				cmd, err := tmux.BuildPaneCommand(workingDir, safeAgentCmd)
+				if err != nil {
+					return outputError(fmt.Errorf("building %s agent command: %w", agent.Type, err))
+				}
+				if err := muxSendKeys(pane.ID, cmd, true); err != nil {
+					return outputError(fmt.Errorf("launching %s agent: %w", agent.Type, err))
+				}
+			}
+		} else {
+			cmd, err := tmux.BuildPaneCommand(workingDir, safeAgentCmd)
+			if err != nil {
+				return outputError(fmt.Errorf("building %s agent command: %w", agent.Type, err))
+			}
+			if err := muxSendKeys(pane.ID, cmd, true); err != nil {
+				return outputError(fmt.Errorf("launching %s agent: %w", agent.Type, err))
+			}
 		}
 		if rateLimitTracker != nil && agent.Type == AgentTypeCodex {
 			rateLimitTracker.RecordSuccess("openai")
@@ -2490,7 +2543,7 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 	}
 
 	// Get final pane list for output
-	finalPanes, _ := tmux.GetPanes(opts.Session)
+	finalPanes, _ := muxGetPanes(opts.Session)
 	// Order deterministically so the emitted panes array (and the post-launch
 	// persona→pane mapping) is reproducible across runs rather than dependent
 	// on tmux list-panes ordering (ntm#149).
@@ -4408,13 +4461,13 @@ func waitForAgentsReady(session string, timeout time.Duration) (int, error) {
 	lastAgents := 0
 
 	for {
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		if err != nil {
 			return 0, fmt.Errorf("failed to get panes: %w", err)
 		}
 
 		readyCount := 0
-		readyPanes, agentCount := collectReadyAgentPanes(panes, tmux.CaptureForStatusDetection)
+		readyPanes, agentCount := collectReadyAgentPanes(panes, muxCaptureForStatusDetection)
 		readyCount = len(readyPanes)
 
 		lastReady = readyCount
@@ -4444,12 +4497,12 @@ func sendInitPromptToReadyAgents(session, prompt string, withAgentName bool) (in
 		return 0, nil
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get panes: %w", err)
 	}
 
-	readyPanes, _ := collectReadyAgentPanes(panes, tmux.CaptureForStatusDetection)
+	readyPanes, _ := collectReadyAgentPanes(panes, muxCaptureForStatusDetection)
 
 	agentsReached := 0
 	var errs []string
@@ -4509,7 +4562,7 @@ func waitForPaneAgentIdle(paneID, agentTypeStr string, timeout time.Duration) bo
 	deadline := time.Now().Add(timeout)
 	pollInterval := 200 * time.Millisecond
 	for {
-		scrollback, _ := tmux.CaptureForStatusDetection(paneID)
+		scrollback, _ := muxCaptureForStatusDetection(paneID)
 		if determineAgentState(scrollback, agentTypeStr) == "idle" {
 			return true
 		}
