@@ -13,7 +13,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
@@ -80,7 +79,7 @@ func (s *Storage) CheckpointDir(sessionName, checkpointID string) string {
 }
 
 func (s *Storage) safeSessionDir(sessionName string) (string, error) {
-	if err := tmux.ValidateSessionName(sessionName); err != nil {
+	if err := muxValidateSessionName(sessionName); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
 	sessionDir := filepath.Join(s.BaseDir, sessionName)
@@ -163,7 +162,7 @@ func (s *Storage) safeCheckpointDir(sessionName, checkpointID string) (string, e
 }
 
 func (s *Storage) checkpointDirForLookup(sessionName, checkpointID string) (string, error) {
-	if err := tmux.ValidateSessionName(sessionName); err != nil {
+	if err := muxValidateSessionName(sessionName); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
 	if err := validateCheckpointID(checkpointID); err != nil {
@@ -527,7 +526,7 @@ func validateLoadedCheckpointMetadata(cp *Checkpoint, sessionName, checkpointID 
 	if err := validateCheckpointID(cp.ID); err != nil {
 		return fmt.Errorf("invalid checkpoint metadata: %w", err)
 	}
-	if err := tmux.ValidateSessionName(cp.SessionName); err != nil {
+	if err := muxValidateSessionName(cp.SessionName); err != nil {
 		return fmt.Errorf("invalid checkpoint metadata: invalid session name: %w", err)
 	}
 	if cp.ID != checkpointID {
@@ -746,7 +745,7 @@ func (s *Storage) getByRecentIndex(sessionName string, index int) (*Checkpoint, 
 }
 
 func (s *Storage) deleteCheckpointPath(sessionName, checkpointID string) error {
-	if err := tmux.ValidateSessionName(sessionName); err != nil {
+	if err := muxValidateSessionName(sessionName); err != nil {
 		return fmt.Errorf("invalid session name: %w", err)
 	}
 	if err := validateCheckpointID(checkpointID); err != nil {

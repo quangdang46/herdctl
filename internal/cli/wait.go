@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
@@ -152,7 +153,10 @@ Examples:
 }
 
 func runWait(w io.Writer, opts WaitOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return err
 	}
 
@@ -169,7 +173,7 @@ func runWait(w io.Writer, opts WaitOptions) error {
 	res.ExplainIfInferred(os.Stderr)
 	opts.Session = res.Session
 
-	if !tmux.SessionExists(opts.Session) {
+	if !muxSessionExists(opts.Session) {
 		return fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
@@ -192,7 +196,17 @@ func runWait(w io.Writer, opts WaitOptions) error {
 	startTime := time.Now()
 	deadline := startTime.Add(opts.Timeout)
 
-	// Create activity monitor
+	// Herdr-native fast path: for simple single-status conditions (idle /
+	// complete / generating) on filtered panes, block on herdr agent wait
+	// instead of poll+capture. Fall through to the poll loop for healthy /
+	// composed conditions or when herdr wait is unavailable.
+	if backend.IsHerdr() {
+		if ok, err := tryHerdrNativeWait(w, opts, startTime, deadline); ok {
+			return err
+		}
+	}
+
+	// Create activity monitor (tmux path and herdr multi-condition fallback)
 	monitor := robot.NewActivityMonitor(nil)
 
 	for {
@@ -204,7 +218,7 @@ func runWait(w io.Writer, opts WaitOptions) error {
 		}
 
 		// Get all panes
-		panes, err := tmux.GetPanes(opts.Session)
+		panes, err := muxGetPanes(opts.Session)
 		if err != nil {
 			return fmt.Errorf("failed to list panes: %w", err)
 		}
@@ -221,6 +235,14 @@ func runWait(w io.Writer, opts WaitOptions) error {
 		// Update activity state for each pane
 		var activities []*robot.AgentActivity
 		for _, pane := range filteredPanes {
+			// Prefer herdr-reported status when available; it is authoritative
+			// and avoids a capture round-trip.
+			if backend.IsHerdr() {
+				if hs, err := muxGetAgentStatus(pane.ID); err == nil && hs != "" {
+					activities = append(activities, herdrStatusToActivity(pane, hs))
+					continue
+				}
+			}
 			classifier := monitor.GetOrCreate(pane.ID)
 			if at := agentTypeForPane(pane); at != "" && at != "unknown" && at != "user" {
 				classifier.SetAgentType(at)
@@ -258,6 +280,108 @@ func runWait(w io.Writer, opts WaitOptions) error {
 
 		// Sleep and poll again
 		time.Sleep(opts.PollInterval)
+	}
+}
+
+// tryHerdrNativeWait attempts a blocking herdr agent-wait for simple
+// conditions. Returns (true, err) when it handled the wait (success or
+// timeout/error); (false, nil) means "fall through to poll loop".
+func tryHerdrNativeWait(w io.Writer, opts WaitOptions, startTime, deadline time.Time) (bool, error) {
+	// Only simple single conditions map cleanly onto herdr --status.
+	parts := strings.Split(string(opts.Condition), ",")
+	if len(parts) != 1 {
+		return false, nil
+	}
+	cond := WaitCondition(strings.TrimSpace(parts[0]))
+	herdrStatus := mapWaitConditionToHerdrStatus(cond)
+	if herdrStatus == "" {
+		return false, nil
+	}
+
+	panes, err := muxGetPanes(opts.Session)
+	if err != nil {
+		return false, nil // fall through; poll loop will surface the error
+	}
+	filtered := filterPanesForWait(panes, opts)
+	if len(filtered) == 0 {
+		return false, nil
+	}
+
+	// For --any we only need one pane; for ALL we wait on every pane.
+	targets := filtered
+	if opts.WaitForAny {
+		// Wait sequentially; first success wins. CountN>1 is rare and falls
+		// through to the poll path for correctness.
+		if opts.CountN > 1 {
+			return false, nil
+		}
+		targets = filtered[:1]
+	}
+
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return true, &WaitTimeoutError{Duration: opts.Timeout}
+	}
+	timeoutMS := int(remaining / time.Millisecond)
+	if timeoutMS < 1 {
+		timeoutMS = 1
+	}
+
+	var details []WaitAgentInfo
+	for _, pane := range targets {
+		if err := muxWaitAgentStatus(pane.ID, herdrStatus, timeoutMS); err != nil {
+			// On timeout/error for ALL mode, surface timeout. For single-pane
+			// --any the error is terminal either way.
+			if time.Now().After(deadline) || strings.Contains(strings.ToLower(err.Error()), "timed out") {
+				fmt.Fprintf(w, "%s✗%s Timeout after %v\n",
+					colorize(theme.Current().Error), colorize(theme.Current().Text), opts.Timeout)
+				return true, &WaitTimeoutError{Duration: opts.Timeout}
+			}
+			// Non-timeout failure: fall through so poll+capture can recover.
+			return false, nil
+		}
+		details = append(details, WaitAgentInfo{
+			Pane:      pane.ID,
+			State:     herdrStatus,
+			MetAt:     time.Now(),
+			AgentType: agentTypeForPane(pane),
+		})
+		// Shrink remaining budget for subsequent panes in ALL mode.
+		remaining = time.Until(deadline)
+		if remaining <= 0 {
+			return true, &WaitTimeoutError{Duration: opts.Timeout}
+		}
+		timeoutMS = int(remaining / time.Millisecond)
+		if timeoutMS < 1 {
+			timeoutMS = 1
+		}
+	}
+
+	elapsed := time.Since(startTime)
+	fmt.Fprintf(w, "%s✓%s Condition '%s' met after %v\n",
+		colorize(theme.Current().Success), colorize(theme.Current().Text), opts.Condition, elapsed.Round(time.Millisecond))
+	for _, d := range details {
+		fmt.Fprintf(w, "    %s: %s\n", d.Pane, d.State)
+	}
+	return true, nil
+}
+
+// herdrStatusToActivity synthesizes a robot.AgentActivity from a herdr
+// agent_status string so checkConditionMet can reuse the existing logic.
+func herdrStatusToActivity(pane tmux.Pane, agentStatus string) *robot.AgentActivity {
+	state := robot.StateUnknown
+	switch strings.ToLower(strings.TrimSpace(agentStatus)) {
+	case "idle", "done":
+		state = robot.StateWaiting
+	case "working":
+		state = robot.StateGenerating
+	case "blocked":
+		state = robot.StateError
+	}
+	return &robot.AgentActivity{
+		PaneID:    pane.ID,
+		State:     state,
+		AgentType: agentTypeForPane(pane),
 	}
 }
 

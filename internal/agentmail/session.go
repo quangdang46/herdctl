@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
@@ -54,9 +53,17 @@ func getSessionsBaseDir() string {
 	return filepath.Join(configDir, "ntm", "sessions")
 }
 
+// sessionStorageNameRegex matches the backend-agnostic session name rules used
+// by both tmux and herdr (a-z A-Z 0-9 _ -). Agent Mail only needs path-safe
+// names for local session storage; it never talks to a multiplexer.
+var sessionStorageNameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
 func validateSessionStorageName(sessionName string) error {
-	if err := tmux.ValidateSessionName(sessionName); err != nil {
-		return fmt.Errorf("invalid session name: %w", err)
+	if sessionName == "" {
+		return fmt.Errorf("invalid session name: empty session name")
+	}
+	if !sessionStorageNameRegex.MatchString(sessionName) {
+		return fmt.Errorf("invalid session name: %q contains invalid characters (allowed: a-z, A-Z, 0-9, _, -)", sessionName)
 	}
 	return nil
 }

@@ -139,12 +139,12 @@ func (r *Restorer) RestoreFromCheckpoint(cp *Checkpoint, opts RestoreOptions) (*
 		}
 	}
 	// Check for existing session
-	if tmux.SessionExists(cp.SessionName) {
+	if muxSessionExists(cp.SessionName) {
 		if !opts.Force {
 			return nil, ErrSessionExists
 		}
 		if !opts.DryRun {
-			if err := tmux.KillSession(cp.SessionName); err != nil {
+			if err := muxKillSession(cp.SessionName); err != nil {
 				return nil, fmt.Errorf("killing existing session: %w", err)
 			}
 			// Wait for session to be fully killed
@@ -211,9 +211,9 @@ func (r *Restorer) RestoreFromCheckpoint(cp *Checkpoint, opts RestoreOptions) (*
 	return result, nil
 }
 
-// createSession creates the initial tmux session.
+// createSession creates the initial session on the active backend.
 func (r *Restorer) createSession(cp *Checkpoint, workDir string) error {
-	if err := tmux.CreateSession(cp.SessionName, workDir); err != nil {
+	if err := muxCreateSession(cp.SessionName, workDir); err != nil {
 		return err
 	}
 
@@ -228,9 +228,9 @@ func (r *Restorer) createSession(cp *Checkpoint, workDir string) error {
 		}
 		firstPane := panes[0]
 		if firstPane.Title != "" {
-			panes, err := tmux.GetPanes(cp.SessionName)
-			if err == nil && len(panes) > 0 {
-				_ = tmux.SetPaneTitle(panes[0].ID, firstPane.Title)
+			livePanes, err := muxGetPanes(cp.SessionName)
+			if err == nil && len(livePanes) > 0 {
+				_ = muxSetPaneTitle(livePanes[0].ID, firstPane.Title)
 			}
 		}
 	}
@@ -251,44 +251,24 @@ func (r *Restorer) restoreLayout(cp *Checkpoint, workDir string) (int, error) {
 
 	for i := 1; i < len(paneStates); i++ {
 		paneState := paneStates[i]
-		windowTarget := fmt.Sprintf("%s:%d", cp.SessionName, paneState.WindowIndex)
 
 		var (
 			paneID string
 			err    error
 		)
 
-		if paneState.WindowIndex != lastWindowIndex {
-			paneID, err = tmux.DefaultClient.Run(
-				"new-window",
-				"-P",
-				"-F",
-				"#{pane_id}",
-				"-t",
-				windowTarget,
-				"-c",
-				workDir,
-			)
+		newWindow := paneState.WindowIndex != lastWindowIndex
+		if newWindow {
 			lastWindowIndex = paneState.WindowIndex
-		} else {
-			paneID, err = tmux.DefaultClient.Run(
-				"split-window",
-				"-t",
-				windowTarget,
-				"-c",
-				workDir,
-				"-P",
-				"-F",
-				"#{pane_id}",
-			)
 		}
+		paneID, err = muxCreatePane(cp.SessionName, paneState.WindowIndex, workDir, newWindow)
 		if err != nil {
 			return panesCreated, fmt.Errorf("creating pane %d: %w", i, err)
 		}
 
 		// Set pane title to match checkpoint
 		if paneState.Title != "" {
-			_ = tmux.SetPaneTitle(paneID, paneState.Title)
+			_ = muxSetPaneTitle(paneID, paneState.Title)
 		}
 
 		panesCreated++
@@ -317,7 +297,7 @@ func (r *Restorer) restoreLayout(cp *Checkpoint, workDir string) (int, error) {
 }
 
 func (r *Restorer) restoreAgents(cp *Checkpoint, workDir string) error {
-	panes, err := tmux.GetPanes(cp.SessionName)
+	panes, err := muxGetPanes(cp.SessionName)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -338,7 +318,7 @@ func (r *Restorer) restoreAgents(cp *Checkpoint, workDir string) error {
 		}
 
 		attempted++
-		if err := relaunchRestoredPane(sortedPanes[i].ID, workDir, agentCmd); err != nil {
+		if err := relaunchRestoredPane(sortedPanes[i].ID, workDir, agentCmd, paneState, cp.SessionName); err != nil {
 			slog.Warn("checkpoint restore: failed to relaunch pane command",
 				"session", cp.SessionName,
 				"pane_index", paneState.Index,
@@ -360,8 +340,8 @@ func (r *Restorer) restoreAgents(cp *Checkpoint, workDir string) error {
 	return nil
 }
 
-func relaunchRestoredPane(paneID, workDir, agentCmd string) error {
-	safeCommand, err := tmux.SanitizePaneCommand(agentCmd)
+func relaunchRestoredPane(paneID, workDir, agentCmd string, paneState PaneState, sessionName string) error {
+	safeCommand, err := muxSanitizePaneCommand(agentCmd)
 	if err != nil {
 		return err
 	}
@@ -370,6 +350,12 @@ func relaunchRestoredPane(paneID, workDir, agentCmd string) error {
 	if expected == "" {
 		return fmt.Errorf("determine expected pane command for %q", agentCmd)
 	}
+
+	// Herdr cannot observe pane_current_command; send once and accept.
+	if muxIsHerdr() {
+		return muxRespawnPane(paneID, workDir, safeCommand, agentCmd, paneState, sessionName)
+	}
+
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
@@ -378,7 +364,7 @@ func relaunchRestoredPane(paneID, workDir, agentCmd string) error {
 
 		// Respawn the pane directly into the target command instead of typing into
 		// a shell prompt. This avoids lost-input races while panes are still initializing.
-		if err := tmux.DefaultClient.RunSilent("respawn-pane", "-k", "-c", workDir, "-t", paneID, safeCommand); err != nil {
+		if err := muxRespawnPane(paneID, workDir, safeCommand, agentCmd, paneState, sessionName); err != nil {
 			lastErr = err
 			continue
 		}
@@ -413,11 +399,7 @@ func waitForPaneCommand(paneID, expected string, timeout time.Duration) error {
 }
 
 func currentPaneCommand(paneID string) (string, error) {
-	output, err := tmux.DefaultClient.Run("display-message", "-p", "-t", paneID, "#{pane_current_command}")
-	if err != nil {
-		return "", fmt.Errorf("getting pane current command: %w", err)
-	}
-	return strings.TrimSpace(output), nil
+	return muxCurrentPaneCommand(paneID)
 }
 
 func expectedPaneCommand(agentCmd string) string {
@@ -568,24 +550,7 @@ func trimMatchingQuotes(token string) string {
 }
 
 func moveInitialWindow(sessionName string, targetWindowIndex int) error {
-	if targetWindowIndex < 0 {
-		return nil
-	}
-
-	currentWindowIndex, err := tmux.GetFirstWindow(sessionName)
-	if err != nil {
-		return fmt.Errorf("getting initial window index: %w", err)
-	}
-	if currentWindowIndex == targetWindowIndex {
-		return nil
-	}
-
-	source := fmt.Sprintf("%s:%d", sessionName, currentWindowIndex)
-	target := fmt.Sprintf("%s:%d", sessionName, targetWindowIndex)
-	if err := tmux.DefaultClient.RunSilent("move-window", "-s", source, "-t", target); err != nil {
-		return fmt.Errorf("moving initial window from %s to %s: %w", source, target, err)
-	}
-	return nil
+	return muxMoveInitialWindow(sessionName, targetWindowIndex)
 }
 
 func (r *Restorer) restoreActivePane(cp *Checkpoint) error {
@@ -593,7 +558,7 @@ func (r *Restorer) restoreActivePane(cp *Checkpoint) error {
 		return nil
 	}
 
-	panes, err := tmux.GetPanes(cp.SessionName)
+	panes, err := muxGetPanes(cp.SessionName)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -601,50 +566,21 @@ func (r *Restorer) restoreActivePane(cp *Checkpoint) error {
 	if !ok {
 		return nil
 	}
-	return tmux.DefaultClient.RunSilent("select-pane", "-t", targetPane.ID)
+	return muxSelectPane(targetPane.ID)
 }
 
-// applyLayout applies a tmux layout string to a session.
+// applyLayout applies a layout string to a session (tmux-only fidelity).
 func (r *Restorer) applyLayout(sessionName, layout string) error {
-	if layout == "" {
-		layout = "tiled"
-	}
-
-	output, err := tmux.DefaultClient.Run("list-windows", "-t", sessionName, "-F", "#{window_index}")
-	if err != nil {
-		return err
-	}
-
-	for _, win := range strings.Split(strings.TrimSpace(output), "\n") {
-		if win == "" {
-			continue
-		}
-		target := fmt.Sprintf("%s:%s", sessionName, win)
-		if err := tmux.DefaultClient.RunSilent("select-layout", "-t", target, layout); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	return muxApplyLayout(sessionName, layout)
 }
 
 func (r *Restorer) applyWindowLayouts(sessionName string, windowLayouts []WindowLayoutState) error {
-	for _, windowLayout := range cloneWindowLayouts(windowLayouts) {
-		layout := strings.TrimSpace(windowLayout.Layout)
-		if layout == "" {
-			layout = "tiled"
-		}
-		target := fmt.Sprintf("%s:%d", sessionName, windowLayout.WindowIndex)
-		if err := tmux.DefaultClient.RunSilent("select-layout", "-t", target, layout); err != nil {
-			return err
-		}
-	}
-	return nil
+	return muxApplyWindowLayouts(sessionName, windowLayouts)
 }
 
 // injectContext sends scrollback content to restored agents.
 func (r *Restorer) injectContext(cp *Checkpoint, maxLines int) error {
-	panes, err := tmux.GetPanes(cp.SessionName)
+	panes, err := muxGetPanes(cp.SessionName)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -674,7 +610,7 @@ func (r *Restorer) injectContext(cp *Checkpoint, maxLines int) error {
 
 		// Send as context message
 		contextMsg := formatContextInjection(content, cp.CreatedAt)
-		if err := tmux.SendBuffer(targetPane.ID, contextMsg, true); err != nil {
+		if err := muxSendBuffer(targetPane.ID, contextMsg, true); err != nil {
 			lastErr = err
 		}
 	}
@@ -1015,7 +951,7 @@ func (r *Restorer) ValidateCheckpoint(cp *Checkpoint, opts RestoreOptions) []str
 	}
 
 	// Check session existence
-	if tmux.SessionExists(cp.SessionName) {
+	if muxSessionExists(cp.SessionName) {
 		if opts.Force {
 			issues = append(issues, fmt.Sprintf("session %q exists and will be killed", cp.SessionName))
 		} else {

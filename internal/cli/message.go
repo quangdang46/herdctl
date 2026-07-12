@@ -10,7 +10,6 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 func newMessageCmd() *cobra.Command {
@@ -34,7 +33,7 @@ func newMessageInboxCmd() *cobra.Command {
 		Use:   "inbox",
 		Short: "View unified inbox",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			projectDir, agentName, err := resolveMessageScope(tmux.GetCurrentSession())
+			projectDir, agentName, err := resolveMessageScope(muxGetCurrentSession())
 			if err != nil {
 				return err
 			}
@@ -71,7 +70,7 @@ func newMessageSendCmd() *cobra.Command {
 			to := args[0]
 			body := args[1]
 
-			projectDir, agentName, err := resolveMessageScope(tmux.GetCurrentSession())
+			projectDir, agentName, err := resolveMessageScope(muxGetCurrentSession())
 			if err != nil {
 				return err
 			}
@@ -96,7 +95,7 @@ This marks the message as read.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 
-			projectDir, agentName, err := resolveMessageScope(tmux.GetCurrentSession())
+			projectDir, agentName, err := resolveMessageScope(muxGetCurrentSession())
 			if err != nil {
 				return err
 			}
@@ -142,7 +141,7 @@ This marks the message as both read and acknowledged.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			id := args[0]
 
-			projectDir, agentName, err := resolveMessageScope(tmux.GetCurrentSession())
+			projectDir, agentName, err := resolveMessageScope(muxGetCurrentSession())
 			if err != nil {
 				return err
 			}

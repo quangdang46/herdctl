@@ -7,23 +7,107 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	assignmentstore "github.com/Dicklesworthstone/ntm/internal/assignment"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/events"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/persona"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
+// getPanesWithActivity / captureForHealthCheckWithCtx are package-level hooks so
+// tests can stub multiplexer I/O. Defaults dispatch through backend.IsHerdr().
+//
+// Known herdr gaps vs tmux PaneActivity:
+//   - PID: herdr pane list does not expose shell PID (stays 0).
+//   - LastActivity: no window_activity equivalent; uses time.Now() so idle
+//     thresholds based purely on activity age are less reliable under herdr.
+//   - Title/type: reconstructed from registry + label parse, not live tmux titles.
 var (
-	getPanesWithActivity         = tmux.GetPanesWithActivity
-	captureForHealthCheckWithCtx = tmux.CaptureForHealthCheckContext
+	getPanesWithActivity         = getPanesWithActivityDefault
+	captureForHealthCheckWithCtx = captureForHealthCheckWithCtxDefault
 )
+
+func getPanesWithActivityDefault(session string) ([]tmux.PaneActivity, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetPanesWithActivity(session)
+	}
+	panes, err := herdr.GetPanes(session)
+	if err != nil {
+		return nil, err
+	}
+	// Herdr has no window_activity timestamp. Use "now" so age-based idle
+	// detection does not treat every pane as permanently idle; status still
+	// comes from capture/classification.
+	now := time.Now()
+	out := make([]tmux.PaneActivity, 0, len(panes))
+	for i, p := range panes {
+		out = append(out, tmux.PaneActivity{
+			Pane:         herdrPaneToTmux(p, i),
+			LastActivity: now,
+		})
+	}
+	return out, nil
+}
+
+func captureForHealthCheckWithCtxDefault(ctx context.Context, paneID string) (string, error) {
+	if !backend.IsHerdr() {
+		return tmux.CaptureForHealthCheckContext(ctx, paneID)
+	}
+	// Match tmux health-check budget (LinesHealthCheck = 50).
+	return herdr.CapturePaneOutputContext(ctx, paneID, tmux.LinesHealthCheck)
+}
+
+// herdrPaneToTmux maps a herdr pane into the tmux.Pane shape the rest of the
+// coordinator/status stack expects. PID is intentionally left 0 (not available).
+func herdrPaneToTmux(p herdr.Pane, fallbackIndex int) tmux.Pane {
+	win, paneIdx := herdrPaneNumericWinPane(p.ID)
+	if win == 0 && paneIdx == 0 {
+		win, paneIdx = p.WindowIndex, p.Index
+	}
+	if paneIdx == 0 && p.Index == 0 {
+		paneIdx = fallbackIndex
+	}
+	return tmux.Pane{
+		ID:          p.ID,
+		Index:       paneIdx,
+		WindowIndex: win,
+		NTMIndex:    p.NTMIndex,
+		Title:       p.Title,
+		Type:        tmux.AgentType(p.Type),
+		Variant:     p.Variant,
+		Tags:        append([]string{}, p.Tags...),
+		Command:     p.Command,
+		Width:       p.Width,
+		Height:      p.Height,
+		Active:      p.Active,
+		PID:         p.PID, // typically 0 under herdr
+	}
+}
+
+// herdrPaneNumericWinPane parses a Herdr pane ID ("w6:p2") into numeric
+// window/pane indices for tmux-shaped selectors.
+func herdrPaneNumericWinPane(herdrID string) (win, pane int) {
+	if strings.Count(herdrID, ":") != 1 {
+		return 0, 0
+	}
+	left, right, ok := strings.Cut(herdrID, ":")
+	if !ok {
+		return 0, 0
+	}
+	win, _ = strconv.Atoi(strings.TrimLeft(left, "wW"))
+	pane, _ = strconv.Atoi(strings.TrimLeft(right, "pP"))
+	return win, pane
+}
 
 // SessionCoordinator manages agent coordination for a tmux session.
 type SessionCoordinator struct {

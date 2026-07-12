@@ -233,7 +233,7 @@ func buildZoomResponse(session string, paneIdx int) (output.SuccessResponse, err
 	if !found {
 		return output.SuccessResponse{}, fmt.Errorf("pane %d not found in session '%s'", paneIdx, session)
 	}
-	if err := tmux.ZoomPane(session, paneIdx); err != nil {
+	if err := muxZoomPane(session, paneIdx); err != nil {
 		return output.SuccessResponse{}, fmt.Errorf("failed to zoom pane: %w", err)
 	}
 	return output.NewSuccess(fmt.Sprintf("zoomed pane %d in '%s'", paneIdx, session)), nil

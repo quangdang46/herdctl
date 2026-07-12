@@ -613,7 +613,7 @@ func (c *Client) StartAgent(ctx context.Context, opts StartAgentOptions) (Pane, 
 		opts.Index = NextNTMIndex(rec.Panes, opts.AgentType)
 	}
 	if opts.Name == "" {
-		opts.Name = fmt.Sprintf("%s_%d", opts.AgentType.Canonical(), opts.Index)
+		opts.Name = fmt.Sprintf("%s-%s_%d", opts.Session, opts.AgentType.Canonical(), opts.Index)
 	}
 	if opts.Cwd == "" {
 		opts.Cwd = rec.Directory
@@ -834,6 +834,108 @@ func (c *Client) CapturePaneVisible(target string) (string, error) {
 // CapturePaneVisible is the package-level helper.
 func CapturePaneVisible(target string) (string, error) {
 	return DefaultClient.CapturePaneVisible(target)
+}
+
+// ---------------------------------------------------------------------------
+// Agent status / wait
+// ---------------------------------------------------------------------------
+
+// AgentStatus constants mirror herdr's reported agent_status values.
+const (
+	AgentStatusIdle    = "idle"
+	AgentStatusWorking = "working"
+	AgentStatusBlocked = "blocked"
+	AgentStatusDone    = "done"
+	AgentStatusUnknown = "unknown"
+)
+
+// GetAgentStatus returns the current herdr agent_status for a pane/agent target.
+// Empty string means unknown / not reported.
+func (c *Client) GetAgentStatus(target string) (string, error) {
+	return c.GetAgentStatusContext(context.Background(), target)
+}
+
+// GetAgentStatusContext is the context-aware variant.
+func (c *Client) GetAgentStatusContext(ctx context.Context, target string) (string, error) {
+	var out agentGetResult
+	if err := c.runJSON(ctx, &out, "agent", "get", target); err != nil {
+		return "", err
+	}
+	status := strings.TrimSpace(out.Agent.AgentStatus)
+	if status == "" {
+		return AgentStatusUnknown, nil
+	}
+	return strings.ToLower(status), nil
+}
+
+// GetAgentStatus is the package-level helper.
+func GetAgentStatus(target string) (string, error) {
+	return DefaultClient.GetAgentStatus(target)
+}
+
+// GetAgentStatusContext is the package-level helper.
+func GetAgentStatusContext(ctx context.Context, target string) (string, error) {
+	return DefaultClient.GetAgentStatusContext(ctx, target)
+}
+
+// WaitAgentStatus blocks until the target reports the desired agent_status
+// (idle|working|blocked|done|unknown) or the timeout elapses.
+//
+// timeoutMS <= 0 uses herdr's default timeout. Uses `herdr agent wait`, which
+// returns immediately when the pane is already in the desired status.
+func (c *Client) WaitAgentStatus(target, status string, timeoutMS int) error {
+	return c.WaitAgentStatusContext(context.Background(), target, status, timeoutMS)
+}
+
+// WaitAgentStatusContext is the context-aware variant. The process context
+// bounds the overall wait; timeoutMS is also passed to herdr for its own
+// deadline so both layers agree.
+func (c *Client) WaitAgentStatusContext(ctx context.Context, target, status string, timeoutMS int) error {
+	status = strings.ToLower(strings.TrimSpace(status))
+	switch status {
+	case AgentStatusIdle, AgentStatusWorking, AgentStatusBlocked, AgentStatusDone, AgentStatusUnknown:
+		// ok
+	default:
+		return fmt.Errorf("invalid agent status %q: must be idle|working|blocked|done|unknown", status)
+	}
+
+	args := []string{"agent", "wait", target, "--status", status}
+	if timeoutMS > 0 {
+		args = append(args, "--timeout", strconv.Itoa(timeoutMS))
+	}
+
+	// Give runJSON a deadline that covers the herdr timeout plus a small
+	// cushion so context cancellation and herdr's own timeout stay in sync.
+	if timeoutMS > 0 {
+		if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+			var cancel context.CancelFunc
+			ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutMS)*time.Millisecond+2*time.Second)
+			defer cancel()
+		}
+	}
+
+	var out agentWaitResult
+	if err := c.runJSON(ctx, &out, args...); err != nil {
+		// Prefer the wait agent-status form as a fallback (same semantics).
+		args2 := []string{"wait", "agent-status", target, "--status", status}
+		if timeoutMS > 0 {
+			args2 = append(args2, "--timeout", strconv.Itoa(timeoutMS))
+		}
+		if err2 := c.runJSON(ctx, &out, args2...); err2 != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// WaitAgentStatus is the package-level helper.
+func WaitAgentStatus(target, status string, timeoutMS int) error {
+	return DefaultClient.WaitAgentStatus(target, status, timeoutMS)
+}
+
+// WaitAgentStatusContext is the package-level helper.
+func WaitAgentStatusContext(ctx context.Context, target, status string, timeoutMS int) error {
+	return DefaultClient.WaitAgentStatusContext(ctx, target, status, timeoutMS)
 }
 
 // ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ func herdrLaunchAgent(session, cwd string, agent FlatAgent, argv []string, title
 	defer cancel()
 	p, err := herdr.StartAgent(ctx, herdr.StartAgentOptions{
 		Session:   session,
-		Name:      fmt.Sprintf("%s_%d", agent.Type, agent.Index),
+		Name:      fmt.Sprintf("%s-%s_%d", session, agent.Type, agent.Index),
 		AgentType: herdr.AgentType(agent.Type),
 		Index:     agent.Index,
 		Variant:   agent.Model,
@@ -90,31 +90,64 @@ func splitAgentArgv(cmd string) []string {
 // herdrPreferredAgentArgv builds a simple argv for common agent types so we can
 // use agent.start even when the config template injects hooks/env for tmux.
 func herdrPreferredAgentArgv(agentType AgentType, model string) []string {
+	model = strings.TrimSpace(model)
 	switch agentType {
 	case AgentTypeClaude:
 		argv := []string{"claude", "--dangerously-skip-permissions"}
-		if strings.TrimSpace(model) != "" {
+		if model != "" {
 			argv = append(argv, "--model", model)
 		}
 		return argv
 	case AgentTypeCodex:
 		argv := []string{"codex", "--dangerously-bypass-approvals-and-sandbox"}
-		if strings.TrimSpace(model) != "" {
+		if model != "" {
 			argv = append(argv, "-m", model)
 		}
 		return argv
 	case AgentTypeGemini:
 		argv := []string{"gemini", "--yolo"}
-		if strings.TrimSpace(model) != "" {
+		if model != "" {
 			argv = append(argv, "--model", model)
 		}
 		return argv
 	case AgentTypeOpencode:
 		argv := []string{"opencode"}
-		if strings.TrimSpace(model) != "" {
+		if model != "" {
 			argv = append(argv, "--model", model)
 		}
 		return argv
+	case AgentTypeAntigravity:
+		// Mirrors DefaultAgentTemplates Antigravity: agy --model X --dangerously-skip-permissions
+		argv := []string{"agy"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		argv = append(argv, "--dangerously-skip-permissions")
+		return argv
+	case AgentTypeCursor:
+		argv := []string{"cursor"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv
+	case AgentTypeWindsurf:
+		argv := []string{"windsurf"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv
+	case AgentTypeAider:
+		argv := []string{"aider"}
+		if model != "" {
+			argv = append(argv, "--model", model)
+		}
+		return argv
+	case AgentTypeOllama:
+		// ollama run requires a model positional; match template default when unset.
+		if model == "" {
+			model = "codellama:latest"
+		}
+		return []string{"ollama", "run", model}
 	default:
 		return nil
 	}

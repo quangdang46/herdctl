@@ -384,7 +384,7 @@ func runMailInbox(cmd *cobra.Command, client mailInboxClient, session string, se
 	}
 
 	if sessionAgents {
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		if err != nil {
 			return fmt.Errorf("getting session panes: %w", err)
 		}
@@ -603,7 +603,7 @@ func resolveSessionPaneAgentName(session, projectKey string) string {
 		return name
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return ""
 	}
@@ -777,9 +777,9 @@ func runMailSendOverseer(cmd *cobra.Command, session string, to []string, subjec
 	// Session check is optional - we primarily care about the project
 	// But it's useful to verify the user is in the right context
 	if session != "" {
-		if err := tmux.EnsureInstalled(); err == nil {
-			if !tmux.SessionExists(session) {
-				fmt.Fprintf(os.Stderr, "Warning: tmux session '%s' not found (continuing anyway)\n", session)
+		if err := muxEnsureInstalled(); err == nil {
+			if !muxSessionExists(session) {
+				fmt.Fprintf(os.Stderr, "Warning: session '%s' not found on %s backend (continuing anyway)\n", session, muxBackendLabel())
 			}
 		}
 	}

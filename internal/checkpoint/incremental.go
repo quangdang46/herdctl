@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
@@ -843,7 +842,7 @@ func validateLoadedIncrementalMetadata(inc *IncrementalCheckpoint, sessionName, 
 	if inc == nil {
 		return fmt.Errorf("incremental metadata is nil")
 	}
-	if err := tmux.ValidateSessionName(inc.SessionName); err != nil {
+	if err := muxValidateSessionName(inc.SessionName); err != nil {
 		return fmt.Errorf("invalid incremental metadata: invalid session name: %w", err)
 	}
 	if inc.ID != incrementalID {

@@ -159,6 +159,20 @@ func muxKillSession(session string) error {
 	return tmux.KillSession(session)
 }
 
+func muxKillPane(paneID string) error {
+	if backend.IsHerdr() {
+		return herdr.KillPane(paneID)
+	}
+	return tmux.KillPane(paneID)
+}
+
+func muxZoomPane(session string, paneIndex int) error {
+	if backend.IsHerdr() {
+		return herdr.ZoomPane(session, paneIndex)
+	}
+	return tmux.ZoomPane(session, paneIndex)
+}
+
 func muxFormatPaneName(session, agentType string, index int, variant string) string {
 	// Pure string helper — identical implementation, no backend needed.
 	// Prefer tmux package to avoid drift for the default path.
@@ -265,5 +279,104 @@ func muxPasteKeys(target, content string, enter bool) error {
 		return herdr.SendKeys(target, content, enter)
 	}
 	return tmux.PasteKeys(target, content, enter)
+}
+
+// muxCapturePaneOutputContext is the context-aware capture helper.
+func muxCapturePaneOutputContext(ctx context.Context, target string, lines int) (string, error) {
+	if backend.IsHerdr() {
+		return herdr.CapturePaneOutputContext(ctx, target, lines)
+	}
+	return tmux.CapturePaneOutputContext(ctx, target, lines)
+}
+
+// muxGetAgentStatus returns the backend-reported agent status when available.
+// On tmux there is no native agent-status field — returns "" so callers fall
+// back to scrollback classification.
+func muxGetAgentStatus(target string) (string, error) {
+	if backend.IsHerdr() {
+		return herdr.GetAgentStatus(target)
+	}
+	return "", nil
+}
+
+// muxWaitAgentStatus blocks until the pane reports the desired agent status.
+// Herdr uses `herdr agent wait`; tmux has no native equivalent and returns
+// ErrNotSupported so callers can poll via capture/classification instead.
+func muxWaitAgentStatus(target, status string, timeoutMS int) error {
+	if backend.IsHerdr() {
+		return herdr.WaitAgentStatus(target, status, timeoutMS)
+	}
+	return fmt.Errorf("tmux backend: native agent-status wait not supported (use poll+capture)")
+}
+
+// muxWaitAgentStatusContext is the context-aware variant.
+func muxWaitAgentStatusContext(ctx context.Context, target, status string, timeoutMS int) error {
+	if backend.IsHerdr() {
+		return herdr.WaitAgentStatusContext(ctx, target, status, timeoutMS)
+	}
+	return fmt.Errorf("tmux backend: native agent-status wait not supported (use poll+capture)")
+}
+
+// herdrStatusToWaitCondition maps herdr agent_status values onto ntm wait
+// conditions so the herdr-native wait path can short-circuit when possible.
+func herdrStatusMatchesCondition(agentStatus string, condition WaitCondition) bool {
+	switch strings.ToLower(strings.TrimSpace(agentStatus)) {
+	case herdr.AgentStatusIdle, herdr.AgentStatusDone:
+		return condition == ConditionIdle || condition == ConditionComplete || condition == ConditionHealthy
+	case herdr.AgentStatusWorking:
+		return condition == ConditionGenerating || condition == ConditionHealthy
+	case herdr.AgentStatusBlocked:
+		// blocked is not healthy and not idle/generating
+		return false
+	case herdr.AgentStatusUnknown:
+		return false
+	default:
+		return false
+	}
+}
+
+// mapWaitConditionToHerdrStatus picks the herdr --status value that best
+// matches a single ntm wait condition. Empty means "no native mapping".
+func mapWaitConditionToHerdrStatus(condition WaitCondition) string {
+	switch condition {
+	case ConditionIdle, ConditionComplete:
+		return herdr.AgentStatusIdle
+	case ConditionGenerating:
+		return herdr.AgentStatusWorking
+	default:
+		// healthy / composed conditions need multi-state awareness
+		return ""
+	}
+}
+
+
+// muxInTmux reports whether the process is nested inside a live terminal
+// multiplexer session that can host the assign-watch overlay.
+// Herdr has no tmux-style overlay binding surface, so this is always false
+// under NTM_BACKEND=herdr.
+func muxInTmux() bool {
+	if backend.IsHerdr() {
+		return false
+	}
+	return tmux.InTmux()
+}
+
+// muxGetCurrentSession returns the currently-focused backend session name,
+// or "" when none can be resolved.
+func muxGetCurrentSession() string {
+	if backend.IsHerdr() {
+		return herdr.GetCurrentSession()
+	}
+	return tmux.GetCurrentSession()
+}
+
+// muxSendKeysForAgentWithDelay routes agent-aware key delivery through the
+// active backend. Herdr ignores agent-type paste heuristics and uses plain
+// send-keys-with-delay; tmux keeps its agent-specific path.
+func muxSendKeysForAgentWithDelay(target, keys string, enter bool, enterDelay time.Duration, agentType tmux.AgentType) error {
+	if backend.IsHerdr() {
+		return herdr.SendKeysForAgentWithDelay(target, keys, enter, enterDelay, herdr.AgentType(agentType))
+	}
+	return tmux.SendKeysForAgentWithDelay(target, keys, enter, enterDelay, agentType)
 }
 

@@ -25,7 +25,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/Dicklesworthstone/ntm/internal/audit"
-	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
@@ -2290,7 +2289,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 		}
 
 		for _, p := range toKill {
-			if err := tmux.KillPane(p.ID); err != nil {
+			if err := muxKillPane(p.ID); err != nil {
 				return fmt.Errorf("killing pane %s: %w", p.ID, err)
 			}
 		}
@@ -2348,7 +2347,7 @@ func runKill(w io.Writer, session string, force bool, tags []string, noHooks boo
 		_ = output
 	}
 
-	if err := tmux.KillSession(session); err != nil {
+	if err := muxKillSession(session); err != nil {
 		return err
 	}
 	auditKilled = true
@@ -2682,7 +2681,7 @@ func buildKillResponse(session string, force bool, tags []string, noHooks bool, 
 		}
 
 		for _, p := range toKill {
-			if err := tmux.KillPane(p.ID); err != nil {
+			if err := muxKillPane(p.ID); err != nil {
 				return nil, fmt.Errorf("killing pane %s: %w", p.ID, err)
 			}
 			events.DefaultEmitter().Emit(events.NewWebhookEvent(
@@ -2717,7 +2716,7 @@ func buildKillResponse(session string, force bool, tags []string, noHooks bool, 
 			_ = output // Monitor may not be running — that's fine
 		}
 
-		if err := tmux.KillSession(session); err != nil {
+		if err := muxKillSession(session); err != nil {
 			return nil, err
 		}
 		auditKilled = true
@@ -3079,11 +3078,16 @@ func shellDispatchOrderer(selected []tmux.Pane) dispatchsvc.TargetOrderer {
 func shellDispatchSelectors(selected []tmux.Pane) []string {
 	selectors := make([]string, 0, len(selected))
 	for _, pane := range selected {
-		if pane.ID != "" && !backend.IsHerdr() {
-			selectors = append(selectors, pane.ID)
-		} else {
-			selectors = append(selectors, pane.Ref().Physical())
+		// Prefer a native pane ID only when it is a valid N / W.P / %N selector.
+		// Herdr pane IDs look like "w6:p2", which ParsePaneSelector rejects —
+		// fall back to the numeric W.P address derived from WindowIndex/Index.
+		if pane.ID != "" {
+			if _, err := tmux.ParsePaneSelector(pane.ID); err == nil {
+				selectors = append(selectors, pane.ID)
+				continue
+			}
 		}
+		selectors = append(selectors, pane.Ref().Physical())
 	}
 	return selectors
 }
@@ -3118,12 +3122,15 @@ func newShellDispatchService(session string, selected []tmux.Pane, redactCfg red
 		Protocols: shellDispatchProtocolPlanner{},
 		Deliverer: dispatchsvc.DelivererFunc(func(_ context.Context, delivery dispatchsvc.Delivery) error {
 			target := delivery.Target.Pane
+			// Keep the native backend pane id (tmux %N or herdr wN:pM). Only
+			// synthesize a session:W.P address when no id is available.
 			if target.ID == "" {
 				target.ID = fmt.Sprintf("%s:%s", session, target.Ref().Physical())
 			}
 			switch delivery.Protocol {
 			case dispatchsvc.ProtocolSingleEnter:
-				return tmux.PasteKeysWithDelay(target.ID, delivery.Message, true, delivery.EnterDelay)
+				// Route through mux so herdr panes are not handed to tmux.
+				return muxSendKeysWithDelay(target.ID, delivery.Message, true, delivery.EnterDelay)
 			case dispatchsvc.ProtocolDoubleEnter:
 				return sendPromptWithDoubleEnterForAgent(target.ID, delivery.Message, target.Type)
 			default:

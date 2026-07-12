@@ -112,6 +112,26 @@ type okResult struct {
 	Type string `json:"type"`
 }
 
+// agentGetResult is the result of `herdr agent get <target>`.
+type agentGetResult struct {
+	Type  string    `json:"type"`
+	Agent agentInfo `json:"agent"`
+}
+
+// agentWaitResult is the result of `herdr agent wait <target> --status ...`
+// when the target is already in (or reaches) the desired status. Herdr may
+// return either a full agent_info or a thin status event depending on path.
+type agentWaitResult struct {
+	Type  string     `json:"type"`
+	Agent *agentInfo `json:"agent,omitempty"`
+	// Event-shaped payloads (herdr wait agent-status) land here when decoded
+	// as the raw result object; we only need success/failure from runJSON.
+	Data *struct {
+		PaneID      string `json:"pane_id"`
+		AgentStatus string `json:"agent_status"`
+	} `json:"data,omitempty"`
+}
+
 type paneSplitResult struct {
 	Type string   `json:"type"`
 	Pane paneInfo `json:"pane"`

@@ -288,7 +288,7 @@ func runAssign(cmd *cobra.Command, args []string) error {
 		session = args[0]
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -499,8 +499,8 @@ func runWatchMode(cmd *cobra.Command, session string) error {
 	prepareAndAnnounceAssignWatchOverlay(
 		watchLoop.logf,
 		session,
-		tmux.InTmux(),
-		tmux.GetCurrentSession(),
+		muxInTmux(),
+		muxGetCurrentSession(),
 		isOverlayKeyBound,
 		setupOverlayBindingQuiet,
 	)
@@ -1012,12 +1012,12 @@ type DirectAssignData struct {
 
 // getAssignOutput builds the assignment output without printing
 func getAssignOutput(opts robot.AssignOptions) (*robot.AssignOutput, error) {
-	if !tmux.SessionExists(opts.Session) {
+	if !muxSessionExists(opts.Session) {
 		return nil, fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
 	// Get panes from tmux
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := muxGetPanes(opts.Session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -1044,7 +1044,7 @@ func getAssignOutput(opts robot.AssignOptions) (*robot.AssignOutput, error) {
 		}
 
 		// Capture state
-		scrollback, _ := tmux.CaptureForStatusDetection(pane.ID)
+		scrollback, _ := muxCaptureForStatusDetection(pane.ID)
 		state := determineAgentState(scrollback, agentType)
 		if state == "idle" {
 			idleAgentPanes = append(idleAgentPanes, fmt.Sprintf("%d", pane.Index))
@@ -1597,12 +1597,12 @@ func runAssignJSON(opts *AssignCommandOptions) error {
 
 // getAssignOutputEnhanced builds the enhanced assignment output
 func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced, error) {
-	if !tmux.SessionExists(opts.Session) {
+	if !muxSessionExists(opts.Session) {
 		return nil, fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
 	// Get panes from tmux
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := muxGetPanes(opts.Session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -1633,7 +1633,7 @@ func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced,
 		}
 
 		model := detectModelFromTitle(at, pane.Title)
-		scrollback, _ := tmux.CaptureForStatusDetection(pane.ID)
+		scrollback, _ := muxCaptureForStatusDetection(pane.ID)
 		state := determineAgentState(scrollback, at)
 
 		if state == "idle" {
@@ -2601,7 +2601,7 @@ func executeAssignmentsEnhanced(session string, out *AssignOutputEnhanced, opts 
 
 	var successCount, failCount, reservedCount int
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -2792,19 +2792,47 @@ func newCLIAtomicAssignmentCoordinator(store *assignment.AssignmentStore, projec
 		}))
 }
 
+
+// muxDispatchDeliverer is a backend-aware dispatchsvc.Deliverer used by the
+// assign atomic path. It mirrors dispatchsvc.TMUXDeliverer but routes key
+// delivery through mux* helpers so herdr panes are not handed to tmux.
+func muxDispatchDeliverer(session string) dispatchsvc.Deliverer {
+	return dispatchsvc.DelivererFunc(func(_ context.Context, delivery dispatchsvc.Delivery) error {
+		target := delivery.Target.Ref.ID
+		if target == "" {
+			// Prefer the live pane id when present (tmux %N / herdr wN:pM).
+			if delivery.Target.Pane.ID != "" {
+				target = delivery.Target.Pane.ID
+			} else {
+				target = fmt.Sprintf("%s:%s", session, delivery.Target.Ref.Physical())
+			}
+		}
+		switch delivery.Protocol {
+		case dispatchsvc.ProtocolStageOnly:
+			return muxSendKeysForAgentWithDelay(target, delivery.Message, false, 0, delivery.Target.AgentType)
+		case dispatchsvc.ProtocolSingleEnter:
+			return muxSendKeysForAgentWithDelay(target, delivery.Message, true, delivery.EnterDelay, delivery.Target.AgentType)
+		case dispatchsvc.ProtocolDoubleEnter:
+			return muxSendKeysForAgentDoubleEnter(target, delivery.Message, delivery.Target.AgentType)
+		default:
+			return fmt.Errorf("unsupported delivery protocol %q", delivery.Protocol)
+		}
+	})
+}
+
 type cliAtomicPaneDispatchPort struct {
 	session         string
 	redactionConfig redaction.Config
 }
 
 func (p *cliAtomicPaneDispatchPort) prepare(ctx context.Context, req assignment.DispatchRequest) (*dispatchsvc.Service, *dispatchsvc.Prepared, error) {
-	panes, err := tmux.GetPanesContext(ctx, p.session)
+	panes, err := muxGetPanesContext(ctx, p.session)
 	if err != nil {
 		return nil, nil, fmt.Errorf("load dispatch topology: %w", err)
 	}
 	service, err := dispatchsvc.NewService(dispatchsvc.Ports{
 		Redactor: shellFinalMessageRedactor(p.redactionConfig), Protocols: shellDispatchProtocolPlanner{},
-		Deliverer: dispatchsvc.TMUXDeliverer{},
+		Deliverer: muxDispatchDeliverer(p.session),
 	})
 	if err != nil {
 		return nil, nil, err
@@ -3160,7 +3188,7 @@ func runRetryAssignments(cmd *cobra.Command, session string) error {
 	}
 
 	// Get all panes for --to-pane
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		if IsJSONOutput() {
 			return emitJSONFailureEnvelope(makeRetryEnvelope(
@@ -3617,7 +3645,7 @@ func runClearPaneAssignments(cmd *cobra.Command, session string, pane int) error
 	}
 
 	// Get panes to validate the pane exists
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		err = fmt.Errorf("failed to get panes: %w", err)
 		if IsJSONOutput() {
@@ -3833,7 +3861,7 @@ func runReassignment(cmd *cobra.Command, session string) error {
 	}
 
 	// Get panes from tmux
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		err = fmt.Errorf("failed to get panes: %w", err)
 		if IsJSONOutput() {
@@ -3901,7 +3929,7 @@ func runReassignment(cmd *cobra.Command, session string) error {
 	}
 
 	// Check if target pane is busy (unless --force)
-	scrollback, _ := tmux.CapturePaneOutput(targetPane.ID, 10)
+	scrollback, _ := muxCapturePaneOutput(targetPane.ID, 10)
 	state := determineAgentState(scrollback, targetAgentType)
 
 	if state != "idle" && !assignForce {
@@ -4736,7 +4764,7 @@ func runDirectPaneAssignment(cmd *cobra.Command, opts *AssignCommandOptions) err
 	beadID := opts.BeadIDs[0]
 
 	// Get panes from tmux
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := muxGetPanes(opts.Session)
 	if err != nil {
 		err = fmt.Errorf("failed to get panes: %w", err)
 		if IsJSONOutput() {
@@ -4836,7 +4864,7 @@ func runDirectPaneAssignment(cmd *cobra.Command, opts *AssignCommandOptions) err
 			return err
 		}
 
-		scrollback, _ := tmux.CapturePaneOutput(targetPane.ID, 10)
+		scrollback, _ := muxCapturePaneOutput(targetPane.ID, 10)
 		state := determineAgentState(scrollback, agentType)
 		if state != "idle" && !opts.Force {
 			assignItem.PaneWasBusy = true
@@ -5283,7 +5311,7 @@ func getIdleAgents(session, agentTypeFilter string, verbose bool) ([]assignAgent
 	}
 
 	// Get panes from tmux
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -5314,7 +5342,7 @@ func getIdleAgents(session, agentTypeFilter string, verbose bool) ([]assignAgent
 		}
 
 		model := detectModelFromTitle(agentType, pane.Title)
-		scrollback, _ := tmux.CaptureForStatusDetection(pane.ID)
+		scrollback, _ := muxCaptureForStatusDetection(pane.ID)
 		state := determineAgentState(scrollback, agentType)
 
 		if state == "idle" {

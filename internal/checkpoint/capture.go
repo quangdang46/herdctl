@@ -17,7 +17,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/assignment"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
 	"github.com/Dicklesworthstone/ntm/internal/privacy"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // Capturer handles capturing session state for checkpoints.
@@ -52,7 +51,7 @@ func (c *Capturer) Create(sessionName, name string, opts ...CheckpointOption) (*
 	}
 
 	// Check session exists
-	if !tmux.SessionExists(sessionName) {
+	if !muxSessionExists(sessionName) {
 		return nil, fmt.Errorf("session %q does not exist", sessionName)
 	}
 
@@ -139,9 +138,9 @@ func (c *Capturer) Create(sessionName, name string, opts ...CheckpointOption) (*
 	return cp, nil
 }
 
-// captureSessionState captures the current state of a tmux session.
+// captureSessionState captures the current state of a session.
 func (c *Capturer) captureSessionState(sessionName string) (SessionState, error) {
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := muxGetPanes(sessionName)
 	if err != nil {
 		return SessionState{}, fmt.Errorf("getting panes: %w", err)
 	}
@@ -258,44 +257,16 @@ func (c *Capturer) captureGitState(workingDir, sessionName, checkpointID string)
 
 // getSessionDir gets the working directory for a session.
 func getSessionDir(sessionName string) (string, error) {
-	return tmux.DefaultClient.Run("display-message", "-p", "-t", sessionName, "#{pane_current_path}")
+	return muxGetSessionDir(sessionName)
 }
 
-// getSessionLayout gets the tmux layout string for a session.
+// getSessionLayout gets the layout string for a session (tmux fidelity).
 func getSessionLayout(sessionName string) (string, error) {
-	return tmux.DefaultClient.Run("display-message", "-p", "-t", sessionName, "#{window_layout}")
+	return muxGetSessionLayout(sessionName)
 }
 
 func getSessionWindowLayouts(sessionName string) ([]WindowLayoutState, error) {
-	out, err := tmux.DefaultClient.Run("list-windows", "-t", sessionName, "-F", "#{window_index}\t#{window_layout}")
-	if err != nil {
-		return nil, err
-	}
-
-	var layouts []WindowLayoutState
-	for _, line := range strings.Split(out, "\n") {
-		if line == "" {
-			continue
-		}
-		parts := strings.SplitN(line, "\t", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("unexpected window layout format: %q", line)
-		}
-		windowIndex, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-		if err != nil {
-			return nil, fmt.Errorf("parsing window index %q: %w", parts[0], err)
-		}
-		layout := strings.TrimSpace(parts[1])
-		if layout == "" {
-			continue
-		}
-		layouts = append(layouts, WindowLayoutState{
-			WindowIndex: windowIndex,
-			Layout:      layout,
-		})
-	}
-	sortWindowLayouts(layouts)
-	return layouts, nil
+	return muxGetSessionWindowLayouts(sessionName)
 }
 
 func canUseLegacyLayoutFallback(panes []PaneState) bool {
@@ -303,7 +274,7 @@ func canUseLegacyLayoutFallback(panes []PaneState) bool {
 }
 
 func getSessionActivePaneID(sessionName string) (string, error) {
-	return tmux.DefaultClient.Run("display-message", "-p", "-t", sessionName, "#{pane_id}")
+	return muxGetSessionActivePaneID(sessionName)
 }
 
 // isGitRepo checks if a directory is a git repository.

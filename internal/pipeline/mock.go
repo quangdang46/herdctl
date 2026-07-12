@@ -5,17 +5,21 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
-// TmuxClient is the narrow tmux surface the pipeline executor needs.
-// Production executors use realTmuxClient; tests can install MockTmuxClient
-// with Executor.SetTmuxClient to avoid touching a live tmux server.
+// TmuxClient is the narrow multiplexer surface the pipeline executor needs.
+// Production executors use realTmuxClient (dispatches tmux or herdr via
+// NTM_BACKEND); tests can install MockTmuxClient with Executor.SetTmuxClient
+// to avoid touching a live server.
 type TmuxClient interface {
 	GetPanes(session string) ([]tmux.Pane, error)
 	PasteKeys(target, content string, enter bool) error
@@ -25,15 +29,86 @@ type TmuxClient interface {
 type realTmuxClient struct{}
 
 func (realTmuxClient) GetPanes(session string) ([]tmux.Pane, error) {
-	return tmux.GetPanes(session)
+	return muxGetPanes(session)
 }
 
 func (realTmuxClient) PasteKeys(target, content string, enter bool) error {
-	return tmux.PasteKeys(target, content, enter)
+	return muxPasteKeys(target, content, enter)
 }
 
 func (realTmuxClient) CapturePaneOutput(target string, lines int) (string, error) {
+	return muxCapturePaneOutput(target, lines)
+}
+
+// muxGetPanes lists panes on the active backend, converting herdr shapes to
+// tmux.Pane so the rest of the pipeline keeps its existing types.
+func muxGetPanes(session string) ([]tmux.Pane, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetPanes(session)
+	}
+	panes, err := herdr.GetPanes(session)
+	if err != nil {
+		return nil, err
+	}
+	return herdrPanesToTmux(panes), nil
+}
+
+// muxPasteKeys delivers multi-line content. Herdr has no paste buffer; SendKeys
+// is the closest equivalent (see internal/herdr/PARITY.md).
+func muxPasteKeys(target, content string, enter bool) error {
+	if backend.IsHerdr() {
+		return herdr.SendKeys(target, content, enter)
+	}
+	return tmux.PasteKeys(target, content, enter)
+}
+
+func muxCapturePaneOutput(target string, lines int) (string, error) {
+	if backend.IsHerdr() {
+		return herdr.CapturePaneOutput(target, lines)
+	}
 	return tmux.CapturePaneOutput(target, lines)
+}
+
+func herdrPanesToTmux(in []herdr.Pane) []tmux.Pane {
+	out := make([]tmux.Pane, 0, len(in))
+	for i, p := range in {
+		win, paneIdx := herdrPaneNumericWinPane(p.ID)
+		if win == 0 && paneIdx == 0 {
+			win, paneIdx = p.WindowIndex, p.Index
+		}
+		if paneIdx == 0 && p.Index == 0 {
+			paneIdx = i
+		}
+		out = append(out, tmux.Pane{
+			ID:          p.ID,
+			Index:       paneIdx,
+			WindowIndex: win,
+			NTMIndex:    p.NTMIndex,
+			Title:       p.Title,
+			Type:        tmux.AgentType(p.Type),
+			Variant:     p.Variant,
+			Tags:        append([]string{}, p.Tags...),
+			Command:     p.Command,
+			Width:       p.Width,
+			Height:      p.Height,
+			Active:      p.Active,
+			PID:         p.PID,
+		})
+	}
+	return out
+}
+
+func herdrPaneNumericWinPane(herdrID string) (win, pane int) {
+	if strings.Count(herdrID, ":") != 1 {
+		return 0, 0
+	}
+	left, right, ok := strings.Cut(herdrID, ":")
+	if !ok {
+		return 0, 0
+	}
+	win, _ = strconv.Atoi(strings.TrimLeft(left, "wW"))
+	pane, _ = strconv.Atoi(strings.TrimLeft(right, "pP"))
+	return win, pane
 }
 
 // MockTmuxPaste records one PasteKeys call made against the mock.

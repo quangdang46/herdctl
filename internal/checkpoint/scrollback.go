@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
 
@@ -83,7 +82,7 @@ func CaptureScrollbackContext(ctx context.Context, session, paneID string, confi
 	_ = session
 
 	// Capture pane output
-	content, err := tmux.CapturePaneOutputContext(ctx, paneID, config.Lines)
+	content, err := muxCapturePaneOutputContext(ctx, paneID, config.Lines)
 	if err != nil {
 		return nil, fmt.Errorf("capturing pane output: %w", err)
 	}

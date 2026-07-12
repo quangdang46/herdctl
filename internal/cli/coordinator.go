@@ -15,7 +15,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/coordinator"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -80,7 +79,7 @@ func runCoordinatorStatus(cmd *cobra.Command, args []string) error {
 		session = args[0]
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -281,7 +280,7 @@ func runCoordinatorDigest(cmd *cobra.Command, args []string, sendMail bool) erro
 		session = args[0]
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -368,7 +367,7 @@ func runCoordinatorRun(cmd *cobra.Command, args []string, once bool) error {
 	if len(args) > 0 {
 		session = args[0]
 	}
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 	resolved, err := ResolveSession(session, cmd.OutOrStdout())
@@ -543,7 +542,7 @@ func runCoordinatorConflicts(cmd *cobra.Command, args []string) error {
 		session = args[0]
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -663,7 +662,7 @@ func runCoordinatorAssign(cmd *cobra.Command, args []string, dryRun bool) error 
 		session = args[0]
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
