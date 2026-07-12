@@ -1,7 +1,7 @@
 # NTM - Named Tmux Manager
 
 <div align="center">
-  <img src="ntm_dashboard.webp" alt="NTM dashboard">
+  <img src="herdctl_illustration.webp" alt="herdctl — Agent Swarm Control Plane">
 </div>
 
 <div align="center">
