@@ -246,7 +246,7 @@ func GetIsWorking(opts IsWorkingOptions) (*IsWorkingOutput, error) {
 	}
 
 	// Validate session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -476,7 +476,10 @@ func newRobotSessionObserver(lines int) *statuspkg.SessionObserver {
 	detector := statuspkg.NewDetectorWithConfig(detectorConfig)
 	observerConfig := statuspkg.DefaultSessionObserverConfig(detectorConfig)
 	observerConfig.CaptureLines = lines
-	return statuspkg.NewSessionObserverWithDependencies(detector, observerConfig, statuspkg.SessionObserverDependencies{})
+	return statuspkg.NewSessionObserverWithDependencies(detector, observerConfig, statuspkg.SessionObserverDependencies{
+		ListPanes:   backendGetPanesWithActivityContext,
+		CapturePane: backendCapturePaneOutputContext,
+	})
 }
 
 func observationPanes(observation statuspkg.SessionObservation) []tmux.Pane {

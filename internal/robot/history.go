@@ -65,7 +65,7 @@ func GetHistory(opts HistoryOptions) (*HistoryOutput, error) {
 	}
 
 	// Verify session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		// Session doesn't exist, but we might still have history
 		// history.Exists() checks for global history file
 		if !history.Exists() {
@@ -125,8 +125,8 @@ func GetHistory(opts HistoryOptions) (*HistoryOutput, error) {
 		}
 	}
 
-	if normalizedAgentType != "" && tmux.SessionExists(opts.Session) {
-		if panes, err := tmux.GetPanes(opts.Session); err == nil {
+	if normalizedAgentType != "" && backendSessionExists(opts.Session) {
+		if panes, err := backendGetPanes(opts.Session); err == nil {
 			for _, pane := range panes {
 				livePaneTypes[fmt.Sprintf("%d", pane.Index)] = normalizeAgentType(pane.Type.String())
 			}
@@ -213,11 +213,11 @@ func historyPaneFilterAliases(opts HistoryOptions) (map[string]struct{}, error) 
 	if err != nil {
 		return nil, err
 	}
-	if opts.Session == "" || !tmux.SessionExists(opts.Session) {
+	if opts.Session == "" || !backendSessionExists(opts.Session) {
 		return map[string]struct{}{parsed.Raw: {}}, nil
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		return nil, fmt.Errorf("list panes for history filter: %w", err)
 	}

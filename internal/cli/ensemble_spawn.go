@@ -19,7 +19,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/ensemble"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 type ensembleSpawnOptions struct {
@@ -208,7 +207,7 @@ func runEnsembleSpawn(cmd *cobra.Command, opts ensembleSpawnOptions) error {
 
 	applyEnsembleConfigDefaults(cmd, &opts)
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return outputError(err)
 	}
 
@@ -216,10 +215,10 @@ func runEnsembleSpawn(cmd *cobra.Command, opts ensembleSpawnOptions) error {
 	if opts.Session == "" {
 		return outputError(fmt.Errorf("session name is required"))
 	}
-	if err := tmux.ValidateSessionName(opts.Session); err != nil {
+	if err := muxValidateSessionName(opts.Session); err != nil {
 		return outputError(err)
 	}
-	if tmux.SessionExists(opts.Session) {
+	if muxSessionExists(opts.Session) {
 		return outputError(fmt.Errorf("session '%s' already exists", opts.Session))
 	}
 
@@ -488,7 +487,7 @@ func defaultEnsembleSessionName(projectDir string) string {
 
 func uniqueEnsembleSessionName(base string) string {
 	name := base
-	for i := 1; tmux.SessionExists(name); i++ {
+	for i := 1; muxSessionExists(name); i++ {
 		name = fmt.Sprintf("%s-%d", base, i)
 	}
 	return name

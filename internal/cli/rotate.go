@@ -40,7 +40,10 @@ Examples:
   ntm rotate myproject --pane=0 --account=backup1@gmail.com`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
+				return err
+			}
+			if err := muxRequireHerdrServer(); err != nil {
 				return err
 			}
 
@@ -68,7 +71,7 @@ Examples:
 			}
 
 			// Get pane info
-			panes, err := tmux.GetPanes(session)
+			panes, err := muxGetPanes(session)
 			if err != nil {
 				return fmt.Errorf("getting panes: %w", err)
 			}
@@ -288,7 +291,7 @@ func newRotateStatusCmd() *cobra.Command {
 func rotateAllLimited(session, targetAccount string, dryRun bool, inferred bool) error {
 	// 1. Identify limited panes
 	fmt.Printf("Scanning session '%s' for rate-limited panes...\n", session)
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return err
 	}

@@ -32,6 +32,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/events"
 	"github.com/Dicklesworthstone/ntm/internal/gemini"
 	"github.com/Dicklesworthstone/ntm/internal/handoff"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/hooks"
 	"github.com/Dicklesworthstone/ntm/internal/integrations/dcg"
 	"github.com/Dicklesworthstone/ntm/internal/output"
@@ -2204,13 +2205,35 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 			return outputError(fmt.Errorf("invalid %s agent command: %w", agent.Type, err))
 		}
 
-		// Use worktree directory if worktree isolation is enabled
+		// Use worktree directory if worktree isolation is enabled.
+		// Fail closed when --worktrees is set but the path cannot be resolved:
+		// sharing the project root would silently defeat isolation (safety).
 		workingDir := dir
-		if opts.UseWorktrees && worktreeManager != nil {
-			agentName := worktreeAgentName(agent, opts.WorktreeName)
-			if wtInfo, err := worktreeManager.GetWorktreeForAgent(agentName); err == nil && wtInfo.Created && wtInfo.Error == "" {
-				workingDir = wtInfo.Path
+		if opts.UseWorktrees {
+			if worktreeManager == nil {
+				return outputError(fmt.Errorf(
+					"worktree isolation enabled but manager is nil for agent %s_%d",
+					agent.Type, agent.Index,
+				))
 			}
+			agentName := worktreeAgentName(agent, opts.WorktreeName)
+			wtInfo, wtErr := worktreeManager.GetWorktreeForAgent(agentName)
+			if wtErr != nil {
+				return outputError(fmt.Errorf(
+					"worktree isolation: resolve path for agent %s: %w", agentName, wtErr,
+				))
+			}
+			if wtInfo == nil || !wtInfo.Created || wtInfo.Error != "" || strings.TrimSpace(wtInfo.Path) == "" {
+				errDetail := "worktree missing"
+				if wtInfo != nil && wtInfo.Error != "" {
+					errDetail = wtInfo.Error
+				}
+				return outputError(fmt.Errorf(
+					"worktree isolation: agent %s has no usable worktree (%s); refusing shared cwd",
+					agentName, errDetail,
+				))
+			}
+			workingDir = wtInfo.Path
 		}
 
 		if agent.Type == AgentTypeCodex {
@@ -2226,12 +2249,22 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 		// Herdr path: prefer agent.start with a clean argv. The tmux path injects
 		// env/hooks via a shell command string which is fragile over pane send-text.
+		// Persona system prompts / reasoning effort must not be dropped: preferred
+		// argv carries them when the CLI supports it; otherwise fall back to the
+		// rendered template (split or sh -c) so PrepareSystemPrompt still applies.
 		if backend.IsHerdr() {
-			argv := herdrPreferredAgentArgv(agent.Type, resolvedModel)
-			if argv == nil {
-				argv = splitAgentArgv(safeAgentCmd)
+			// Ordered agent.start delays when --stagger / --stagger-mode is set.
+			// Prompt-delivery stagger still runs in the post-launch goroutine;
+			// this spaces the actual process launches themselves.
+			if isStaggered && staggerAgentIdx > 0 && staggerInterval > 0 {
+				if !IsJSONOutput() {
+					fmt.Printf("  → Staggering herdr agent.start by %v before agent %d\n",
+						staggerInterval, staggerAgentIdx+1)
+				}
+				time.Sleep(staggerInterval)
 			}
-			if argv != nil {
+			argv := resolveHerdrAgentArgv(agent.Type, resolvedModel, systemPromptFile, resolvedReasoningEffort, safeAgentCmd)
+			if len(argv) > 0 {
 				launched, launchErr := herdrLaunchAgent(opts.Session, workingDir, agent, argv, title)
 				if launchErr != nil {
 					return outputError(fmt.Errorf("launching %s agent via herdr agent.start: %w", agent.Type, launchErr))
@@ -2242,6 +2275,8 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 					panes[agentNum] = pane
 				}
 			} else {
+				// No usable argv (empty template) — last-resort send-keys into
+				// the root pane (unlikely; resolveHerdrAgentArgv prefers sh -c).
 				cmd, err := tmux.BuildPaneCommand(workingDir, safeAgentCmd)
 				if err != nil {
 					return outputError(fmt.Errorf("building %s agent command: %w", agent.Type, err))
@@ -4453,7 +4488,9 @@ func worktreeAgentName(a FlatAgent, override string) string {
 }
 
 // waitForAgentsReady waits for spawned agents to show ready/idle prompts.
-// Returns the number of ready agents and any error.
+// On herdr, prefers native agent_status (idle/done) via muxGetAgentStatus /
+// muxWaitAgentStatus; falls back to scrollback classification when status is
+// unknown. Returns the number of ready agents and any error.
 func waitForAgentsReady(session string, timeout time.Duration) (int, error) {
 	deadline := time.Now().Add(timeout)
 	pollInterval := 2 * time.Second
@@ -4466,9 +4503,8 @@ func waitForAgentsReady(session string, timeout time.Duration) (int, error) {
 			return 0, fmt.Errorf("failed to get panes: %w", err)
 		}
 
-		readyCount := 0
 		readyPanes, agentCount := collectReadyAgentPanes(panes, muxCaptureForStatusDetection)
-		readyCount = len(readyPanes)
+		readyCount := len(readyPanes)
 
 		lastReady = readyCount
 		lastAgents = agentCount
@@ -4479,6 +4515,40 @@ func waitForAgentsReady(session string, timeout time.Duration) (int, error) {
 
 		if time.Now().After(deadline) {
 			return lastReady, fmt.Errorf("timeout waiting for agents to become ready (%d/%d ready)", lastReady, lastAgents)
+		}
+
+		// Herdr: when some agents are still not ready, try a short native wait
+		// on the first non-ready agent pane before the next poll cycle.
+		if backend.IsHerdr() && agentCount > readyCount {
+			for _, pane := range panes {
+				agentType := detectAgentTypeFromPane(pane)
+				if agentType == "user" || agentType == "unknown" || pane.ID == "" {
+					continue
+				}
+				alreadyReady := false
+				for _, rp := range readyPanes {
+					if rp.ID == pane.ID {
+						alreadyReady = true
+						break
+					}
+				}
+				if alreadyReady {
+					continue
+				}
+				remaining := time.Until(deadline)
+				if remaining <= 0 {
+					break
+				}
+				waitMS := int(remaining / time.Millisecond)
+				if waitMS > 2000 {
+					waitMS = 2000
+				}
+				if waitMS < 100 {
+					waitMS = 100
+				}
+				_ = muxWaitAgentStatus(pane.ID, herdr.AgentStatusIdle, waitMS)
+				break
+			}
 		}
 
 		time.Sleep(pollInterval)
@@ -4537,12 +4607,42 @@ func collectReadyAgentPanes(panes []tmux.Pane, capture func(string) (string, err
 	readyPanes := make([]tmux.Pane, 0, len(panes))
 	agentCount := 0
 
+	// Herdr: bulk agent_status from one pane list when session name is known.
+	var herdrStatuses map[string]string
+	if backend.IsHerdr() {
+		if session := sessionNameFromPanes(panes); session != "" {
+			herdrStatuses = muxHerdrAgentStatuses(session)
+		}
+	}
+
 	for _, pane := range panes {
 		agentType := detectAgentTypeFromPane(pane)
 		if agentType == "user" || agentType == "unknown" {
 			continue
 		}
 		agentCount++
+
+		// Prefer herdr-native agent_status when available.
+		if backend.IsHerdr() && pane.ID != "" {
+			status := ""
+			if herdrStatuses != nil {
+				status = herdrStatuses[pane.ID]
+			}
+			if status == "" {
+				if s, err := muxGetAgentStatus(pane.ID); err == nil {
+					status = s
+				}
+			}
+			switch strings.ToLower(strings.TrimSpace(status)) {
+			case herdr.AgentStatusIdle, herdr.AgentStatusDone:
+				readyPanes = append(readyPanes, pane)
+				continue
+			case herdr.AgentStatusWorking, herdr.AgentStatusBlocked:
+				// Not ready; skip scrollback so we don't false-positive on banners.
+				continue
+			}
+			// unknown / empty → fall through to capture classification
+		}
 
 		scrollback, _ := capture(pane.ID)
 		if determineAgentState(scrollback, agentType) == "idle" {
@@ -4551,6 +4651,21 @@ func collectReadyAgentPanes(panes []tmux.Pane, capture func(string) (string, err
 	}
 
 	return readyPanes, agentCount
+}
+
+// sessionNameFromPanes best-effort extracts the NTM session name from pane titles
+// of the form "{session}__{type}_{index}". Returns "" when no title matches.
+func sessionNameFromPanes(panes []tmux.Pane) string {
+	for _, p := range panes {
+		title := strings.TrimSpace(p.Title)
+		if title == "" {
+			continue
+		}
+		if i := strings.Index(title, "__"); i > 0 {
+			return title[:i]
+		}
+	}
+	return ""
 }
 
 // waitForPaneAgentIdle polls a single pane's scrollback until the agent

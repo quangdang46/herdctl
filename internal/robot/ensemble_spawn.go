@@ -99,7 +99,7 @@ func GetEnsembleSpawn(opts EnsembleSpawnOptions, cfg *config.Config) (*EnsembleS
 		output.RobotResponse = NewErrorResponse(err, ErrCodeDependencyMissing, "Install tmux to spawn ensembles")
 		return output, nil
 	}
-	if tmux.SessionExists(output.Session) {
+	if backendSessionExists(output.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' already exists", output.Session),
 			ErrCodeInvalidFlag,

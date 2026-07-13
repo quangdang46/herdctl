@@ -14,7 +14,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/agent"
 	"github.com/Dicklesworthstone/ntm/internal/state"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // liveThinkingWindowLines is the number of trailing lines from a pane
@@ -175,7 +174,7 @@ func (vt *VelocityTracker) Update() (*VelocitySample, error) {
 	// PaneID is immutable after creation, so safe to read without lock
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	output, err := tmux.CaptureForStatusDetectionContext(ctx, vt.PaneID)
+	output, err := backendCaptureForStatusDetectionContext(ctx, vt.PaneID)
 	if err != nil {
 		return nil, err
 	}

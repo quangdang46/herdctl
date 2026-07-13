@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -128,10 +130,21 @@ func newMemoryOutcomeCmd() *cobra.Command {
 }
 
 func findSessionID(dir string) (string, error) {
-	pidsDir := ".ntm/pids"
+	// Prefer the active backend's current session (herdr or tmux via mux) so
+	// memory commands work without a local cm-*.pid file under .ntm/pids.
+	if current := strings.TrimSpace(muxGetCurrentSession()); current != "" {
+		return current, nil
+	}
+
+	// Fall back to project-local CM daemon pid files when present.
+	pidsDir := filepath.Join(dir, ".ntm", "pids")
 	entries, err := os.ReadDir(pidsDir)
 	if err != nil {
-		return "", fmt.Errorf("could not find .ntm/pids in current directory (run from project root): %w", err)
+		// Last resort: use the project basename so cm clients still get a stable id.
+		if base := filepath.Base(strings.TrimSpace(dir)); base != "" && base != "." && base != string(filepath.Separator) {
+			return base, nil
+		}
+		return "", fmt.Errorf("could not resolve memory session id (no live backend session, no .ntm/pids under %s)", dir)
 	}
 
 	for _, entry := range entries {
@@ -139,6 +152,9 @@ func findSessionID(dir string) (string, error) {
 		if len(name) > 3 && name[:3] == "cm-" && name[len(name)-4:] == ".pid" {
 			return name[3 : len(name)-4], nil
 		}
+	}
+	if base := filepath.Base(strings.TrimSpace(dir)); base != "" && base != "." && base != string(filepath.Separator) {
+		return base, nil
 	}
 	return "", fmt.Errorf("no running memory daemon found in current directory")
 }

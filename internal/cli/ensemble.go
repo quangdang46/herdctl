@@ -26,9 +26,9 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/ensemble"
 	"github.com/Dicklesworthstone/ntm/internal/output"
+	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	sessionPkg "github.com/Dicklesworthstone/ntm/internal/session"
 	"github.com/Dicklesworthstone/ntm/internal/status"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
@@ -130,7 +130,7 @@ Primary usage:
 			}
 			opts.Project = projectDir
 
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				if IsJSONOutput() {
 					_ = output.PrintJSON(output.NewError(err.Error()))
 				}
@@ -364,7 +364,7 @@ func runEnsembleStop(w io.Writer, session string, opts ensembleStopOptions) erro
 
 	// Collect partial outputs if requested
 	if !opts.NoCollect {
-		capture := ensemble.NewOutputCapture(tmux.DefaultClient)
+		capture := ensemble.NewOutputCapture(newMuxEnsembleCapture())
 		capturedOutputs, err := capture.CaptureAll(state)
 		if err != nil {
 			slog.Default().Warn("failed to capture partial outputs", "error", err)
@@ -379,7 +379,7 @@ func runEnsembleStop(w io.Writer, session string, opts ensembleStopOptions) erro
 	}
 
 	// Get all panes for the session
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		slog.Default().Warn("failed to get panes", "error", err)
 	}
@@ -391,7 +391,7 @@ func runEnsembleStop(w io.Writer, session string, opts ensembleStopOptions) erro
 	if !opts.Force && len(panes) > 0 {
 		for _, pane := range panes {
 			// Send Ctrl+C (interrupt signal)
-			if err := tmux.SendKeys(pane.ID, "C-c", false); err != nil {
+			if err := muxSendKeys(pane.ID, "C-c", false); err != nil {
 				slog.Default().Warn("failed to send interrupt to pane",
 					"pane", pane.ID,
 					"error", err,
@@ -404,7 +404,7 @@ func runEnsembleStop(w io.Writer, session string, opts ensembleStopOptions) erro
 	}
 
 	// Kill the session (force or after graceful timeout)
-	if err := tmux.KillSession(session); err != nil {
+	if err := muxKillSession(session); err != nil {
 		slog.Default().Warn("failed to kill session", "session", session, "error", err)
 		stopErrors = append(stopErrors, err)
 	} else {
@@ -522,7 +522,7 @@ func runEnsembleStatus(w io.Writer, session string, opts ensembleStatusOptions) 
 
 	if sessionLive {
 		queryStart := time.Now()
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		queryDuration := time.Since(queryStart)
 		if err != nil {
 			return err
@@ -586,14 +586,30 @@ func runEnsembleStatus(w io.Writer, session string, opts ensembleStatusOptions) 
 	return renderEnsembleStatus(w, outputData, format)
 }
 
+
+// muxEnsembleCapture routes ensemble pane capture through the active backend.
+type muxEnsembleCapture struct{}
+
+func (muxEnsembleCapture) GetPanes(session string) ([]tmux.Pane, error) {
+	return muxGetPanes(session)
+}
+
+func (muxEnsembleCapture) CapturePaneOutput(target string, lines int) (string, error) {
+	return muxCapturePaneOutput(target, lines)
+}
+
+func newMuxEnsembleCapture() ensemble.CaptureClient {
+	return muxEnsembleCapture{}
+}
+
 func ensembleSessionRuntimeExists(session string) bool {
 	if strings.TrimSpace(session) == "" {
 		return false
 	}
-	if !tmux.IsInstalled() {
+	if !muxIsInstalled() {
 		return false
 	}
-	return tmux.SessionExists(session)
+	return muxSessionExists(session)
 }
 
 func loadEnsembleStateWithRuntimePresence(session string) (*ensemble.EnsembleSession, bool, error) {
@@ -629,7 +645,7 @@ func loadEnsembleModeOutputs(state *ensemble.EnsembleSession, sessionLive bool) 
 
 	var captured []ensemble.CapturedOutput
 	if sessionLive {
-		capture := ensemble.NewOutputCapture(tmux.DefaultClient)
+		capture := ensemble.NewOutputCapture(newMuxEnsembleCapture())
 		var err error
 		captured, err = capture.CaptureAll(state)
 		if err != nil {
@@ -1098,7 +1114,7 @@ func runEnsembleSynthesize(w io.Writer, session string, opts synthesizeOptions) 
 	// Collect outputs from panes for cache misses when the session is still live.
 	var captured []ensemble.CapturedOutput
 	if sessionLive && len(collectedModes) < len(state.Assignments) {
-		capture := ensemble.NewOutputCapture(tmux.DefaultClient)
+		capture := ensemble.NewOutputCapture(newMuxEnsembleCapture())
 		var err error
 		captured, err = capture.CaptureAll(state)
 		if err != nil {
@@ -2413,11 +2429,11 @@ func normalizeOfflineCapableEnsembleSessionName(session string, allowPrefix bool
 	if session == "" {
 		return "", fmt.Errorf("session is required")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
 
-	if sessionList, err := tmux.ListSessions(); err == nil {
+	if sessionList, err := muxListSessions(); err == nil {
 		resolved, _, err := resolveExplicitSessionName(session, sessionList, allowPrefix)
 		if err == nil {
 			session = resolved

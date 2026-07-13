@@ -128,7 +128,7 @@ func runSummary(args []string, sinceStr, format string, recent, regenerate bool)
 		}
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		if sessionArg == "" && len(summaryFiles) > 0 {
 			if latest, ok := latestSummaryForSession(summaryFiles, ""); ok {
 				return outputSummaryFromFile(latest.Path, sumFormat, forceJSON || IsJSONOutput())
@@ -156,7 +156,7 @@ func runSummary(args []string, sinceStr, format string, recent, regenerate bool)
 		return err
 	}
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -168,13 +168,13 @@ func runSummary(args []string, sinceStr, format string, recent, regenerate bool)
 	}
 
 	// Get panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return fmt.Errorf("failed to get panes: %w", err)
 	}
 
 	// Build agent outputs
-	outputs := collectSummaryAgentOutputs(panes, tmux.CapturePaneOutput, nil)
+	outputs := collectSummaryAgentOutputs(panes, muxCapturePaneOutput, nil)
 
 	opts := summary.Options{
 		Session:        session,

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
 	"github.com/Dicklesworthstone/ntm/internal/output"
@@ -212,7 +213,10 @@ func runController(opts ControllerInput) error {
 func buildControllerResponse(opts ControllerInput) (*ControllerResponse, error) {
 	session := opts.Session
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return nil, err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return nil, err
 	}
 
@@ -228,12 +232,12 @@ func buildControllerResponse(opts ControllerInput) (*ControllerResponse, error) 
 		opts.Session = res.Session
 	}
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return nil, fmt.Errorf("session '%s' not found", session)
 	}
 
 	// Get existing panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, fmt.Errorf("getting panes: %w", err)
 	}
@@ -247,38 +251,48 @@ func buildControllerResponse(opts ControllerInput) (*ControllerResponse, error) 
 		agentType = "cc"
 	}
 
-	// Resolve agent type to full name
+	// Resolve agent type to full name + short AgentType for herdr launch
 	var agentTypeFull string
 	var agentCmdTemplate string
+	var shortAgentType AgentType
 	switch robot.ResolveAgentType(agentType) {
 	case "claude":
 		agentTypeFull = "claude"
+		shortAgentType = AgentTypeClaude
 		agentCmdTemplate = cfg.Agents.Claude
 	case "codex":
 		agentTypeFull = "codex"
+		shortAgentType = AgentTypeCodex
 		agentCmdTemplate = cfg.Agents.Codex
 	case "gemini":
 		agentTypeFull = "gemini"
+		shortAgentType = AgentTypeGemini
 		agentCmdTemplate = cfg.Agents.Gemini
 	case "antigravity":
 		agentTypeFull = "antigravity"
+		shortAgentType = AgentTypeAntigravity
 		agentCmdTemplate = cfg.Agents.Antigravity
 	case "cursor":
 		agentTypeFull = "cursor"
+		shortAgentType = AgentTypeCursor
 		agentCmdTemplate = cfg.Agents.Cursor
 	case "windsurf", "ws":
 		agentTypeFull = "windsurf"
+		shortAgentType = AgentTypeWindsurf
 		agentCmdTemplate = cfg.Agents.Windsurf
 	case "aider":
 		agentTypeFull = "aider"
+		shortAgentType = AgentTypeAider
 		agentCmdTemplate = cfg.Agents.Aider
 	case "oc":
 		agentTypeFull = "opencode"
+		shortAgentType = AgentTypeOpencode
 		// Mirror the spawn/add dispatch fallback so model injection works on
 		// restart too. See ntm#193.
 		agentCmdTemplate = opencodeCommandOrDefault(cfg.Agents.Opencode)
 	case "ollama":
 		agentTypeFull = "ollama"
+		shortAgentType = AgentTypeOllama
 		agentCmdTemplate = cfg.Agents.Ollama
 	default:
 		return nil, fmt.Errorf("unknown agent type: %s", agentType)
@@ -300,11 +314,69 @@ func buildControllerResponse(opts ControllerInput) (*ControllerResponse, error) 
 		return nil, fmt.Errorf("rendering agent command template: %w", err)
 	}
 
-	// Find or create pane 1
+	title := muxFormatPaneName(session, "controller_"+agentTypeFull, 1, "")
+
 	var targetPaneID string
 	var targetPaneIndex int
-	pane1Found := false
 
+	if backend.IsHerdr() {
+		// Herdr: launch a dedicated controller agent pane via agent.start.
+		// Do not reuse pane-index heuristics from tmux (herdr IDs are wN:pM).
+		argv := resolveHerdrAgentArgv(shortAgentType, "", "", "", agentCmd)
+		if len(argv) == 0 {
+			return nil, fmt.Errorf("could not resolve argv for controller agent type %s", shortAgentType)
+		}
+		// Use a high NTM index so the controller is distinct from worker agents.
+		// Title still labels it controller_*.
+		controllerIndex := 1
+		for _, p := range panes {
+			if p.NTMIndex >= controllerIndex {
+				controllerIndex = p.NTMIndex + 1
+			}
+		}
+		launchAgent := FlatAgent{
+			Type:  shortAgentType,
+			Index: controllerIndex,
+		}
+		launched, launchErr := herdrLaunchAgent(session, dir, launchAgent, argv, title)
+		if launchErr != nil {
+			return nil, fmt.Errorf("launching controller via herdr agent.start: %w", launchErr)
+		}
+		targetPaneID = launched.ID
+		targetPaneIndex = launched.Index
+		if targetPaneIndex == 0 {
+			targetPaneIndex = controllerIndex
+		}
+
+		// Wait briefly for agent to start
+		time.Sleep(2 * time.Second)
+
+		promptUsed := ""
+		if !opts.NoPrompt {
+			promptContent, source, err := resolveControllerPrompt(opts, session, strings.Join(agentList, "\n"), dir)
+			if err != nil {
+				return nil, fmt.Errorf("resolving prompt: %w", err)
+			}
+			promptUsed = source
+			if err := muxSendKeysForAgent(targetPaneID, promptContent, true, tmux.AgentType(shortAgentType)); err != nil {
+				return nil, fmt.Errorf("sending prompt: %w", err)
+			}
+		}
+
+		return &ControllerResponse{
+			TimestampedResponse: output.NewTimestamped(),
+			Session:             session,
+			PaneID:              targetPaneID,
+			PaneIndex:           targetPaneIndex,
+			AgentType:           agentTypeFull,
+			PromptUsed:          promptUsed,
+			AgentCount:          agentCount,
+			AgentList:           strings.Join(agentList, "\n"),
+		}, nil
+	}
+
+	// tmux path: find or create pane 1, then send-keys the agent command.
+	pane1Found := false
 	for _, p := range panes {
 		if p.Index == 1 {
 			pane1Found = true
@@ -336,7 +408,6 @@ func buildControllerResponse(opts ControllerInput) (*ControllerResponse, error) 
 	}
 
 	// Set pane title
-	title := tmux.FormatPaneName(session, "controller_"+agentTypeFull, 1, "")
 	if err := tmux.SetPaneTitle(targetPaneID, title); err != nil {
 		return nil, fmt.Errorf("setting pane title: %w", err)
 	}

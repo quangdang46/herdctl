@@ -342,7 +342,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Name:        "status",
 			Flag:        "--robot-status",
 			Category:    "state",
-			Description: "Get tmux sessions, panes, and agent states. The primary entry point for understanding current system state.",
+			Description: "Get sessions, panes, and agent states (tmux or NTM_BACKEND=herdr). The primary entry point for understanding current system state.",
 			Parameters: []RobotParameter{
 				{Name: "robot-limit", Flag: "--robot-limit", Type: "int", Required: false, Default: "0", Description: "Max sessions to return (alias: --limit)"},
 				{Name: "robot-offset", Flag: "--robot-offset", Type: "int", Required: false, Default: "0", Description: "Pagination offset for sessions (alias: --offset)"},

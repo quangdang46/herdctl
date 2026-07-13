@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/palette"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
@@ -47,7 +48,8 @@ Examples:
 }
 
 func runPalette(w io.Writer, errW io.Writer, session string) error {
-	// When --json is passed, output palette data as JSON instead of launching the TUI
+	// When --json is passed, output palette data as JSON instead of launching the TUI.
+	// Config-backed JSON listing is backend-agnostic (no tmux/herdr pane attach).
 	if jsonOutput {
 		sess := strings.TrimSpace(session)
 		sessionExplicit := sess != ""
@@ -65,6 +67,11 @@ func runPalette(w io.Writer, errW io.Writer, session string) error {
 		return robot.PrintPalette(paletteCfg, robot.PaletteOptions{
 			Session: sess,
 		})
+	}
+
+	// Herdr: interactive palette TUI is tmux-oriented; point at herdr + ntm send.
+	if backend.IsHerdr() {
+		return printHerdrUISubstitute("palette", session)
 	}
 
 	if err := tmux.EnsureInstalled(); err != nil {

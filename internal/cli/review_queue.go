@@ -150,8 +150,8 @@ func runReviewQueue(session, filter string, idleThreshold time.Duration, send bo
 		return fmt.Errorf("failed to load assignment store: %w", err)
 	}
 
-	// Get pane information
-	panes, err := tmux.GetPanes(session)
+	// Get pane information via active backend (tmux or herdr)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		if isJSON {
 			return outputReviewQueueError(session, fmt.Sprintf("failed to list panes: %v", err))
@@ -392,7 +392,7 @@ func sendReviewPrompts(session string, suggestions []ReviewSuggestion) (sent, sk
 			"agent", s.Agent,
 			"pane", s.Pane,
 			"source", s.Source)
-		if err := tmux.SendKeys(target, s.Prompt, true); err != nil {
+		if err := muxSendKeys(target, s.Prompt, true); err != nil {
 			slog.Warn("[E2E-REVIEWQ] send_failed",
 				"session", session,
 				"pane", s.Pane,

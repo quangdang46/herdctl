@@ -69,17 +69,17 @@ type sessionStatus struct {
 }
 
 func runGetAllSessionText(w io.Writer, lines int, compact bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := muxListSessions()
 	if err != nil {
 		return fmt.Errorf("failed to list sessions: %w", err)
 	}
 
 	if len(sessions) == 0 {
-		fmt.Fprintln(w, "No active tmux sessions found.")
+		fmt.Fprintln(w, "No active sessions found.")
 		return nil
 	}
 
@@ -106,13 +106,13 @@ func collectSessionStatus(sessionName string, lines int) sessionStatus {
 		Workers: make([]*paneStatus, 0),
 	}
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := muxGetPanes(sessionName)
 	if err != nil {
 		return status
 	}
 
 	for _, pane := range panes {
-		captured, err := tmux.CapturePaneOutput(pane.ID, lines)
+		captured, err := muxCapturePaneOutput(pane.ID, lines)
 		if err != nil {
 			continue
 		}

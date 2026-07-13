@@ -239,10 +239,37 @@ func (r *Restorer) createSession(cp *Checkpoint, workDir string) error {
 }
 
 // restoreLayout creates additional panes to match the checkpoint layout.
+// Under herdr, agent panes are created later via StartAgent (restoreAgents);
+// here we only ensure non-agent extra shells exist and skip tmux layout fidelity.
+// Live PTY scrollback/process state is never restored on either backend.
 func (r *Restorer) restoreLayout(cp *Checkpoint, workDir string) (int, error) {
 	paneStates := sortedCheckpointPanes(cp.Session.Panes)
 	if len(paneStates) == 0 {
 		return 0, nil
+	}
+
+	// Herdr: CreateSession already made one root pane. Agent panes come from
+	// StartAgent in restoreAgents (type/index/argv), not placeholder splits.
+	// Only create extra non-agent (user/unknown) shells here.
+	// Live PTY state is never restored — structure + relaunch commands only.
+	if muxIsHerdr() {
+		for i := 1; i < len(paneStates); i++ {
+			paneState := paneStates[i]
+			if restorableAgentCommand(paneState) != "" {
+				// Agent pane — deferred to restoreAgents via StartAgent.
+				continue
+			}
+			paneID, err := muxCreatePane(cp.SessionName, paneState.WindowIndex, workDir, false)
+			if err != nil {
+				return i, fmt.Errorf("creating pane %d: %w", i, err)
+			}
+			if paneState.Title != "" {
+				_ = muxSetPaneTitle(paneID, paneState.Title)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+		// Report planned pane count (agents launch in restoreAgents).
+		return len(paneStates), nil
 	}
 
 	// First pane was created with the session, so we start at 1.
@@ -297,15 +324,55 @@ func (r *Restorer) restoreLayout(cp *Checkpoint, workDir string) (int, error) {
 }
 
 func (r *Restorer) restoreAgents(cp *Checkpoint, workDir string) error {
+	sortedStates := sortedCheckpointPanes(cp.Session.Panes)
+	attempted := 0
+	launched := 0
+
+	// Herdr: relaunch by type/index/argv via StartAgent (pane ids are not stable
+	// across restore). Does not restore live PTY state — structure+commands only.
+	if muxIsHerdr() {
+		agentOrdinal := 0
+		for _, paneState := range sortedStates {
+			agentCmd := restorableAgentCommand(paneState)
+			if agentCmd == "" {
+				continue
+			}
+			attempted++
+			agentOrdinal++
+			// Pane ids / window indices are not stable across herdr restore.
+			// Use a dense 1-based agent ordinal for StartAgent naming+NTM index.
+			ntmIndex := agentOrdinal
+			agentType := strings.TrimSpace(paneState.AgentType)
+			if agentType == "" {
+				agentType = "unknown"
+			}
+			if _, err := muxStartAgentHerdr(cp.SessionName, workDir, agentType, agentCmd, ntmIndex, paneState.Title); err != nil {
+				slog.Warn("checkpoint restore: herdr StartAgent failed",
+					"session", cp.SessionName,
+					"pane_index", paneState.Index,
+					"agent_type", paneState.AgentType,
+					"command", agentCmd,
+					"error", err)
+				continue
+			}
+			launched++
+			time.Sleep(50 * time.Millisecond)
+		}
+		if attempted > 0 && launched == 0 {
+			return fmt.Errorf("all %d agent launch attempts failed", attempted)
+		}
+		if launched != attempted {
+			return fmt.Errorf("launched %d of %d agent panes", launched, attempted)
+		}
+		return nil
+	}
+
 	panes, err := muxGetPanes(cp.SessionName)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
 
-	sortedStates := sortedCheckpointPanes(cp.Session.Panes)
 	sortedPanes := sortedTmuxPanes(panes)
-	attempted := 0
-	launched := 0
 
 	for i, paneState := range sortedStates {
 		if i >= len(sortedPanes) {

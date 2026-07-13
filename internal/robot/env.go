@@ -277,7 +277,7 @@ func GetEnv(session string) (*EnvOutput, error) {
 
 	// If session specified (and not "global"), add session-specific info
 	if session != "" && session != "global" {
-		if !tmux.SessionExists(session) {
+		if !backendSessionExists(session) {
 			output.RobotResponse = NewErrorResponse(
 				fmt.Errorf("session '%s' not found", session),
 				ErrCodeSessionNotFound,

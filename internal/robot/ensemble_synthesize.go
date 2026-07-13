@@ -84,7 +84,7 @@ func GetEnsembleSynthesize(opts EnsembleSynthesizeOptions) (*EnsembleSynthesizeO
 
 	// Load ensemble state
 	state, err := ensemble.LoadSession(opts.Session)
-	sessionLive := tmux.IsInstalled() && tmux.SessionExists(opts.Session)
+	sessionLive := backendIsInstalled() && backendSessionExists(opts.Session)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			if !sessionLive {

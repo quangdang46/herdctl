@@ -480,9 +480,9 @@ func buildAttentionNextCommand(opts AttentionOptions, cursor int64) string {
 var (
 	overlayExecCommand      = exec.Command
 	overlayBinaryPath       = tmux.BinaryPath
-	overlayIsInstalled      = tmux.IsInstalled
+	overlayIsInstalled      = backendIsInstalled
 	overlayInTmux           = tmux.InTmux
-	overlaySessionExists    = tmux.SessionExists
+	overlaySessionExists    = backendSessionExists
 	overlayCurrentSession   = tmux.GetCurrentSession
 	overlayOSExecutable     = os.Executable
 	overlayLaunchProbeDelay = 150 * time.Millisecond

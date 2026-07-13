@@ -1,22 +1,18 @@
 package robot
 
-import (
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
-)
-
-// tmuxIsInstalledReal delegates to the real tmux.IsInstalled.
+// tmuxIsInstalledReal delegates to the active backend (tmux or herdr).
 func tmuxIsInstalledReal() bool {
-	return tmux.IsInstalled()
+	return backendIsInstalled()
 }
 
-// tmuxSessionExistsReal delegates to the real tmux.SessionExists.
+// tmuxSessionExistsReal delegates to the active backend.
 func tmuxSessionExistsReal(name string) bool {
-	return tmux.SessionExists(name)
+	return backendSessionExists(name)
 }
 
-// tmuxGetPanesReal delegates to the real tmux.GetPanes and converts to tmuxPaneInfo.
+// tmuxGetPanesReal lists panes via the active backend and converts to tmuxPaneInfo.
 func tmuxGetPanesReal(session string) []tmuxPaneInfo {
-	panes, err := tmux.GetPanes(session)
+	panes, err := backendGetPanes(session)
 	if err != nil {
 		return nil
 	}

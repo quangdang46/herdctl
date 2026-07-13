@@ -107,7 +107,7 @@ func GetRoute(opts RouteOptions) (*RouteOutput, int) {
 	}
 
 	// Check session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -117,7 +117,7 @@ func GetRoute(opts RouteOptions) (*RouteOutput, int) {
 	}
 
 	// Get all panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("failed to get panes: %w", err),
@@ -341,12 +341,12 @@ func GetRouteRecommendation(opts RouteOptions) (*RouteRecommendation, error) {
 	}
 
 	// Check session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return nil, fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
 	// Get all panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}

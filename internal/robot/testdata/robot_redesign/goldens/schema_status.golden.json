@@ -1074,6 +1074,10 @@
             "description": "Arch",
             "type": "string"
           },
+          "backend": {
+            "description": "Backend",
+            "type": "string"
+          },
           "build_date": {
             "description": "Build date",
             "type": "string"
@@ -1111,7 +1115,7 @@
         "type": "object"
       }
     },
-    "description": "Get tmux sessions, panes, and agent states. The primary entry point for understanding current system state.",
+    "description": "Get sessions, panes, and agent states (tmux or NTM_BACKEND=herdr). The primary entry point for understanding current system state.",
     "properties": {
       "_agent_hints": {
         "$ref": "#/definitions/AgentHints",

@@ -272,7 +272,7 @@ Examples:
 }
 
 func runErrors(session string, opts ErrorsOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -287,12 +287,12 @@ func runErrors(session string, opts ErrorsOptions) error {
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
 	// Get panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -328,7 +328,7 @@ func runErrors(session string, opts ErrorsOptions) error {
 		}
 
 		// Capture pane output
-		paneOutput, err := tmux.CapturePaneOutput(pane.ID, opts.MaxLines)
+		paneOutput, err := muxCapturePaneOutput(pane.ID, opts.MaxLines)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %s: %v\n", pane.Title, err)
 			continue

@@ -20,7 +20,7 @@ func resolveReplaySession(entrySession, sessionOverride string) (string, error) 
 	if session == "" {
 		return "", fmt.Errorf("history entry session is empty")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
 	return session, nil
@@ -128,12 +128,18 @@ Examples:
 			}
 
 			// Check session exists
-			if !tmux.SessionExists(session) {
+			if err := muxEnsureInstalled(); err != nil {
+				return err
+			}
+			if err := muxRequireHerdrServer(); err != nil {
+				return err
+			}
+			if !muxSessionExists(session) {
 				return fmt.Errorf("session %q not found", session)
 			}
 
 			// Determine target panes
-			panes, err := tmux.GetPanes(session)
+			panes, err := muxGetPanes(session)
 			if err != nil {
 				return fmt.Errorf("getting panes: %w", err)
 			}

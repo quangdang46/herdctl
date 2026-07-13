@@ -16,7 +16,9 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/invariants"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tools"
@@ -53,6 +55,7 @@ This command helps diagnose issues before spawning sessions.`,
 type DoctorReport struct {
 	Timestamp      time.Time        `json:"timestamp"`
 	Overall        string           `json:"overall"` // "healthy", "warning", "unhealthy"
+	Backend        string           `json:"backend"` // active NTM_BACKEND (herdr|tmux)
 	SafetyDefaults SafetyDefaults   `json:"safety_defaults"`
 	Tools          []ToolCheck      `json:"tools"`
 	Dependencies   []DepCheck       `json:"dependencies"`
@@ -140,6 +143,7 @@ func performDoctorCheck(ctx context.Context) *DoctorReport {
 	report := &DoctorReport{
 		Timestamp: time.Now(),
 		Overall:   "healthy",
+		Backend:   muxBackendLabel(),
 	}
 
 	report.SafetyDefaults = buildSafetyDefaults(cfg)
@@ -147,7 +151,7 @@ func performDoctorCheck(ctx context.Context) *DoctorReport {
 	// Check tools using the adapter framework
 	report.Tools = checkTools(ctx)
 
-	// Check dependencies (tmux, Go)
+	// Check dependencies (active backend binary + Go)
 	report.Dependencies = checkDependencies(ctx)
 
 	// Check daemons
@@ -307,25 +311,14 @@ func checkTools(ctx context.Context) []ToolCheck {
 func checkDependencies(ctx context.Context) []DepCheck {
 	var checks []DepCheck
 
-	// Check tmux
-	tmuxCheck := DepCheck{
-		Name:       "tmux",
-		MinVersion: "3.0",
-	}
-	if tmux.DefaultClient.IsInstalled() {
-		path := tmux.BinaryPath()
-		tmuxCheck.Installed = true
-		cmd := exec.CommandContext(ctx, path, "-V")
-		cmd.WaitDelay = 2 * time.Second
-		if out, err := cmd.Output(); err == nil {
-			tmuxCheck.Version = strings.TrimSpace(string(out))
-		}
-		tmuxCheck.Status = "ok"
+	// Active backend is required; the alternate backend is reported as optional.
+	if backend.IsHerdr() {
+		checks = append(checks, checkHerdrDependency(ctx, true))
+		checks = append(checks, checkTmuxDependency(ctx, false))
 	} else {
-		tmuxCheck.Status = "error"
-		tmuxCheck.Message = "tmux is required for NTM"
+		checks = append(checks, checkTmuxDependency(ctx, true))
+		checks = append(checks, checkHerdrDependency(ctx, false))
 	}
-	checks = append(checks, tmuxCheck)
 
 	// Check Go version (for building)
 	goCheck := DepCheck{
@@ -356,6 +349,84 @@ func checkDependencies(ctx context.Context) []DepCheck {
 	checks = append(checks, goCheck)
 
 	return checks
+}
+
+func checkTmuxDependency(ctx context.Context, required bool) DepCheck {
+	check := DepCheck{
+		Name:       "tmux",
+		MinVersion: "3.0",
+	}
+	if tmux.DefaultClient.IsInstalled() {
+		path := tmux.BinaryPath()
+		check.Installed = true
+		cmd := exec.CommandContext(ctx, path, "-V")
+		cmd.WaitDelay = 2 * time.Second
+		if out, err := cmd.Output(); err == nil {
+			check.Version = strings.TrimSpace(string(out))
+		}
+		check.Status = "ok"
+		if !required {
+			check.Message = "optional (NTM_BACKEND=herdr active)"
+		}
+		return check
+	}
+	if required {
+		check.Status = "error"
+		check.Message = "tmux is required when NTM_BACKEND=tmux"
+	} else {
+		check.Status = "warning"
+		check.Message = "optional backend binary not found"
+	}
+	return check
+}
+
+func checkHerdrDependency(ctx context.Context, required bool) DepCheck {
+	check := DepCheck{
+		Name: "herdr",
+	}
+	if !herdr.IsInstalled() {
+		if required {
+			check.Status = "error"
+			check.Message = "herdr is required when NTM_BACKEND=herdr (install herdr or set HERDR_BIN_PATH)"
+		} else {
+			check.Status = "warning"
+			check.Message = "optional backend binary not found"
+		}
+		return check
+	}
+
+	check.Installed = true
+	bin := "herdr"
+	if env := strings.TrimSpace(os.Getenv("HERDR_BIN_PATH")); env != "" {
+		bin = env
+	} else if path, err := exec.LookPath("herdr"); err == nil {
+		bin = path
+	}
+	cmd := exec.CommandContext(ctx, bin, "--version")
+	cmd.WaitDelay = 2 * time.Second
+	if out, err := cmd.Output(); err == nil {
+		check.Version = strings.TrimSpace(string(out))
+	}
+
+	// Server reachability is the herdr-specific health signal (binary alone is not enough).
+	if err := herdr.Ping(); err != nil {
+		if required {
+			check.Status = "error"
+			check.Message = "herdr binary found but server is not reachable (start `herdr` first)"
+		} else {
+			check.Status = "warning"
+			check.Message = "binary found; server not reachable"
+		}
+		return check
+	}
+
+	check.Status = "ok"
+	if required {
+		check.Message = "binary + server healthy"
+	} else {
+		check.Message = "optional (NTM_BACKEND=tmux active)"
+	}
+	return check
 }
 
 func checkDaemons(ctx context.Context) []DaemonCheck {
@@ -570,6 +641,11 @@ func renderDoctorTUITo(w io.Writer, report *DoctorReport) error {
 	// Title
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, titleStyle.Render("NTM Doctor"))
+	backendLabel := strings.TrimSpace(report.Backend)
+	if backendLabel == "" {
+		backendLabel = muxBackendLabel()
+	}
+	fmt.Fprintln(w, mutedStyle.Render(fmt.Sprintf("Backend: %s (NTM_BACKEND)", backendLabel)))
 	fmt.Fprintln(w)
 
 	// Tools section

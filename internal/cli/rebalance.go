@@ -138,8 +138,8 @@ func runRebalance(session string, dryRun, apply bool, filter string, threshold f
 		return fmt.Errorf("failed to load assignment store: %w", err)
 	}
 
-	// Get pane information
-	panes, err := tmux.GetPanes(session)
+	// Get pane information via active backend (tmux or herdr)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		if isJSON {
 			return outputRebalanceError(session, fmt.Sprintf("failed to list panes: %v", err))

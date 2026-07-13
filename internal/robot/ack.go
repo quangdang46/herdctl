@@ -87,7 +87,7 @@ func GetAck(opts AckOptions) (*AckOutput, error) {
 		TimedOut:      false,
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.Failed = append(output.Failed, AckFailure{
 			Pane:   "session",
 			Reason: fmt.Sprintf("session '%s' not found", opts.Session),
@@ -101,7 +101,7 @@ func GetAck(opts AckOptions) (*AckOutput, error) {
 		return output, nil
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.Failed = append(output.Failed, AckFailure{
 			Pane:   "panes",
@@ -147,7 +147,7 @@ func GetAck(opts AckOptions) (*AckOutput, error) {
 		captured, err := func() (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			return tmux.CapturePaneOutputContext(ctx, pane.ID, ackCaptureLines)
+			return backendCapturePaneOutputContext(ctx, pane.ID, ackCaptureLines)
 		}()
 		if err == nil {
 			initialStates[paneKey] = status.StripANSI(captured)
@@ -176,7 +176,7 @@ func GetAck(opts AckOptions) (*AckOutput, error) {
 			captured, err := func() (string, error) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
-				return tmux.CapturePaneOutputContext(ctx, targetPane.ID, ackCaptureLines)
+				return backendCapturePaneOutputContext(ctx, targetPane.ID, ackCaptureLines)
 			}()
 			if err != nil {
 				stillPending = append(stillPending, paneKey)
@@ -532,7 +532,7 @@ func GetSendAndAck(opts SendAndAckOptions) (*SendAndAckOutput, error) {
 	}
 	opts.Message = messageToSend
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return finalizeTerminalSendAndAckActuation(trace, opts, &SendAndAckOutput{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
@@ -571,7 +571,7 @@ func GetSendAndAck(opts SendAndAckOptions) (*SendAndAckOutput, error) {
 		}), nil
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		return finalizeTerminalSendAndAckActuation(trace, opts, &SendAndAckOutput{
 			RobotResponse: NewErrorResponse(
@@ -660,7 +660,7 @@ func GetSendAndAck(opts SendAndAckOptions) (*SendAndAckOutput, error) {
 		captured, err := func() (string, error) {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
-			return tmux.CapturePaneOutputContext(ctx, pane.ID, ackCaptureLines)
+			return backendCapturePaneOutputContext(ctx, pane.ID, ackCaptureLines)
 		}()
 		if err == nil {
 			initialStates[paneKey] = status.StripANSI(captured)
@@ -799,7 +799,7 @@ func GetSendAndAck(opts SendAndAckOptions) (*SendAndAckOutput, error) {
 			captured, err := func() (string, error) {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 				defer cancel()
-				return tmux.CapturePaneOutputContext(ctx, targetPane.ID, ackCaptureLines)
+				return backendCapturePaneOutputContext(ctx, targetPane.ID, ackCaptureLines)
 			}()
 			if err != nil {
 				stillPending = append(stillPending, paneKey)

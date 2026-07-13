@@ -73,7 +73,7 @@ func GetSave(opts SaveOptions) (*SaveResult, error) {
 		}, nil
 	}
 
-	if !tmux.SessionExists(sessionName) {
+	if !backendSessionExists(sessionName) {
 		return &SaveResult{
 			Success: false,
 			Session: sessionName,
@@ -185,7 +185,7 @@ func GetRestore(opts RestoreOptions) (*RestoreResult, error) {
 	}
 
 	// Check if session already exists
-	if tmux.SessionExists(state.Name) {
+	if backendSessionExists(state.Name) {
 		return &RestoreResult{
 			Success:   false,
 			SavedName: opts.SavedName,

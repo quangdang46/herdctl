@@ -109,7 +109,7 @@ const CompleteIdleThreshold = 5 * time.Second
 // Returns the response and normalized robot exit code (0=success, 1=error).
 func GetWait(opts WaitOptions) (*WaitResponse, int) {
 	// Validate session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return &WaitResponse{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
@@ -199,7 +199,7 @@ func GetWait(opts WaitOptions) (*WaitResponse, int) {
 		var activities []*AgentActivity
 		needPaneState := len(paneConditions) > 0 || opts.ExitOnError || opts.RequireTransition || len(waitPaneSelectors(opts)) > 0
 		if needPaneState {
-			panes, err := tmux.GetPanes(opts.Session)
+			panes, err := backendGetPanes(opts.Session)
 			if err != nil {
 				return &WaitResponse{
 					RobotResponse: NewErrorResponse(

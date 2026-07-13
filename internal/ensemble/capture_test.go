@@ -6,8 +6,8 @@ func TestOutputCapture_DefaultsAndLineCount(t *testing.T) {
 	capture := &OutputCapture{}
 	capture.SetMaxLines(-1)
 	capture.ensureDefaults()
-	if capture.tmuxClient == nil {
-		t.Fatal("expected tmux client to be set")
+	if capture.client == nil {
+		t.Fatal("expected capture client to be set")
 	}
 	if capture.validator == nil {
 		t.Fatal("expected validator to be set")

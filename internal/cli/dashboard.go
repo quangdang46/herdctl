@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/dashboard"
 	"github.com/Dicklesworthstone/ntm/internal/watcher"
@@ -63,6 +64,13 @@ Examples:
 			var session string
 			if len(args) > 0 {
 				session = args[0]
+			}
+
+			// Herdr: no Bubbletea dashboard port — point at herdr TUI/sidebar.
+			// Keep --json/--no-tui paths for scripting if they grow mux support later;
+			// today they still require tmux panes, so guide operators away.
+			if backend.IsHerdr() {
+				return printHerdrUISubstitute("dashboard", session)
 			}
 
 			// JSON implies no-tui

@@ -612,7 +612,7 @@ func GetInspectPane(opts InspectPaneOptions) (*InspectPaneOutput, error) {
 		}, nil
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return &InspectPaneOutput{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
@@ -624,7 +624,7 @@ func GetInspectPane(opts InspectPaneOptions) (*InspectPaneOutput, error) {
 	}
 
 	// Get panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		return &InspectPaneOutput{
 			RobotResponse: NewErrorResponse(err, ErrCodeInternalError, "Failed to get panes"),
@@ -673,7 +673,7 @@ func GetInspectPane(opts InspectPaneOptions) (*InspectPaneOutput, error) {
 	}
 
 	// Capture output
-	captured, captureErr := tmux.CapturePaneOutput(targetPane.ID, opts.Lines)
+	captured, captureErr := backendCapturePaneOutput(targetPane.ID, opts.Lines)
 
 	output := &InspectPaneOutput{
 		RobotResponse: NewRobotResponse(true),
@@ -2546,7 +2546,7 @@ func GetMetrics(opts MetricsOptions) (*MetricsOutput, error) {
 
 	// Get session info if specified
 	if opts.Session != "" {
-		if !tmux.SessionExists(opts.Session) {
+		if !backendSessionExists(opts.Session) {
 			return &MetricsOutput{
 				RobotResponse: NewErrorResponse(
 					fmt.Errorf("session '%s' not found", opts.Session),
@@ -2564,7 +2564,7 @@ func GetMetrics(opts MetricsOptions) (*MetricsOutput, error) {
 			}, nil
 		}
 
-		panes, err := tmux.GetPanes(opts.Session)
+		panes, err := backendGetPanes(opts.Session)
 		if err == nil {
 			output.SessionStats.TotalAgents = len(panes)
 

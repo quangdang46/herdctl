@@ -1,9 +1,12 @@
 package herdr
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -766,6 +769,273 @@ func (c *Client) AgentSend(target, text string) error {
 // AgentSend is the package-level helper.
 func AgentSend(target, text string) error { return DefaultClient.AgentSend(target, text) }
 
+// Agent is the NTM-facing view of a herdr agent entry.
+type Agent struct {
+	Name        string `json:"name"`
+	Agent       string `json:"agent,omitempty"` // detected/reported agent label (e.g. "claude")
+	PaneID      string `json:"pane_id,omitempty"`
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	TabID       string `json:"tab_id,omitempty"`
+	TerminalID  string `json:"terminal_id,omitempty"`
+	Cwd         string `json:"cwd,omitempty"`
+	Focused     bool   `json:"focused"`
+	AgentStatus string `json:"agent_status,omitempty"`
+	Label       string `json:"label,omitempty"` // same as Name when set
+}
+
+func agentFromInfo(a agentInfo) Agent {
+	return Agent{
+		Name:        a.Name,
+		Agent:       firstNonEmpty(a.Agent, a.Name),
+		PaneID:      a.PaneID,
+		WorkspaceID: a.WorkspaceID,
+		TabID:       a.TabID,
+		TerminalID:  a.TerminalID,
+		Cwd:         firstNonEmpty(a.ForegroundCwd, a.Cwd),
+		Focused:     a.Focused,
+		AgentStatus: strings.ToLower(strings.TrimSpace(a.AgentStatus)),
+		Label:       a.Name,
+	}
+}
+
+// ListAgents returns all agents known to the herdr server (global list).
+func (c *Client) ListAgents(ctx context.Context) ([]Agent, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	var out agentListResult
+	if err := c.runJSON(ctx, &out, "agent", "list"); err != nil {
+		return nil, err
+	}
+	agents := make([]Agent, 0, len(out.Agents))
+	for _, a := range out.Agents {
+		agents = append(agents, agentFromInfo(a))
+	}
+	return agents, nil
+}
+
+// ListAgents is the package-level helper.
+func ListAgents(ctx context.Context) ([]Agent, error) {
+	return DefaultClient.ListAgents(ctx)
+}
+
+// ListAgentsForSession filters ListAgents to agents bound to the given NTM session.
+// Matching uses workspace_id via the registry, then falls back to name prefix
+// "<session>-" used by StartAgent naming.
+func (c *Client) ListAgentsForSession(ctx context.Context, session string) ([]Agent, error) {
+	session = strings.TrimSpace(session)
+	all, err := c.ListAgents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if session == "" {
+		return all, nil
+	}
+	var workspaceID string
+	if reg, rerr := c.registry(); rerr == nil {
+		if rec, ok := reg.GetSession(session); ok {
+			workspaceID = rec.WorkspaceID
+		}
+	}
+	prefix := session + "-"
+	out := make([]Agent, 0, len(all))
+	for _, a := range all {
+		if workspaceID != "" && a.WorkspaceID == workspaceID {
+			out = append(out, a)
+			continue
+		}
+		if strings.HasPrefix(a.Name, prefix) {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
+// ListAgentsForSession is the package-level helper.
+func ListAgentsForSession(ctx context.Context, session string) ([]Agent, error) {
+	return DefaultClient.ListAgentsForSession(ctx, session)
+}
+
+// GetAgent returns full agent info for a target (name, pane id, or terminal id).
+func (c *Client) GetAgent(ctx context.Context, target string) (Agent, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return Agent{}, fmt.Errorf("%w: empty agent target", ErrNotFound)
+	}
+	var out agentGetResult
+	if err := c.runJSON(ctx, &out, "agent", "get", target); err != nil {
+		return Agent{}, err
+	}
+	return agentFromInfo(out.Agent), nil
+}
+
+// GetAgent is the package-level helper.
+func GetAgent(ctx context.Context, target string) (Agent, error) {
+	return DefaultClient.GetAgent(ctx, target)
+}
+
+// ReadAgent captures recent/visible text via `herdr agent read`.
+// source is "recent" (default), "visible", or "recent-unwrapped".
+func (c *Client) ReadAgent(ctx context.Context, target string, lines int, source string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "", fmt.Errorf("%w: empty agent target", ErrNotFound)
+	}
+	if lines <= 0 {
+		lines = 50
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = "recent"
+	}
+	args := []string{
+		"agent", "read", target,
+		"--source", source,
+		"--lines", strconv.Itoa(lines),
+	}
+	var out paneReadResult
+	if err := c.runJSON(ctx, &out, args...); err != nil {
+		// Fall back to flexible agentReadResult shape.
+		var aout agentReadResult
+		if err2 := c.runJSON(ctx, &aout, args...); err2 != nil {
+			return "", err
+		}
+		if aout.Read != nil && aout.Read.Text != "" {
+			return aout.Read.Text, nil
+		}
+		return aout.Text, nil
+	}
+	return out.Read.Text, nil
+}
+
+// ReadAgent is the package-level helper.
+func ReadAgent(ctx context.Context, target string, lines int, source string) (string, error) {
+	return DefaultClient.ReadAgent(ctx, target, lines, source)
+}
+
+// RenameAgent renames a herdr agent. Pass clear=true to clear the name
+// (herdr agent rename <target> --clear).
+func (c *Client) RenameAgent(ctx context.Context, target, name string, clear bool) (Agent, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return Agent{}, fmt.Errorf("%w: empty agent target", ErrNotFound)
+	}
+	args := []string{"agent", "rename", target}
+	if clear {
+		args = append(args, "--clear")
+	} else {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return Agent{}, fmt.Errorf("rename requires a new name (or --clear)")
+		}
+		args = append(args, name)
+	}
+	var out agentGetResult
+	if err := c.runJSON(ctx, &out, args...); err != nil {
+		return Agent{}, err
+	}
+	return agentFromInfo(out.Agent), nil
+}
+
+// RenameAgent is the package-level helper.
+func RenameAgent(ctx context.Context, target, name string, clear bool) (Agent, error) {
+	return DefaultClient.RenameAgent(ctx, target, name, clear)
+}
+
+// FocusAgent focuses a herdr agent pane (herdr agent focus <target>).
+func (c *Client) FocusAgent(ctx context.Context, target string) (Agent, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return Agent{}, fmt.Errorf("%w: empty agent target", ErrNotFound)
+	}
+	var out agentGetResult
+	if err := c.runJSON(ctx, &out, "agent", "focus", target); err != nil {
+		return Agent{}, err
+	}
+	return agentFromInfo(out.Agent), nil
+}
+
+// FocusAgent is the package-level helper.
+func FocusAgent(ctx context.Context, target string) (Agent, error) {
+	return DefaultClient.FocusAgent(ctx, target)
+}
+
+// ExplainAgent returns detection-explain evidence from `herdr agent explain --json`.
+// The result is an opaque JSON-compatible map (rule matches, evidence, state).
+func (c *Client) ExplainAgent(ctx context.Context, target string) (map[string]any, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return nil, fmt.Errorf("%w: empty agent target", ErrNotFound)
+	}
+	// Prefer the CLI envelope path first.
+	var out map[string]any
+	if err := c.runJSON(ctx, &out, "agent", "explain", target, "--json"); err == nil && out != nil {
+		return out, nil
+	}
+	// Some herdr builds emit bare JSON (no {"id","result"} envelope) for explain.
+	return c.runRawJSON(ctx, "agent", "explain", target, "--json")
+}
+
+// ExplainAgent is the package-level helper.
+func ExplainAgent(ctx context.Context, target string) (map[string]any, error) {
+	return DefaultClient.ExplainAgent(ctx, target)
+}
+
+// runRawJSON executes herdr and unmarshals stdout as a bare JSON object
+// (no CLI envelope). Used for commands like agent explain --json that may
+// print the payload directly.
+func (c *Client) runRawJSON(ctx context.Context, args ...string) (map[string]any, error) {
+	if ctx == nil {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.Background(), c.timeout())
+		defer cancel()
+	}
+	cmd := exec.CommandContext(ctx, c.binary(), args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	outStr := strings.TrimSpace(stdout.String())
+	errStr := strings.TrimSpace(stderr.String())
+	if err != nil {
+		if parsed := tryParseCLIError(outStr, errStr); parsed != nil {
+			return nil, &CommandError{Args: args, Status: exitStatus(err), Stdout: outStr, Stderr: errStr, Err: parsed}
+		}
+		return nil, &CommandError{Args: args, Status: exitStatus(err), Stdout: outStr, Stderr: errStr, Err: err}
+	}
+	if outStr == "" {
+		return nil, fmt.Errorf("%w: empty stdout for herdr %v", ErrUnavailable, args)
+	}
+	// Strip a possible CLI envelope.
+	var envelope cliResponse
+	if jerr := json.Unmarshal([]byte(outStr), &envelope); jerr == nil && len(envelope.Result) > 0 {
+		var m map[string]any
+		if jerr := json.Unmarshal(envelope.Result, &m); jerr == nil {
+			return m, nil
+		}
+	}
+	var m map[string]any
+	if jerr := json.Unmarshal([]byte(outStr), &m); jerr != nil {
+		return nil, fmt.Errorf("decode herdr raw json for %v: %w\nstdout=%s", args, jerr, outStr)
+	}
+	return m, nil
+}
+
 // SendInterrupt sends Ctrl+C to a pane.
 func (c *Client) SendInterrupt(target string) error {
 	return c.runJSON(context.Background(), &okResult{}, "pane", "send-keys", target, "ctrl+c")
@@ -970,10 +1240,51 @@ func (c *Client) ZoomPaneID(paneID string) error {
 	return c.runJSON(context.Background(), &okResult{}, "pane", "zoom", paneID, "--on")
 }
 
-// ApplyTiledLayout is not a direct Herdr primitive; return a clear error.
-// Callers should use layout.apply with an explicit tree when needed.
+// UnzoomPaneID clears zoom on a Herdr pane (`pane zoom --off`).
+func (c *Client) UnzoomPaneID(paneID string) error {
+	if strings.TrimSpace(paneID) == "" {
+		return fmt.Errorf("%w: empty pane id", ErrNotFound)
+	}
+	return c.runJSON(context.Background(), &okResult{}, "pane", "zoom", paneID, "--off")
+}
+
+// UnzoomPaneID is the package-level helper.
+func UnzoomPaneID(paneID string) error { return DefaultClient.UnzoomPaneID(paneID) }
+
+// UnzoomAllPanes clears zoom on every pane in the session. Herdr has no
+// `select-layout tiled` equivalent; unzoom is the closest operator action for
+// "show all panes again" after a zoomed view.
+func (c *Client) UnzoomAllPanes(session string) error {
+	panes, err := c.GetPanes(session)
+	if err != nil {
+		return err
+	}
+	var firstErr error
+	for _, p := range panes {
+		if p.ID == "" {
+			continue
+		}
+		if err := c.UnzoomPaneID(p.ID); err != nil && firstErr == nil {
+			// --off on an already-unzoomed pane is typically a no-op success;
+			// keep the first real error for the caller.
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
+// UnzoomAllPanes is the package-level helper.
+func UnzoomAllPanes(session string) error { return DefaultClient.UnzoomAllPanes(session) }
+
+// ApplyTiledLayout is not a direct Herdr primitive (no select-layout tiled).
+// Best-effort: unzoom every pane when the session resolves, then always return
+// ErrNotSupported so callers can print herdr TUI tiling guidance. Use
+// UnzoomAllPanes when unzoom-only success is enough.
 func (c *Client) ApplyTiledLayout(session string) error {
-	return notSupported("ApplyTiledLayout", "use herdr layout.apply with an explicit tree")
+	// Best-effort unzoom; ignore resolution failures so unit tests and offline
+	// callers still get a stable ErrNotSupported for the missing tile API.
+	_ = c.UnzoomAllPanes(session)
+	return notSupported("ApplyTiledLayout", "unzoomed panes when possible; herdr has no select-layout tiled — open the herdr TUI for manual tiling")
 }
 
 // ApplyTiledLayout is the package-level helper.

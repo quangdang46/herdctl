@@ -14,7 +14,6 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
 	sessionPkg "github.com/Dicklesworthstone/ntm/internal/session"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
@@ -36,7 +35,7 @@ func resolveCheckpointStorageSessionArg(session string) (string, error) {
 	if session == "" {
 		return "", fmt.Errorf("session is required")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
 	allowPrefix := !IsJSONOutput()
@@ -53,8 +52,8 @@ func resolveCheckpointStorageSessionArg(session string) (string, error) {
 			}
 		}
 	}
-	if tmux.IsInstalled() {
-		if sessionList, err := tmux.ListSessions(); err == nil {
+	if muxIsInstalled() {
+		if sessionList, err := muxListSessions(); err == nil {
 			if resolved, _, err := resolveExplicitSessionName(session, sessionList, allowPrefix); err == nil {
 				return resolved, nil
 			} else {
@@ -132,8 +131,8 @@ Examples:
 				return err
 			}
 
-			// Verify session exists
-			if !tmux.SessionExists(session) {
+			// Verify session exists on the active backend
+			if !muxSessionExists(session) {
 				return fmt.Errorf("session %q does not exist", session)
 			}
 
@@ -680,7 +679,10 @@ Examples:
 			}
 
 			if !dryRun {
-				if err := tmux.EnsureInstalled(); err != nil {
+				if err := muxEnsureInstalled(); err != nil {
+					return err
+				}
+				if err := muxRequireHerdrServer(); err != nil {
 					return err
 				}
 			}
@@ -794,7 +796,13 @@ Examples:
 			}
 
 			if attach {
-				return tmux.AttachOrSwitch(result.SessionName)
+				// Herdr has no tmux attach; muxAttachOrSwitch returns actionable guidance.
+				if err := muxAttachOrSwitch(result.SessionName); err != nil {
+					fmt.Printf("  Note: attach after restore: %v\n", err)
+					fmt.Printf("  Session %q was restored; open via `herdr` TUI / session attach.\n", result.SessionName)
+					return nil
+				}
+				return nil
 			}
 
 			return nil

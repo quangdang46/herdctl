@@ -21,13 +21,14 @@ func newSessionPersistCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sessions",
 		Short: "Manage saved session states",
-		Long: `Save, archive, and resume tmux session state snapshots.
+		Long: `Save, archive, and resume session state snapshots (tmux or herdr).
 
 Captures session topology including windows, panes, splits/layout,
 working directory, git context, agent counts, and (best-effort) the
 per-pane agent CLI session id so the session can be resumed.
 
-Resume reconstructs the tmux topology (ntm-owned) and relaunches each
+Resume reconstructs topology (tmux windows/panes or herdr workspace panes)
+and relaunches each
 pane's agent, delegating per-pane agent-session resume to casr
 (Cross Agent Session Resumer) or the agent's native --resume <id>.
 
@@ -63,9 +64,9 @@ func newSessionsSaveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "save [session-name]",
 		Short: "Save session state",
-		Long: `Save the current state of a tmux session.
+		Long: `Save the current state of a session (tmux or herdr).
 
-If no session name is provided and you're inside tmux, saves the current session.
+If no session name is provided and you're inside tmux/herdr, saves the current session.
 Otherwise, prompts to select a session.
 
 Examples:
@@ -144,7 +145,17 @@ func runSessionsSave(sessionName string, opts session.SaveOptions) error {
 		return jsonFailureExit()
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		if jsonOutput {
+			return emitSaveFailure(&SessionsSaveResult{
+				Success: false,
+				Session: sessionName,
+				Error:   err.Error(),
+			})
+		}
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		if jsonOutput {
 			return emitSaveFailure(&SessionsSaveResult{
 				Success: false,
@@ -172,7 +183,7 @@ func runSessionsSave(sessionName string, opts session.SaveOptions) error {
 	res.ExplainIfInferred(os.Stderr)
 	sessionName = res.Session
 
-	if !tmux.SessionExists(sessionName) {
+	if !muxSessionExists(sessionName) {
 		return emitSaveFailure(&SessionsSaveResult{
 			Success: false,
 			Session: sessionName,
@@ -470,7 +481,7 @@ func newSessionsRestoreCmd() *cobra.Command {
 		Short: "Restore a saved session",
 		Long: `Restore a session from a saved state.
 
-Creates a new tmux session with the same panes and layout as the saved state.
+Creates a new session with the same panes (and layout on tmux) as the saved state.
 Optionally launches agents in the panes.
 
 Examples:
@@ -562,7 +573,7 @@ func runSessionsRestore(savedName string, opts session.RestoreOptions, attach, l
 		return jsonFailureExit()
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		if jsonOutput {
 			return emitRestoreFailure(&SessionsRestoreResult{
 				Success:   false,
@@ -602,7 +613,7 @@ func runSessionsRestore(savedName string, opts session.RestoreOptions, attach, l
 	if !opts.SkipGitCheck && state.GitBranch != "" && state.WorkDir != "" {
 		// The restore function already does the check, but we capture the warning for output
 		// by checking current branch again
-		if _, err := tmux.GetSession(restoredName); err == nil {
+		if _, err := muxGetSession(restoredName); err == nil {
 			// Session exists, could check git branch here
 		}
 	}
@@ -651,7 +662,7 @@ func runSessionsRestore(savedName string, opts session.RestoreOptions, attach, l
 
 	// Attach if requested
 	if attach {
-		return tmux.AttachOrSwitch(restoredName)
+		return finishCreateAttach(restoredName)
 	}
 
 	return nil
@@ -672,7 +683,7 @@ func newSessionsResumeCmd() *cobra.Command {
 		Short: "Resume a saved session (rebuild topology + resume agents)",
 		Long: `Resume a saved session.
 
-Reconstructs the tmux topology (windows, panes, splits, cwd, layout) and
+Reconstructs topology (windows/panes on tmux; workspace panes on herdr) and
 relaunches each pane's agent. Panes that captured a provider session id at
 save time are resumed via casr (Cross Agent Session Resumer) when available,
 or the agent's native --resume <id>. Panes without a captured id are launched
@@ -893,7 +904,7 @@ func sendResumePrompt(sessionName, prompt string) (sent, failed int) {
 	if prompt = strings.TrimSpace(prompt); prompt == "" {
 		return 0, 0
 	}
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := muxGetPanes(sessionName)
 	if err != nil {
 		return 0, 0
 	}
@@ -922,7 +933,7 @@ func runSessionsResume(savedName, name string, force, attach, preferCASR bool, p
 
 	applyResumeTheme(themeName)
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		if jsonOutput {
 			return emitFailure(&SessionsResumeResult{Success: false, SavedName: savedName, Error: err.Error()})
 		}
@@ -971,7 +982,7 @@ func runSessionsResume(savedName, name string, force, attach, preferCASR bool, p
 	}
 
 	if attach {
-		return tmux.AttachOrSwitch(res.Session)
+		return finishCreateAttach(res.Session)
 	}
 	return nil
 }

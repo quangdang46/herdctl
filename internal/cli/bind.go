@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
@@ -43,6 +44,11 @@ Examples:
   ntm bind --show           # Show current binding
   ntm bind --unbind         # Remove the binding`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Herdr: ntm bind only mutates tmux.conf / live tmux server — N/A.
+			if backend.IsHerdr() {
+				return printHerdrUISubstitute("bind", "")
+			}
+
 			if overlay && !cmd.Flags().Changed("key") {
 				// Default overlay key is F12 (not F6 which is the palette default)
 				key = "F12"

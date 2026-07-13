@@ -88,7 +88,7 @@ func GetEnsembleStop(session string, opts EnsembleStopOptions) (*EnsembleStopOut
 	state, err := ensemble.LoadSession(session)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			if !tmux.SessionExists(session) {
+			if !backendSessionExists(session) {
 				output.RobotResponse = NewErrorResponse(
 					fmt.Errorf("session '%s' not found", session),
 					ErrCodeSessionNotFound,
@@ -112,7 +112,7 @@ func GetEnsembleStop(session string, opts EnsembleStopOptions) (*EnsembleStopOut
 	}
 
 	output.Result.PrevStatus = state.Status.String()
-	sessionLive := tmux.SessionExists(session)
+	sessionLive := backendSessionExists(session)
 
 	// Check if already stopped
 	if state.Status.IsTerminal() {
@@ -155,13 +155,13 @@ func GetEnsembleStop(session string, opts EnsembleStopOptions) (*EnsembleStopOut
 	output.Result.Captured = captured
 
 	// Get panes for counting
-	panes, _ := tmux.GetPanes(session)
+	panes, _ := backendGetPanes(session)
 	stoppedCount := len(panes)
 
 	// Graceful shutdown: send Ctrl+C to each pane
 	if !opts.Force && len(panes) > 0 {
 		for _, pane := range panes {
-			_ = tmux.SendKeys(pane.ID, "C-c", false)
+			_ = backendSendKeys(pane.ID, "C-c", false)
 		}
 		time.Sleep(5 * time.Second)
 	}

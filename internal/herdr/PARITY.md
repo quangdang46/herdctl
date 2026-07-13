@@ -41,7 +41,7 @@ Override: `HERDCTL_HERDR_REGISTRY`
 | `ZoomPane` | done | `pane zoom --on` |
 | `DisplayMessage` | partial | `notification show` |
 | `GetCurrentSession` | done | focused workspace → registry |
-| `ApplyTiledLayout` | stub | `ErrNotSupported` → use `layout.apply` later |
+| `ApplyTiledLayout` | partial | best-effort `UnzoomAllPanes` then `ErrNotSupported` (no select-layout tiled) |
 | `AttachOrSwitch` | stub | `ErrNotSupported` (Herdr client attach model) |
 | `SetPaneBorderStyle*` | stub | `ErrNotSupported` |
 | `PasteKeys` / `SendBuffer*` | not yet | use `SendKeys` / `pane run` |

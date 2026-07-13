@@ -115,7 +115,7 @@ func GetHealthOAuthWithOptions(opts OAuthHealthOptions) (*OAuthHealthOutput, err
 	}
 
 	// Check if session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -125,7 +125,7 @@ func GetHealthOAuthWithOptions(opts OAuthHealthOptions) (*OAuthHealthOutput, err
 	}
 
 	// Get panes in the session
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			err,
@@ -227,7 +227,7 @@ func getAgentOAuthHealth(session string, pane tmux.Pane, agentType string) Agent
 	// Capture recent output for OAuth/error detection
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	output, err := tmux.CapturePaneOutputContext(ctx, pane.ID, 50)
+	output, err := backendCapturePaneOutputContext(ctx, pane.ID, 50)
 	if err != nil {
 		return health
 	}

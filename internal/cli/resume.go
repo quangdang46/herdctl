@@ -335,7 +335,7 @@ func spawnWithHandoff(cmd *cobra.Command, sessionName string, h *handoff.Handoff
 	contextText := formatHandoffContext(h)
 
 	// Check if session already exists
-	if tmux.SessionExists(sessionName) {
+	if muxSessionExists(sessionName) {
 		return fmt.Errorf("session %q already exists; use --inject to add context to existing session", sessionName)
 	}
 
@@ -359,7 +359,7 @@ func spawnWithHandoff(cmd *cobra.Command, sessionName string, h *handoff.Handoff
 	time.Sleep(500 * time.Millisecond)
 
 	// Get panes and send context
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := muxGetPanes(sessionName)
 	if err != nil {
 		slog.Warn("could not get panes after spawn", "error", err)
 	}
@@ -411,7 +411,7 @@ func injectHandoff(cmd *cobra.Command, sessionName string, h *handoff.Handoff,
 	slog.Info("injecting handoff into session", "session", sessionName)
 
 	// Check session exists
-	if !tmux.SessionExists(sessionName) {
+	if !muxSessionExists(sessionName) {
 		return fmt.Errorf("session %q does not exist; use --spawn to create it", sessionName)
 	}
 
@@ -419,7 +419,7 @@ func injectHandoff(cmd *cobra.Command, sessionName string, h *handoff.Handoff,
 	contextText := formatHandoffContext(h)
 
 	// Get panes
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := muxGetPanes(sessionName)
 	if err != nil {
 		return fmt.Errorf("failed to get session panes: %w", err)
 	}
@@ -652,7 +652,7 @@ func validateResumeSessionName(sessionName string) error {
 	if sessionName == "" {
 		return nil
 	}
-	if err := tmux.ValidateSessionName(sessionName); err != nil {
+	if err := muxValidateSessionName(sessionName); err != nil {
 		return fmt.Errorf("invalid session name: %w", err)
 	}
 	return nil

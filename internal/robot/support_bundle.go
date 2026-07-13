@@ -9,7 +9,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/bundle"
 	"github.com/Dicklesworthstone/ntm/internal/privacy"
 	"github.com/Dicklesworthstone/ntm/internal/redaction"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // SupportBundleOptions configures support bundle generation.
@@ -164,7 +163,7 @@ func GenerateSupportBundle(opts SupportBundleOptions) (*SupportBundleOutput, err
 			privacySessions = append(privacySessions, opts.Session)
 		}
 	} else if opts.AllSessions {
-		sessions, err := tmux.ListSessions()
+		sessions, err := backendListSessions()
 		if err == nil {
 			for _, s := range sessions {
 				suppressed, err := collectSessionDataWithPrivacy(gen, s.Name, opts.Lines, opts.AllowPersist)
@@ -242,7 +241,7 @@ func PrintSupportBundle(opts SupportBundleOptions) error {
 // collectSessionDataWithPrivacy adds session data to the bundle, respecting privacy mode.
 // Returns true if content was suppressed due to privacy mode.
 func collectSessionDataWithPrivacy(gen *bundle.Generator, session string, lines int, allowPersist bool) (bool, error) {
-	if !tmux.SessionExists(session) {
+	if !backendSessionExists(session) {
 		return false, nil // Session doesn't exist, skip silently
 	}
 
@@ -252,7 +251,7 @@ func collectSessionDataWithPrivacy(gen *bundle.Generator, session string, lines 
 	contentSuppressed := false
 
 	// Get panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := backendGetPanes(session)
 	if err != nil {
 		return false, err
 	}
@@ -297,7 +296,7 @@ To include private content, use: ntm --robot-support-bundle=%s --allow-secret
 	// Capture scrollback for each pane
 	for _, pane := range panes {
 		target := pane.ID
-		content, err := tmux.CapturePaneOutput(target, lines)
+		content, err := backendCapturePaneOutput(target, lines)
 		if err != nil {
 			// Record error and continue
 			gen.AddFile(

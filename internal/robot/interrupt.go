@@ -103,7 +103,7 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 		return finalizeTerminalInterruptActuation(trace, opts, nil, output), nil
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.Failed = append(output.Failed, InterruptError{
 			Pane:   "session",
 			Reason: fmt.Sprintf("session '%s' not found", opts.Session),
@@ -204,7 +204,7 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 			continue
 		}
 
-		err := tmux.SendInterrupt(pane.ID)
+		err := backendSendInterrupt(pane.ID)
 		if err != nil {
 			output.Failed = append(output.Failed, InterruptError{
 				Pane:   paneKey,
@@ -259,7 +259,7 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 					observer,
 					opts.Session,
 					*targetPane,
-					tmux.CapturePaneOutput,
+					backendCapturePaneOutput,
 					tmux.GetPaneActivity,
 				)
 				state := interruptPaneStateFromObservation(current, interruptPaneAgentType(*targetPane))

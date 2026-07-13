@@ -124,7 +124,7 @@ func (liveSmartRestartExecutor) waitForPaneAgentReady(target string, shellPID in
 }
 
 func (liveSmartRestartExecutor) capturePaneOutput(target string, lines int) (string, error) {
-	return tmux.CapturePaneOutput(target, lines)
+	return backendCapturePaneOutput(target, lines)
 }
 
 // DefaultSmartRestartOptions returns sensible defaults.
@@ -1001,7 +1001,7 @@ func waitForShellReturn(session string, win, pane int, timeout time.Duration) (b
 	deadline := time.Now().Add(timeout)
 	lastOutput := ""
 	for {
-		if content, err := tmux.CapturePaneOutput(target, 10); err == nil {
+		if content, err := backendCapturePaneOutput(target, 10); err == nil {
 			lastOutput = content
 		}
 		childAlive := false
@@ -1089,7 +1089,7 @@ func verifyRestart(session string, win, pane int, opts SmartRestartOptions) *Pos
 	}
 	// Capture current state
 	target := fmt.Sprintf("%s:%d.%d", session, win, pane)
-	content, err := tmux.CapturePaneOutput(target, 50)
+	content, err := backendCapturePaneOutput(target, 50)
 	if err != nil {
 		return &PostStateInfo{
 			AgentRunning: false,

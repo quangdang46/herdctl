@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // WatchBeadOptions configures the --robot-watch-bead operation.
@@ -86,7 +85,7 @@ func GetWatchBead(opts WatchBeadOptions) (*WatchBeadOutput, error) {
 		)
 		return output, nil
 	}
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -105,7 +104,7 @@ func GetWatchBead(opts WatchBeadOptions) (*WatchBeadOutput, error) {
 		return output, nil
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("failed to list panes: %w", err),
@@ -130,7 +129,7 @@ func GetWatchBead(opts WatchBeadOptions) (*WatchBeadOutput, error) {
 			continue
 		}
 
-		captured, captureErr := tmux.CapturePaneOutput(pane.ID, opts.Lines)
+		captured, captureErr := backendCapturePaneOutput(pane.ID, opts.Lines)
 		if captureErr != nil {
 			continue
 		}

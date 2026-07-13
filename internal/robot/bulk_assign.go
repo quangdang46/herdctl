@@ -284,9 +284,9 @@ func bulkAssignDeps(custom *BulkAssignDependencies) BulkAssignDependencies {
 	deps := BulkAssignDependencies{
 		FetchTriage:       bv.GetTriage,
 		FetchInProgress:   func(dir string, limit int) ([]bv.BeadInProgress, error) { return bv.GetInProgressList(dir, limit), nil },
-		ListPanes:         tmux.GetPanes,
-		SendKeys:          tmux.SendKeys,
-		SendKeysForAgent:  tmux.SendKeysForAgent,
+		ListPanes:         backendGetPanes,
+		SendKeys:          backendSendKeys,
+		SendKeysForAgent:  backendSendKeysForAgent,
 		ReadFile:          os.ReadFile,
 		FetchBeadTitle:    fetchBeadTitle,
 		FetchBeadDetails:  fetchBeadDetails,
@@ -297,7 +297,7 @@ func bulkAssignDeps(custom *BulkAssignDependencies) BulkAssignDependencies {
 		GetBeadStatus:     bv.GetBeadStatus,
 		NewIdempotencyKey: assignment.NewAssignmentIdempotencyKey,
 		ObserveSession:    observer.Observe,
-		DispatchDeliverer: dispatchsvc.TMUXDeliverer{},
+		DispatchDeliverer: backendDispatchDeliverer(""),
 		LoadRedaction: func(dir string) (redaction.Config, error) {
 			loaded, err := config.LoadMerged(dir, config.DefaultPath())
 			if err != nil {

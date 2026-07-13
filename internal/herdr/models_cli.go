@@ -73,6 +73,8 @@ type agentListResult struct {
 
 type agentInfo struct {
 	Name          string `json:"name"`
+	// Agent is the detected/reported agent label from herdr (e.g. "claude").
+	Agent         string `json:"agent,omitempty"`
 	PaneID        string `json:"pane_id"`
 	WorkspaceID   string `json:"workspace_id"`
 	TabID         string `json:"tab_id"`
@@ -83,6 +85,11 @@ type agentInfo struct {
 	ForegroundCwd string `json:"foreground_cwd"`
 	Revision      int    `json:"revision"`
 }
+
+// agentExplainResult is a flexible container for `herdr agent explain --json`.
+// Herdr may emit either a bare object or a CLI envelope; callers treat the
+// decoded map as opaque explain evidence.
+type agentExplainResult map[string]any
 
 type agentStartedResult struct {
 	Type  string    `json:"type"`

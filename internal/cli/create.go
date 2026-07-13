@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/audit"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/hooks"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
@@ -27,7 +28,7 @@ type SessionCreateInput struct {
 func init() {
 	kernel.MustRegister(kernel.Command{
 		Name:        "sessions.create",
-		Description: "Create a tmux session",
+		Description: "Create a session (tmux or herdr)",
 		Category:    "sessions",
 		Input: &kernel.SchemaRef{
 			Name: "SessionCreateInput",
@@ -98,14 +99,18 @@ func newCreateCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "create <session-name>",
-		Short: "Create a new tmux session with multiple panes",
-		Long: `Create a new tmux session with the specified number of panes.
+		Short: "Create a new session with multiple panes",
+		Long: `Create a new session with the specified number of panes.
 The session directory is created under PROJECTS_BASE if it doesn't exist.
+
+On NTM_BACKEND=herdr this creates a herdr workspace (no agents) via
+workspace create + registry bind; pane splits use herdr pane split.
 
 Example:
   ntm create myproject           # Create with default panes
   ntm create myproject --panes=6 # Create with 6 panes
-  ntm create myproject --label frontend  # Labeled session`,
+  ntm create myproject --label frontend  # Labeled session
+  NTM_BACKEND=herdr ntm create myproject`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sessionName := args[0]
@@ -149,14 +154,20 @@ func runCreate(session string, panes int) (err error) {
 		return output.PrintJSON(resp)
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		if IsJSONOutput() {
+			return output.PrintJSON(output.NewError(err.Error()))
+		}
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(err.Error()))
 		}
 		return err
 	}
 
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(err.Error()))
 		}
@@ -260,11 +271,11 @@ func runCreate(session string, panes int) (err error) {
 	}
 
 	// Check if session already exists
-	if tmux.SessionExists(session) {
+	if muxSessionExists(session) {
 		auditAlreadyExisted = true
 		if IsJSONOutput() {
 			// Return info about existing session
-			existingPanes, _ := tmux.GetPanes(session)
+			existingPanes, _ := muxGetPanes(session)
 			paneResponses := make([]output.PaneResponse, len(existingPanes))
 			for i, p := range existingPanes {
 				paneResponses[i] = output.PaneResponse{
@@ -289,7 +300,7 @@ func runCreate(session string, panes int) (err error) {
 			})
 		}
 		fmt.Printf("Session '%s' already exists\n", session)
-		return tmux.AttachOrSwitch(session)
+		return finishCreateAttach(session)
 	}
 
 	if !IsJSONOutput() {
@@ -297,11 +308,11 @@ func runCreate(session string, panes int) (err error) {
 	}
 
 	// Create the session with scrollback history
-	historyLimit := tmux.DefaultHistoryLimit
+	historyLimit := muxDefaultHistoryLimit()
 	if cfg != nil && cfg.Tmux.HistoryLimit > 0 {
 		historyLimit = cfg.Tmux.HistoryLimit
 	}
-	if err := tmux.CreateSessionWithHistoryLimit(session, dir, historyLimit); err != nil {
+	if err := muxCreateSessionWithHistoryLimit(session, dir, historyLimit); err != nil {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(fmt.Sprintf("creating session: %v", err)))
 		}
@@ -312,7 +323,7 @@ func runCreate(session string, panes int) (err error) {
 	// Add additional panes
 	if panes > 1 {
 		for i := 1; i < panes; i++ {
-			if _, err := tmux.SplitWindow(session, dir); err != nil {
+			if _, err := muxSplitWindow(session, dir); err != nil {
 				if IsJSONOutput() {
 					return output.PrintJSON(output.NewError(fmt.Sprintf("creating pane %d: %v", i+1, err)))
 				}
@@ -331,7 +342,7 @@ func runCreate(session string, panes int) (err error) {
 
 	// JSON output mode: return structured response
 	if IsJSONOutput() {
-		finalPanes, _ := tmux.GetPanes(session)
+		finalPanes, _ := muxGetPanes(session)
 		paneResponses := make([]output.PaneResponse, len(finalPanes))
 		for i, p := range finalPanes {
 			paneResponses[i] = output.PaneResponse{
@@ -356,7 +367,7 @@ func runCreate(session string, panes int) (err error) {
 	}
 
 	fmt.Printf("Created session '%s' with %d pane(s)\n", session, panes)
-	return tmux.AttachOrSwitch(session)
+	return finishCreateAttach(session)
 }
 
 func coerceCreateResponse(result any) (output.CreateResponse, error) {
@@ -374,11 +385,14 @@ func coerceCreateResponse(result any) (output.CreateResponse, error) {
 }
 
 func buildCreateResponse(session string, panes int) (resp output.CreateResponse, err error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return output.CreateResponse{}, err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return output.CreateResponse{}, err
 	}
 
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return output.CreateResponse{}, err
 	}
 
@@ -451,9 +465,9 @@ func buildCreateResponse(session string, panes int) (resp output.CreateResponse,
 	}
 
 	// Check if session already exists
-	if tmux.SessionExists(session) {
+	if muxSessionExists(session) {
 		auditAlreadyExisted = true
-		existingPanes, _ := tmux.GetPanes(session)
+		existingPanes, _ := muxGetPanes(session)
 		paneResponses := make([]output.PaneResponse, len(existingPanes))
 		for i, p := range existingPanes {
 			paneResponses[i] = output.PaneResponse{
@@ -480,11 +494,11 @@ func buildCreateResponse(session string, panes int) (resp output.CreateResponse,
 	}
 
 	// Create the session with scrollback history
-	createHistoryLimit := tmux.DefaultHistoryLimit
+	createHistoryLimit := muxDefaultHistoryLimit()
 	if cfg != nil && cfg.Tmux.HistoryLimit > 0 {
 		createHistoryLimit = cfg.Tmux.HistoryLimit
 	}
-	if err := tmux.CreateSessionWithHistoryLimit(session, dir, createHistoryLimit); err != nil {
+	if err := muxCreateSessionWithHistoryLimit(session, dir, createHistoryLimit); err != nil {
 		return output.CreateResponse{}, fmt.Errorf("creating session: %w", err)
 	}
 	auditCreated = true
@@ -492,7 +506,7 @@ func buildCreateResponse(session string, panes int) (resp output.CreateResponse,
 	// Add additional panes
 	if panes > 1 {
 		for i := 1; i < panes; i++ {
-			if _, err := tmux.SplitWindow(session, dir); err != nil {
+			if _, err := muxSplitWindow(session, dir); err != nil {
 				return output.CreateResponse{}, fmt.Errorf("creating pane %d: %w", i+1, err)
 			}
 		}
@@ -503,7 +517,7 @@ func buildCreateResponse(session string, panes int) (resp output.CreateResponse,
 		_, _ = hookExec.RunHooksForEvent(ctx, hooks.EventPostCreate, hookCtx)
 	}
 
-	finalPanes, _ := tmux.GetPanes(session)
+	finalPanes, _ := muxGetPanes(session)
 	paneResponses := make([]output.PaneResponse, len(finalPanes))
 	for i, p := range finalPanes {
 		paneResponses[i] = output.PaneResponse{
@@ -527,6 +541,15 @@ func buildCreateResponse(session string, panes int) (resp output.CreateResponse,
 		Panes:               paneResponses,
 	}
 	return resp, nil
+}
+
+// finishCreateAttach attaches after create on tmux, or prints herdr TUI guidance.
+// Never shells out to tmux attach when NTM_BACKEND=herdr.
+func finishCreateAttach(session string) error {
+	if backend.IsHerdr() {
+		return printHerdrAttachGuidance(session)
+	}
+	return tmux.AttachOrSwitch(session)
 }
 
 // confirm prompts the user for y/n confirmation

@@ -15,7 +15,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/ratelimit"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // AgentMailConfig holds configuration for Agent Mail integration in routing.
@@ -540,7 +539,7 @@ func (s *AgentScorer) ScoreAgentsWithContext(ctx context.Context, session string
 // ScoreAgents calculates scores for all agents in a session.
 func (s *AgentScorer) ScoreAgents(session string, prompt string) ([]ScoredAgent, error) {
 	// Get all panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := backendGetPanes(session)
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +565,7 @@ func (s *AgentScorer) ScoreAgents(session string, prompt string) ([]ScoredAgent,
 
 		// Detect rate limiting by checking recent pane output
 		rateLimited := false
-		if output, err := tmux.CapturePaneOutput(pane.ID, 20); err == nil && output != "" {
+		if output, err := backendCapturePaneOutput(pane.ID, 20); err == nil && output != "" {
 			rateLimited = detectRoutingRateLimit(output, agentType)
 		}
 

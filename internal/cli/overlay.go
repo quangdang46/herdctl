@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
@@ -38,13 +39,18 @@ Examples:
 		Aliases: []string{"ov", "hud"},
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !tmux.InTmux() {
-				return fmt.Errorf("overlay requires tmux — run from inside a tmux session")
-			}
-
 			var session string
 			if len(args) > 0 {
 				session = args[0]
+			}
+
+			// Herdr has no tmux display-popup; sidebar/status cockpit is the substitute.
+			if backend.IsHerdr() {
+				return printHerdrUISubstitute("overlay", session)
+			}
+
+			if !tmux.InTmux() {
+				return fmt.Errorf("overlay requires tmux — run from inside a tmux session")
 			}
 
 			res, err := ResolveSession(session, cmd.OutOrStdout())

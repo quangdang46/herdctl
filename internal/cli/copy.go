@@ -158,7 +158,7 @@ type copyResult struct {
 }
 
 func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -178,11 +178,11 @@ func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) 
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func runCopy(w io.Writer, session string, filter AgentFilter, opts CopyOptions) 
 	var outputs []string
 	var paneLabels []string
 	for _, p := range targetPanes {
-		output, err := tmux.CapturePaneOutput(p.ID, opts.Last)
+		output, err := muxCapturePaneOutput(p.ID, opts.Last)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %d: %v\n", p.Index, err)
 			continue

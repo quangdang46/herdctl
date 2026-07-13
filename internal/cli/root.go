@@ -3284,7 +3284,7 @@ func init() {
 
 	// Robot flags for AI agents - state inspection commands
 	rootCmd.Flags().BoolVar(&robotHelp, "robot-help", false, "Show comprehensive human-readable AI agent integration guide with examples")
-	rootCmd.Flags().BoolVar(&robotStatus, "robot-status", false, "Get tmux sessions, panes, agent states. Start here. Example: ntm --robot-status")
+	rootCmd.Flags().BoolVar(&robotStatus, "robot-status", false, "Get sessions, panes, agent states (tmux or NTM_BACKEND=herdr). Start here. Example: ntm --robot-status")
 	rootCmd.Flags().BoolVar(&robotVersion, "robot-version", false, "Get ntm version, commit, build info (JSON). Example: ntm --robot-version")
 	rootCmd.Flags().BoolVar(&robotCapabilities, "robot-capabilities", false, "Get all available robot commands with parameters and descriptions (JSON). Machine-discoverable API")
 	rootCmd.Flags().StringVar(&robotCapabilitiesCommand, "capability-command", "", "Filter --robot-capabilities to one exact command name or flag")
@@ -4090,6 +4090,7 @@ func init() {
 		newWaitCmd(),
 		newMailCmd(),
 		newPluginsCmd(),
+		newAgentCmd(),
 		newAgentsCmd(),
 		newModelsCmd(),
 		newAssignCmd(),
@@ -4125,6 +4126,7 @@ func init() {
 		// Session persistence
 		newCheckpointCmd(),
 		newRollbackCmd(),
+		newSessionCmd(),
 		newSessionPersistCmd(),
 		newHandoffCmd(),
 		newResumeCmd(),

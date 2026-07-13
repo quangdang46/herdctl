@@ -76,7 +76,7 @@ Examples:
 }
 
 func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilter) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -92,11 +92,11 @@ func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilt
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func runSave(w io.Writer, session, outputDir string, lines int, filter AgentFilt
 	captured := make([]capturedOutput, 0, len(targetPanes))
 
 	for _, p := range targetPanes {
-		output, err := tmux.CapturePaneOutput(p.ID, lines)
+		output, err := muxCapturePaneOutput(p.ID, lines)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %d: %v\n", p.Index, err)
 			continue

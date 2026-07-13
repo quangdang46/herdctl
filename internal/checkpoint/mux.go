@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/herdr"
@@ -207,10 +208,10 @@ func muxCreatePane(sessionName string, windowIndex int, workDir string, newWindo
 	)
 }
 
-// muxRespawnPane relaunches a pane into agentCmd. Under herdr there is no
-// respawn-pane equivalent that targets an existing pane id, so we type the
-// command into the restored placeholder pane via SendKeys. (StartAgent would
-// create an extra pane and break positional restore mapping.)
+// muxRespawnPane relaunches a pane into agentCmd (tmux respawn-pane).
+// Under herdr, prefer muxStartAgentHerdr from restoreAgents — this SendKeys
+// path remains as a fallback for callers that already hold a placeholder pane id.
+// Live PTY state is never restored; only structure + relaunch command.
 func muxRespawnPane(paneID, workDir, safeCommand, agentCmd string, _ PaneState, _ string) error {
 	if !backend.IsHerdr() {
 		return tmux.DefaultClient.RunSilent("respawn-pane", "-k", "-c", workDir, "-t", paneID, safeCommand)
@@ -360,3 +361,56 @@ func herdrPaneNumericWinPane(herdrID string) (win, pane int) {
 	return win, pane
 }
 
+// herdrRestoreArgv builds argv for herdr.StartAgent from a restored command string.
+// Complex shell features fall back to sh -c so restore still launches something.
+func herdrRestoreArgv(agentCmd string) []string {
+	cmd := strings.TrimSpace(agentCmd)
+	if cmd == "" {
+		return nil
+	}
+	for _, bad := range []string{"&&", "||", "|", ";", "`", "$(", "\n", "\r"} {
+		if strings.Contains(cmd, bad) {
+			return []string{"sh", "-c", cmd}
+		}
+	}
+	fields := strings.Fields(cmd)
+	if len(fields) == 0 {
+		return nil
+	}
+	if strings.Contains(fields[0], "=") {
+		return []string{"sh", "-c", cmd}
+	}
+	return fields
+}
+
+// muxStartAgentHerdr launches an agent via herdr agent start (creates a new pane).
+// Used by checkpoint restore instead of typing into placeholder shells.
+func muxStartAgentHerdr(session, workDir, agentType, agentCmd string, ntmIndex int, title string) (string, error) {
+	argv := herdrRestoreArgv(agentCmd)
+	if len(argv) == 0 {
+		return "", fmt.Errorf("empty argv for agent type %q", agentType)
+	}
+	if ntmIndex <= 0 {
+		ntmIndex = 1
+	}
+	name := fmt.Sprintf("%s-%s_%d", session, agentType, ntmIndex)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	p, err := herdr.StartAgent(ctx, herdr.StartAgentOptions{
+		Session:   session,
+		Name:      name,
+		AgentType: herdr.AgentType(agentType),
+		Index:     ntmIndex,
+		Cwd:       workDir,
+		Argv:      argv,
+		Focus:     false,
+		Split:     "right",
+	})
+	if err != nil {
+		return "", err
+	}
+	if title != "" {
+		_ = herdr.SetPaneTitle(p.ID, title)
+	}
+	return p.ID, nil
+}

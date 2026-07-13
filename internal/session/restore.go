@@ -14,6 +14,8 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/agent"
 	"github.com/Dicklesworthstone/ntm/internal/agentsession"
 	"github.com/Dicklesworthstone/ntm/internal/audit"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -63,11 +65,11 @@ func Restore(state *SessionState, opts RestoreOptions) (err error) {
 	}()
 
 	// Check if session already exists
-	if tmux.SessionExists(name) {
+	if sessionExistsBackend(name) {
 		if !opts.Force {
 			return fmt.Errorf("session '%s' already exists (use --force to overwrite)", name)
 		}
-		if err := tmux.KillSession(name); err != nil {
+		if err := killSessionBackend(name); err != nil {
 			return fmt.Errorf("killing existing session: %w", err)
 		}
 		killedExisting = true
@@ -114,10 +116,22 @@ func Restore(state *SessionState, opts RestoreOptions) (err error) {
 
 	if len(panes) == 0 {
 		// Create empty session if no panes
-		if err := tmux.CreateSession(name, workDir); err != nil {
+		if err := createSessionBackend(name, workDir); err != nil {
 			return fmt.Errorf("creating session: %w", err)
 		}
 		sessionCreated = true
+	} else if backend.IsHerdr() {
+		// Herdr: create workspace + split for extra panes. Multi-window new-window
+		// is not supported — collapse to a single workspace with N panes.
+		if err := createSessionBackend(name, workDir); err != nil {
+			return fmt.Errorf("creating session: %w", err)
+		}
+		sessionCreated = true
+		for i := 1; i < len(panes); i++ {
+			if _, err := herdr.SplitWindow(name, workDir); err != nil {
+				return fmt.Errorf("creating pane %d: %w", i+1, err)
+			}
+		}
 	} else {
 		lastWindowIndex := -1
 		for i, p := range panes {
@@ -148,7 +162,7 @@ func Restore(state *SessionState, opts RestoreOptions) (err error) {
 	}
 
 	// Get pane list
-	tmuxPanes, err := tmux.GetPanes(name)
+	tmuxPanes, err := getPanesBackend(name)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -159,7 +173,7 @@ func Restore(state *SessionState, opts RestoreOptions) (err error) {
 			break
 		}
 		if paneState.Title != "" {
-			if err := tmux.SetPaneTitle(tmuxPanes[i].ID, paneState.Title); err != nil {
+			if err := setPaneTitleBackend(tmuxPanes[i].ID, paneState.Title); err != nil {
 				// Non-fatal - continue with other panes
 				continue
 			}
@@ -169,7 +183,10 @@ func Restore(state *SessionState, opts RestoreOptions) (err error) {
 	// Restore per-window fidelity: exact geometry, window names, active window,
 	// active pane, and zoom. Falls back to the whole-session layout for states
 	// saved without per-window metadata. All steps are best-effort (non-fatal).
-	restoreWindowFidelity(name, state, panes, tmuxPanes)
+	// Herdr has no tmux layout/window primitives — skip fidelity restore.
+	if !backend.IsHerdr() {
+		restoreWindowFidelity(name, state, panes, tmuxPanes)
+	}
 
 	// Check git branch if requested
 	if !opts.SkipGitCheck && state.GitBranch != "" {
@@ -218,7 +235,7 @@ func RestoreAgents(sessionName string, state *SessionState, cmds AgentCommands) 
 		_ = audit.LogEvent(sessionName, audit.EventTypeSpawn, audit.ActorSystem, "session.restore.agents", payload, nil)
 	}()
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := getPanesBackend(sessionName)
 	if err != nil {
 		return fmt.Errorf("getting panes: %w", err)
 	}
@@ -282,7 +299,7 @@ func RestoreAgents(sessionName string, state *SessionState, cmds AgentCommands) 
 			continue
 		}
 
-		if err := tmux.SendKeysForAgent(panes[i].ID, cmd, true, tmux.AgentType(paneState.AgentType)); err != nil {
+		if err := sendKeysForAgentBackend(panes[i].ID, cmd, true, tmux.AgentType(paneState.AgentType)); err != nil {
 			_ = audit.LogEvent(sessionName, audit.EventTypeError, audit.ActorSystem, "agent.restore", map[string]interface{}{
 				"agent_type":     paneState.AgentType,
 				"pane_index":     paneState.Index,
@@ -358,7 +375,7 @@ func Resume(state *SessionState, cmds AgentCommands, opts ResumeOptions) (*Resum
 		return nil, err
 	}
 
-	panes, err := tmux.GetPanes(name)
+	panes, err := getPanesBackend(name)
 	if err != nil {
 		return nil, fmt.Errorf("getting panes: %w", err)
 	}
@@ -436,7 +453,7 @@ func Resume(state *SessionState, cmds AgentCommands, opts ResumeOptions) (*Resum
 			continue
 		}
 
-		if err := tmux.SendKeysForAgent(panes[i].ID, fullCmd, true, tmux.AgentType(ps.AgentType)); err != nil {
+		if err := sendKeysForAgentBackend(panes[i].ID, fullCmd, true, tmux.AgentType(ps.AgentType)); err != nil {
 			rp.Action = "skipped"
 			result.Skipped++
 			result.Panes = append(result.Panes, rp)
@@ -647,4 +664,41 @@ func shouldCreateDir(path string) bool {
 
 	parts := strings.Split(rel, string(filepath.Separator))
 	return len(parts) >= 2
+}
+
+// Backend dispatch helpers for dual-backend restore (tmux default / herdr).
+
+func sessionExistsBackend(name string) bool {
+	if backend.IsHerdr() {
+		return herdr.SessionExists(name)
+	}
+	return tmux.SessionExists(name)
+}
+
+func killSessionBackend(name string) error {
+	if backend.IsHerdr() {
+		return herdr.KillSession(name)
+	}
+	return tmux.KillSession(name)
+}
+
+func createSessionBackend(name, workDir string) error {
+	if backend.IsHerdr() {
+		return herdr.CreateSession(name, workDir)
+	}
+	return tmux.CreateSession(name, workDir)
+}
+
+func setPaneTitleBackend(paneID, title string) error {
+	if backend.IsHerdr() {
+		return herdr.SetPaneTitle(paneID, title)
+	}
+	return tmux.SetPaneTitle(paneID, title)
+}
+
+func sendKeysForAgentBackend(target, keys string, enter bool, agentType tmux.AgentType) error {
+	if backend.IsHerdr() {
+		return herdr.SendKeysForAgent(target, keys, enter, herdr.AgentType(agentType))
+	}
+	return tmux.SendKeysForAgent(target, keys, enter, agentType)
 }

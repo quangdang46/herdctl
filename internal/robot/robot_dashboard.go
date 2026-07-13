@@ -61,7 +61,8 @@ func GetDashboard() (*DashboardOutput, error) {
 			Version:   Version,
 			Commit:    Commit,
 			BuildDate: Date,
-			TmuxOK:    tmux.IsInstalled(),
+			TmuxOK:    backendIsInstalled(),
+			Backend:   backendName(),
 		},
 		Summary: StatusSummary{
 			AgentsByState: map[string]int{},
@@ -70,8 +71,8 @@ func GetDashboard() (*DashboardOutput, error) {
 	}
 
 	// Sessions and agents (best-effort)
-	if tmux.IsInstalled() {
-		sessions, err := tmux.ListSessions()
+	if backendIsInstalled() {
+		sessions, err := backendListSessions()
 		if err == nil {
 			for _, sess := range sessions {
 				snapSession := SnapshotSession{
@@ -79,7 +80,7 @@ func GetDashboard() (*DashboardOutput, error) {
 					Attached: sess.Attached,
 					Agents:   []SnapshotAgent{},
 				}
-				panes, err := tmux.GetPanes(sess.Name)
+				panes, err := backendGetPanes(sess.Name)
 				if err == nil {
 					for _, pane := range panes {
 						agentType, ok := dashboardAgentType(pane)

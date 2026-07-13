@@ -27,6 +27,23 @@ func muxEnsureInstalled() error {
 	return tmux.EnsureInstalled()
 }
 
+// muxIsInstalled reports whether the active backend binary is resolvable.
+func muxIsInstalled() bool {
+	if backend.IsHerdr() {
+		return herdr.IsInstalled()
+	}
+	return tmux.IsInstalled()
+}
+
+// muxAttachOrSwitch attaches/switches on tmux. Under herdr, attach is a
+// client/server TUI concern — return an actionable error (no tmux attach).
+func muxAttachOrSwitch(session string) error {
+	if backend.IsHerdr() {
+		return herdr.AttachOrSwitch(session)
+	}
+	return tmux.AttachOrSwitch(session)
+}
+
 func muxValidateSessionName(name string) error {
 	if backend.IsHerdr() {
 		return herdr.ValidateSessionName(name)
@@ -60,6 +77,30 @@ func muxListSessions() ([]tmux.Session, error) {
 		})
 	}
 	return out, nil
+}
+
+// muxGetSession returns session metadata via the active backend.
+func muxGetSession(name string) (*tmux.Session, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetSession(name)
+	}
+	s, err := herdr.GetSession(name)
+	if err != nil {
+		return nil, err
+	}
+	return &tmux.Session{
+		Name:      s.Name,
+		Directory: s.Directory,
+		Windows:   s.Windows,
+		Attached:  s.Attached,
+		Created:   s.Created,
+	}, nil
+}
+
+// muxDefaultHistoryLimit is the scrollback default used when config is unset.
+// On herdr the value is ignored by CreateSessionWithHistoryLimit.
+func muxDefaultHistoryLimit() int {
+	return tmux.DefaultHistoryLimit
 }
 
 func muxGetPanes(session string) ([]tmux.Pane, error) {
@@ -171,6 +212,25 @@ func muxZoomPane(session string, paneIndex int) error {
 		return herdr.ZoomPane(session, paneIndex)
 	}
 	return tmux.ZoomPane(session, paneIndex)
+}
+
+// muxUnzoomAllPanes clears zoom on every pane in the session.
+// Herdr: pane zoom --off for each pane.
+// Tmux: ApplyTiledLayout unzooms as part of select-layout tiled.
+func muxUnzoomAllPanes(session string) error {
+	if backend.IsHerdr() {
+		return herdr.UnzoomAllPanes(session)
+	}
+	return tmux.ApplyTiledLayout(session)
+}
+
+// muxApplyTiledLayout applies a tiled layout when the backend supports it.
+// Herdr best-effort unzooms then returns ErrNotSupported (no select-layout tiled).
+func muxApplyTiledLayout(session string) error {
+	if backend.IsHerdr() {
+		return herdr.ApplyTiledLayout(session)
+	}
+	return tmux.ApplyTiledLayout(session)
 }
 
 func muxFormatPaneName(session, agentType string, index int, variant string) string {
@@ -289,6 +349,36 @@ func muxCapturePaneOutputContext(ctx context.Context, target string, lines int) 
 	return tmux.CapturePaneOutputContext(ctx, target, lines)
 }
 
+// muxCaptureForFullContextContext captures a large scrollback budget for
+// context-usage estimation and full-pane analysis. Routes through herdr pane
+// read when NTM_BACKEND=herdr.
+func muxCaptureForFullContextContext(ctx context.Context, target string) (string, error) {
+	if backend.IsHerdr() {
+		return herdr.CapturePaneOutputContext(ctx, target, tmux.LinesFullContext)
+	}
+	return tmux.CaptureForFullContextContext(ctx, target)
+}
+
+// muxHerdrAgentStatuses returns pane_id → agent_status for a session when the
+// herdr backend is active. Returns nil on tmux (no native agent_status field).
+// Statuses come from a single herdr pane list so callers avoid N agent-get RPCs.
+func muxHerdrAgentStatuses(session string) map[string]string {
+	if !backend.IsHerdr() {
+		return nil
+	}
+	panes, err := herdr.GetPanes(session)
+	if err != nil {
+		return nil
+	}
+	out := make(map[string]string, len(panes))
+	for _, p := range panes {
+		if s := strings.TrimSpace(p.AgentStatus); s != "" {
+			out[p.ID] = strings.ToLower(s)
+		}
+	}
+	return out
+}
+
 // muxGetAgentStatus returns the backend-reported agent status when available.
 // On tmux there is no native agent-status field — returns "" so callers fall
 // back to scrollback classification.
@@ -349,7 +439,6 @@ func mapWaitConditionToHerdrStatus(condition WaitCondition) string {
 	}
 }
 
-
 // muxInTmux reports whether the process is nested inside a live terminal
 // multiplexer session that can host the assign-watch overlay.
 // Herdr has no tmux-style overlay binding surface, so this is always false
@@ -380,3 +469,196 @@ func muxSendKeysForAgentWithDelay(target, keys string, enter bool, enterDelay ti
 	return tmux.SendKeysForAgentWithDelay(target, keys, enter, enterDelay, agentType)
 }
 
+// ---------------------------------------------------------------------------
+// Agent list / get / read / rename / focus / explain
+// ---------------------------------------------------------------------------
+
+// muxListAgents returns backend agent entries.
+// On herdr: herdr agent list (optionally filtered to session).
+// On tmux: synthesizes entries from pane titles/registry when session is set;
+// requires a session (global list is herdr-only).
+func muxListAgents(session string) ([]herdr.Agent, error) {
+	if backend.IsHerdr() {
+		return herdr.ListAgentsForSession(context.Background(), session)
+	}
+	session = strings.TrimSpace(session)
+	if session == "" {
+		return nil, fmt.Errorf("tmux backend: agent list requires a session name")
+	}
+	panes, err := tmux.GetPanes(session)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]herdr.Agent, 0, len(panes))
+	for _, p := range panes {
+		if p.Type == tmux.AgentUser || p.Type == tmux.AgentUnknown || p.Type == "" {
+			// Still include titled agent-like panes; skip pure user shells when type is user.
+			if p.Type == tmux.AgentUser {
+				continue
+			}
+		}
+		name := strings.TrimSpace(p.Title)
+		if name == "" {
+			name = p.ID
+		}
+		status := ""
+		out = append(out, herdr.Agent{
+			Name:        name,
+			Agent:       string(p.Type),
+			PaneID:      p.ID,
+			Cwd:         "",
+			Focused:     p.Active,
+			AgentStatus: status,
+			Label:       name,
+		})
+	}
+	return out, nil
+}
+
+// muxGetAgent returns agent details for a target (name / pane id).
+func muxGetAgent(target string) (herdr.Agent, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return herdr.Agent{}, fmt.Errorf("agent target is required")
+	}
+	if backend.IsHerdr() {
+		return herdr.GetAgent(context.Background(), target)
+	}
+	// tmux: resolve by pane id or title across live sessions.
+	all, err := tmux.GetAllPanes()
+	if err != nil {
+		return herdr.Agent{}, err
+	}
+	for session, panes := range all {
+		for _, p := range panes {
+			if p.ID == target || p.Title == target || strings.EqualFold(p.Title, target) {
+				name := p.Title
+				if name == "" {
+					name = p.ID
+				}
+				return herdr.Agent{
+					Name:        name,
+					Agent:       string(p.Type),
+					PaneID:      p.ID,
+					Focused:     p.Active,
+					AgentStatus: "",
+					Label:       name,
+					// WorkspaceID unused on tmux; stash session in WorkspaceID for display.
+					WorkspaceID: session,
+				}, nil
+			}
+		}
+	}
+	return herdr.Agent{}, fmt.Errorf("agent target %q not found", target)
+}
+
+// muxReadAgent reads recent/visible text for an agent/pane target.
+func muxReadAgent(target string, lines int, source string) (string, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "", fmt.Errorf("agent target is required")
+	}
+	if lines <= 0 {
+		lines = 50
+	}
+	source = strings.TrimSpace(source)
+	if source == "" {
+		source = "recent"
+	}
+	if backend.IsHerdr() {
+		return herdr.ReadAgent(context.Background(), target, lines, source)
+	}
+	// tmux path: map source onto capture helpers.
+	if source == "visible" {
+		return tmux.CapturePaneVisible(target)
+	}
+	return tmux.CapturePaneOutput(target, lines)
+}
+
+// muxRenameAgent renames an agent (herdr) or pane title (tmux).
+func muxRenameAgent(target, name string, clear bool) (herdr.Agent, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return herdr.Agent{}, fmt.Errorf("agent target is required")
+	}
+	if backend.IsHerdr() {
+		return herdr.RenameAgent(context.Background(), target, name, clear)
+	}
+	// tmux: rename via pane title. --clear sets empty title.
+	title := strings.TrimSpace(name)
+	if clear {
+		title = ""
+	}
+	// Resolve to a pane id if a title was passed.
+	ag, err := muxGetAgent(target)
+	if err != nil {
+		// Fall through and try target as pane id.
+		ag = herdr.Agent{PaneID: target, Name: target}
+	}
+	paneID := ag.PaneID
+	if paneID == "" {
+		paneID = target
+	}
+	if err := tmux.SetPaneTitle(paneID, title); err != nil {
+		return herdr.Agent{}, err
+	}
+	ag.PaneID = paneID
+	ag.Name = title
+	if title == "" {
+		ag.Name = paneID
+	}
+	ag.Label = ag.Name
+	return ag, nil
+}
+
+// muxFocusAgent focuses an agent pane.
+func muxFocusAgent(target string) (herdr.Agent, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return herdr.Agent{}, fmt.Errorf("agent target is required")
+	}
+	if backend.IsHerdr() {
+		return herdr.FocusAgent(context.Background(), target)
+	}
+	ag, err := muxGetAgent(target)
+	if err != nil {
+		// Try raw pane id.
+		ag = herdr.Agent{PaneID: target, Name: target}
+	}
+	paneID := ag.PaneID
+	if paneID == "" {
+		paneID = target
+	}
+	// tmux select-pane -t <id>
+	if err := tmux.DefaultClient.RunSilent("select-pane", "-t", paneID); err != nil {
+		return herdr.Agent{}, err
+	}
+	ag.PaneID = paneID
+	ag.Focused = true
+	return ag, nil
+}
+
+// muxExplainAgent returns detection-explain evidence.
+// Herdr: herdr agent explain --json. Tmux: not supported.
+func muxExplainAgent(target string) (map[string]any, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return nil, fmt.Errorf("agent target is required")
+	}
+	if backend.IsHerdr() {
+		return herdr.ExplainAgent(context.Background(), target)
+	}
+	return nil, fmt.Errorf("tmux backend: agent explain is herdr-only (detection rules live in herdr)")
+}
+
+// muxAgentSend delivers text via herdr agent send when available, else send-keys.
+func muxAgentSend(target, text string) error {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return fmt.Errorf("agent target is required")
+	}
+	if backend.IsHerdr() {
+		return herdr.AgentSend(target, text)
+	}
+	return tmux.SendKeys(target, text, true)
+}

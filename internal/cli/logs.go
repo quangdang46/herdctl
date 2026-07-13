@@ -16,7 +16,6 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/agent"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -211,11 +210,11 @@ func runLogsAggregated(opts robot.LogsOptions) error {
 
 // runLogsFollow streams logs continuously.
 func runLogsFollow(opts robot.LogsOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !muxSessionExists(opts.Session) {
 		return fmt.Errorf("session '%s' not found", opts.Session)
 	}
 

@@ -50,7 +50,7 @@ Examples:
 }
 
 func runDiff(session, pane1ID, pane2ID string, unified, codeOnly bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -78,11 +78,11 @@ func runDiff(session, pane1ID, pane2ID string, unified, codeOnly bool) error {
 	}
 
 	// Capture output (default 1000 lines)
-	out1, err := tmux.CapturePaneOutput(p1.ID, 1000)
+	out1, err := muxCapturePaneOutput(p1.ID, 1000)
 	if err != nil {
 		return fmt.Errorf("capturing pane 1: %w", err)
 	}
-	out2, err := tmux.CapturePaneOutput(p2.ID, 1000)
+	out2, err := muxCapturePaneOutput(p2.ID, 1000)
 	if err != nil {
 		return fmt.Errorf("capturing pane 2: %w", err)
 	}
@@ -125,7 +125,7 @@ func runDiff(session, pane1ID, pane2ID string, unified, codeOnly bool) error {
 }
 
 func resolvePane(session, idOrName string) (*tmux.Pane, error) {
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, err
 	}

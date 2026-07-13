@@ -209,7 +209,7 @@ type GrepOptions struct {
 }
 
 func runGrep(pattern, session string, opts GrepOptions) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return err
 	}
 
@@ -226,12 +226,12 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 	// Determine target session(s)
 	var sessions []string
 	if opts.AllSessions {
-		sessionList, err := tmux.ListSessions()
+		sessionList, err := muxListSessions()
 		if err != nil {
 			return err
 		}
 		if len(sessionList) == 0 {
-			return fmt.Errorf("no tmux sessions found")
+			return fmt.Errorf("no sessions found")
 		}
 		for _, s := range sessionList {
 			sessions = append(sessions, s.Name)
@@ -247,7 +247,7 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 		res.ExplainIfInferred(os.Stderr)
 		session = res.Session
 
-		if !tmux.SessionExists(session) {
+		if !muxSessionExists(session) {
 			return fmt.Errorf("session '%s' not found", session)
 		}
 		sessions = []string{session}
@@ -260,7 +260,7 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 	matchingPanes := make(map[string]bool)
 
 	for _, sess := range sessions {
-		panes, err := tmux.GetPanes(sess)
+		panes, err := muxGetPanes(sess)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to get panes for %s: %v\n", sess, err)
 			continue
@@ -276,7 +276,7 @@ func runGrep(pattern, session string, opts GrepOptions) error {
 				continue
 			}
 
-			output, err := tmux.CapturePaneOutput(pane.ID, opts.MaxLines)
+			output, err := muxCapturePaneOutput(pane.ID, opts.MaxLines)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to capture pane %s: %v\n", pane.Title, err)
 				continue

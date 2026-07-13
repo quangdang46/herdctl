@@ -99,7 +99,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 	output.Panes.Unknown = []int{}
 
 	// Check if session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.Success = false
 		output.Error = fmt.Sprintf("session '%s' not found", opts.Session)
 		output.ErrorCode = ErrCodeSessionNotFound
@@ -108,7 +108,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 	}
 
 	// Get all panes in session
-	panes, err := tmux.GetPanesContext(ctx, opts.Session)
+	panes, err := backendGetPanesContext(ctx, opts.Session)
 	if err != nil {
 		output.Success = false
 		output.Error = fmt.Sprintf("failed to get panes: %v", err)
@@ -374,7 +374,7 @@ func executeDiagnoseFix(ctx context.Context, diag DiagnoseOutput, opts DiagnoseO
 	// interprets as a *window* index and breaks on hosts with
 	// `base-index = 1` (#141). Context-aware so callers can cancel a hung
 	// tmux daemon (matches the HTTP `handlePaneInputV1` shape).
-	fixPanes, fixPanesErr := tmux.GetPanesContext(ctx, opts.Session)
+	fixPanes, fixPanesErr := backendGetPanesContext(ctx, opts.Session)
 	paneIDByIndex := map[int]string{}
 	for _, p := range fixPanes {
 		paneIDByIndex[p.Index] = p.ID
@@ -435,7 +435,7 @@ func executeDiagnoseFix(ctx context.Context, diag DiagnoseOutput, opts DiagnoseO
 
 		case "interrupt":
 			// Send Ctrl+C to interrupt via the pane ID.
-			err := tmux.SendKeys(paneTarget, "C-c", false)
+			err := backendSendKeys(paneTarget, "C-c", false)
 			if err != nil {
 				attempt.Success = false
 				attempt.Message = fmt.Sprintf("Failed to interrupt: %v", err)
@@ -494,7 +494,7 @@ func GetDiagnoseBrief(ctx context.Context, session string) (*DiagnoseBriefOutput
 	}
 
 	// Check if session exists
-	if !tmux.SessionExists(session) {
+	if !backendSessionExists(session) {
 		output.Success = false
 		output.Error = fmt.Sprintf("session '%s' not found", session)
 		output.ErrorCode = ErrCodeSessionNotFound
@@ -503,7 +503,7 @@ func GetDiagnoseBrief(ctx context.Context, session string) (*DiagnoseBriefOutput
 	}
 
 	// Get panes and check health
-	panes, err := tmux.GetPanesContext(ctx, session)
+	panes, err := backendGetPanesContext(ctx, session)
 	if err != nil {
 		output.Success = false
 		output.Error = fmt.Sprintf("failed to get panes: %v", err)

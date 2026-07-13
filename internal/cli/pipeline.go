@@ -17,7 +17,6 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/pipeline"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 func newPipelineCmd() *cobra.Command {
@@ -280,7 +279,7 @@ Examples:
 				return fmt.Errorf("--session is required")
 			}
 
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 
@@ -645,7 +644,7 @@ Examples:
 
 			resolvedSession := strings.TrimSpace(session)
 			if resolvedSession != "" {
-				if err := tmux.EnsureInstalled(); err != nil {
+				if err := muxEnsureInstalled(); err != nil {
 					return err
 				}
 				res, err := resolvePipelineSession(resolvedSession, cmd.OutOrStdout())
@@ -681,7 +680,7 @@ Examples:
 				return fmt.Errorf("--session is required (or state must contain session)")
 			}
 
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 
@@ -1034,7 +1033,7 @@ Examples:
 				})
 			}
 
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 
@@ -1086,7 +1085,7 @@ func resolvePipelineSession(session string, w io.Writer) (SessionResolution, err
 	if res.Session == "" {
 		return SessionResolution{}, fmt.Errorf("session is required")
 	}
-	if !tmux.SessionExists(res.Session) {
+	if !muxSessionExists(res.Session) {
 		return SessionResolution{}, fmt.Errorf("session %q not found", res.Session)
 	}
 	return res, nil

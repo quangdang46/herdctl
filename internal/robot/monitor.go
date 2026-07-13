@@ -140,7 +140,7 @@ func (m *Monitor) getPanesToCheck() ([]tmux.Pane, error) {
 		return m.getAgentPanes()
 	}
 
-	allPanes, err := tmux.GetPanes(m.config.Session)
+	allPanes, err := backendGetPanes(m.config.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (m *Monitor) getPanesToCheck() ([]tmux.Pane, error) {
 }
 
 func (m *Monitor) getAgentPanes() ([]tmux.Pane, error) {
-	allPanes, err := tmux.GetPanes(m.config.Session)
+	allPanes, err := backendGetPanes(m.config.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +218,7 @@ func (m *Monitor) checkPane(ctx context.Context, pane tmux.Pane) error {
 	}
 
 	// Capture output
-	output, err := tmux.CapturePaneOutputContext(ctx, target, m.config.LinesCaptured)
+	output, err := backendCapturePaneOutputContext(ctx, target, m.config.LinesCaptured)
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ type MonitorThresh struct {
 // PrintMonitor starts the monitoring loop and outputs JSONL.
 func PrintMonitor(config MonitorConfig) error {
 	// Validate session exists
-	if !tmux.SessionExists(config.Session) {
+	if !backendSessionExists(config.Session) {
 		output := MonitorOutput{
 			RobotResponse: RobotResponse{
 				Success:   false,
@@ -368,7 +368,7 @@ func PrintMonitor(config MonitorConfig) error {
 	// Determine panes
 	panes := config.Panes
 	if len(panes) == 0 {
-		allPanes, err := tmux.GetPanes(config.Session)
+		allPanes, err := backendGetPanes(config.Session)
 		if err != nil {
 			output := MonitorOutput{
 				RobotResponse: RobotResponse{

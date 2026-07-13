@@ -1729,7 +1729,7 @@ type paneInfo struct {
 
 // getPanesForSession gets pane info for a session using tmux.GetPanes.
 func getPanesForSession(session string) ([]paneInfo, error) {
-	tmuxPanes, err := tmux.GetPanes(session)
+	tmuxPanes, err := backendGetPanes(session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}

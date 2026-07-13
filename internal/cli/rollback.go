@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 )
 
@@ -295,21 +294,23 @@ func performRollback(cp *checkpoint.Checkpoint, workDir string, noStash, noGit b
 	return nil
 }
 
-// getSessionWorkDir gets the working directory from a tmux session.
+// getSessionWorkDir gets the working directory from the active backend session.
 func getSessionWorkDir(session string) (string, error) {
 	session = strings.TrimSpace(session)
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return "", fmt.Errorf("session %q does not exist", session)
 	}
-	cmd := exec.Command(tmux.BinaryPath(), "display-message", "-p", "-t", session, "#{pane_current_path}")
-	out, err := cmd.Output()
+	s, err := muxGetSession(session)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	if s == nil || strings.TrimSpace(s.Directory) == "" {
+		return "", fmt.Errorf("session %q has no working directory", session)
+	}
+	return strings.TrimSpace(s.Directory), nil
 }
 
 // hasUncommittedChanges checks if there are uncommitted changes.

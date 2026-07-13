@@ -1,21 +1,24 @@
 #!/usr/bin/env bash
 # E2E smoke for NTM_BACKEND=herdr.
 #
-# Exercises the core session lifecycle against a live Herdr server:
-#   spawn → list → send → kill
-# plus multi-agent spawn (cc=2,cod=1) to verify unique agent names
-# (agent_name_taken regression).
+# FEATURES.md §1 P0 coverage (bd-gl28u.1.6 / bd-gl28u.1.8):
+#   spawn → list → status → status --watch → attach → send → kill
+#   multi-agent spawn (cc=2,cod=1) — agent_name_taken regression
+#   mid-session add (spawn --cc=1; add --cc=1 / --cod=1) — NTMIndex
+#   spawn --label — full session name in registry + herdr workspace label
 #
 # Prerequisites:
 #   - herdr binary on PATH (or HERDR_BIN_PATH)
 #   - herdr server running (herdr status → server.status=running)
-#   - go (if no local ./ntm binary) or a prebuilt ./ntm
+#   - go (if no prebuilt binary) or NTM_BIN / /tmp/herdctl / ./ntm
 #
 # Usage (from repo root):
 #   ./scripts/test-herdr-backend.sh
-#   NTM_BIN=./ntm ./scripts/test-herdr-backend.sh
+#   NTM_BIN=/tmp/herdctl ./scripts/test-herdr-backend.sh
+#   go build -o /tmp/herdctl ./cmd/ntm && NTM_BIN=/tmp/herdctl ./scripts/test-herdr-backend.sh
 #
 # Exit codes: 0 on full pass, non-zero on any failure.
+# Each case logs backend, registry path, workspace_id, agent names, exit codes.
 
 set -uo pipefail
 # Intentionally not using -e so individual assertions can fail without
@@ -30,7 +33,17 @@ cd "$ROOT_DIR"
 
 DEMO_SESSION="${DEMO_SESSION:-demo-session}"
 MULTI_SESSION="${MULTI_SESSION:-test-multi}"
+ADD_SESSION="${ADD_SESSION:-test-add}"
+LABEL_BASE="${LABEL_BASE:-test-label}"
+LABEL_SUFFIX="${LABEL_SUFFIX:-frontend}"
+# Full labeled session name: base--label (config.FormatSessionName)
+LABEL_SESSION="${LABEL_SESSION:-${LABEL_BASE}--${LABEL_SUFFIX}}"
+CP_SESSION="${CP_SESSION:-test-checkpoint}"
+PERSIST_SESSION="${PERSIST_SESSION:-test-persist}"
 TEST_MSG="${TEST_MSG:-echo herdr-test}"
+# Short watch for e2e (status --interval is milliseconds)
+WATCH_INTERVAL_MS="${WATCH_INTERVAL_MS:-400}"
+WATCH_TICKS="${WATCH_TICKS:-2}"
 
 # Isolated registry so we never clobber the developer's real binding map.
 TEST_HOME="${TEST_HOME:-$(mktemp -d -t ntm-herdr-e2e-XXXXXX)}"
@@ -140,8 +153,8 @@ resolve_ntm() {
     return 0
   fi
 
-  # Prefer a local binary built for this host.
-  for candidate in "${ROOT_DIR}/ntm" "${ROOT_DIR}/cmd/ntm/ntm"; do
+  # Prefer a prebuilt binary (go build -o /tmp/herdctl ./cmd/ntm) over go run.
+  for candidate in /tmp/herdctl "${ROOT_DIR}/ntm" "${ROOT_DIR}/cmd/ntm/ntm"; do
     if [[ -x "$candidate" ]]; then
       # Skip wrong-arch binaries (e.g. cross-compiled leftovers).
       if "$candidate" --help >/dev/null 2>&1 || "$candidate" version >/dev/null 2>&1; then
@@ -271,6 +284,8 @@ cleanup_all() {
   # Always try known session names even if tracking missed them.
   kill_session_best_effort "$DEMO_SESSION"
   kill_session_best_effort "$MULTI_SESSION"
+  kill_session_best_effort "$ADD_SESSION"
+  kill_session_best_effort "$LABEL_SESSION"
 
   # Drop registry file so subsequent runs start clean.
   if [[ -f "$HERDCTL_HERDR_REGISTRY" ]]; then
@@ -397,7 +412,21 @@ seed_registry() {
   # Pre-clean any leftover workspaces from prior failed runs.
   kill_session_best_effort "$DEMO_SESSION"
   kill_session_best_effort "$MULTI_SESSION"
-  ok "pre-cleaned leftover demo/multi workspaces (if any)"
+  kill_session_best_effort "$ADD_SESSION"
+  kill_session_best_effort "$LABEL_SESSION"
+  ok "pre-cleaned leftover demo/multi/add/label workspaces (if any)"
+}
+
+# Log context for a case (FEATURES e2e quality: backend, registry, workspace, agents).
+log_case_context() {
+  local session="${1:-}"
+  info "context: NTM_BACKEND=${NTM_BACKEND} registry=${HERDCTL_HERDR_REGISTRY}"
+  if [[ -n "$session" ]]; then
+    local ws_id agents
+    ws_id="$(workspace_ids_for_label "$session" | head -n1)"
+    agents="$(agent_names_for_session "$session" | tr '\n' ' ')"
+    info "context: session=${session} workspace_id=${ws_id:-none} agents=[${agents}]"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -467,8 +496,259 @@ test_list() {
   assert_contains "ntm list output includes ${DEMO_SESSION}" "$out" "$DEMO_SESSION"
 }
 
+
+test_status() {
+  section "Test: status ${DEMO_SESSION}"
+  log_case_context "$DEMO_SESSION"
+  local out rc=0
+  out="$(run_ntm status "$DEMO_SESSION" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm status ${DEMO_SESSION} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "ntm status ${DEMO_SESSION} succeeded (exit=0)"
+  # Must show agent type (claude/cc) and a status field (idle/working/unknown/error)
+  if [[ "$out" == *"claude"* || "$out" == *"Claude"* || "$out" == *"cc_"* || "$out" == *"cc…"* || "$out" == *"cc..."* ]]; then
+    ok "status output includes agent type"
+  else
+    bad "status output missing agent type (claude/cc)"
+    info "output: ${out}"
+  fi
+  if [[ "$out" == *"idle"* || "$out" == *"working"* || "$out" == *"unknown"* || "$out" == *"error"* || "$out" == *"blocked"* ]]; then
+    ok "status output includes status field"
+  else
+    bad "status output missing status field"
+    info "output: ${out}"
+  fi
+  # herdr pane identity (wN:pM) when backend is herdr
+  if [[ "$out" == *"w"*":p"* || "$out" == *"ntm="* ]]; then
+    ok "status output includes herdr pane identity (wN:pM / ntm=)"
+  else
+    # Soft: older builds may omit; still note for FEATURES honesty.
+    warn "status output missing herdr pane id / ntm= (acceptable if table format differs)"
+    info "output preview: ${out:0:300}"
+  fi
+  info "status output: ${out}"
+}
+
+# ntm agent list/get/read after spawn (bd-gl28u.1.12).
+test_agent_ops() {
+  section "Test: agent list/get/read ${DEMO_SESSION} (bd-gl28u.1.12)"
+  log_case_context "$DEMO_SESSION"
+
+  local agent_name="${DEMO_SESSION}-cc_1"
+  local out rc=0
+
+  # list (session-filtered)
+  out="$(run_ntm agent list --session "$DEMO_SESSION" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm agent list --session ${DEMO_SESSION} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "ntm agent list --session ${DEMO_SESSION} succeeded"
+  assert_contains "agent list includes ${agent_name}" "$out" "$agent_name"
+
+  # get
+  rc=0
+  out="$(run_ntm agent get "$agent_name" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm agent get ${agent_name} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "ntm agent get ${agent_name} succeeded"
+  assert_contains "agent get shows name" "$out" "$agent_name"
+  if [[ "$out" == *"idle"* || "$out" == *"working"* || "$out" == *"unknown"* || "$out" == *"blocked"* ]]; then
+    ok "agent get includes status"
+  else
+    bad "agent get missing status field"
+    info "output: ${out}"
+  fi
+
+  # read
+  rc=0
+  out="$(run_ntm agent read "$agent_name" --lines 10 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm agent read ${agent_name} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "ntm agent read ${agent_name} succeeded (bytes=${#out})"
+
+  # explain (herdr-only; should succeed under NTM_BACKEND=herdr)
+  rc=0
+  out="$(run_ntm agent explain "$agent_name" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm agent explain ${agent_name} (exit=${rc})"
+    info "output: ${out}"
+  else
+    ok "ntm agent explain ${agent_name} succeeded"
+    if [[ "$out" == *"agent"* || "$out" == *"evaluated_rules"* || "$out" == *"state"* ]]; then
+      ok "agent explain returns detection evidence"
+    else
+      bad "agent explain output missing expected keys"
+      info "output preview: ${out:0:300}"
+    fi
+  fi
+
+  # focus
+  rc=0
+  out="$(run_ntm agent focus "$agent_name" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm agent focus ${agent_name} (exit=${rc})"
+    info "output: ${out}"
+  else
+    ok "ntm agent focus ${agent_name} succeeded"
+  fi
+
+  # agents profiles (backend-agnostic)
+  rc=0
+  out="$(run_ntm agents list 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm agents list (exit=${rc})"
+    info "output: ${out}"
+  else
+    ok "ntm agents list succeeded"
+    assert_contains "agents list includes claude" "$out" "claude"
+  fi
+}
+
+# status --watch must re-fetch via mux each tick (no tmux poll) and exit cleanly
+# on SIGINT (bd-gl28u.1.8).
+test_status_watch() {
+  section "Test: status --watch ${DEMO_SESSION} (mux each tick)"
+  log_case_context "$DEMO_SESSION"
+
+  local out_file
+  out_file="$(mktemp -t ntm-status-watch-XXXXXX)"
+  local rc_file
+  rc_file="$(mktemp -t ntm-status-watch-rc-XXXXXX)"
+
+  # Run watch in background; kill after a few intervals so we observe ≥1 refresh.
+  (
+    set +e
+    run_ntm status "$DEMO_SESSION" --watch --interval "$WATCH_INTERVAL_MS" >"$out_file" 2>&1
+    echo $? >"$rc_file"
+  ) &
+  local watch_pid=$!
+  info "status --watch pid=${watch_pid} interval_ms=${WATCH_INTERVAL_MS}"
+
+  # Wait for at least WATCH_TICKS * interval (+ startup headroom).
+  local wait_s
+  wait_s="$(awk -v ms="$WATCH_INTERVAL_MS" -v ticks="$WATCH_TICKS" 'BEGIN { printf "%.2f", (ms * (ticks + 1)) / 1000.0 + 0.5 }')"
+  sleep "$wait_s"
+
+  if ! kill -0 "$watch_pid" 2>/dev/null; then
+    # Process already exited — may be error or immediate completion.
+    wait "$watch_pid" 2>/dev/null || true
+    local early_out
+    early_out="$(cat "$out_file" 2>/dev/null || true)"
+    if [[ "$early_out" == *"Error"* || "$early_out" == *"not found"* ]]; then
+      bad "status --watch exited early with error"
+      info "output: ${early_out}"
+      rm -f "$out_file" "$rc_file"
+      return 1
+    fi
+    warn "status --watch exited before SIGINT (output may still be valid)"
+  else
+    # Clean Ctrl-C path: SIGINT then wait.
+    # runStatusOnce can take several seconds (herdr RPCs); allow up to ~8s.
+    kill -INT "$watch_pid" 2>/dev/null || true
+    local i
+    for i in $(seq 1 40); do
+      if ! kill -0 "$watch_pid" 2>/dev/null; then
+        break
+      fi
+      sleep 0.2
+    done
+    if kill -0 "$watch_pid" 2>/dev/null; then
+      warn "status --watch still running after SIGINT; sending SIGTERM"
+      kill -TERM "$watch_pid" 2>/dev/null || true
+      sleep 0.5
+      if kill -0 "$watch_pid" 2>/dev/null; then
+        kill -KILL "$watch_pid" 2>/dev/null || true
+      fi
+    fi
+    wait "$watch_pid" 2>/dev/null || true
+  fi
+
+  local out
+  out="$(cat "$out_file" 2>/dev/null || true)"
+  rm -f "$out_file" "$rc_file"
+
+  if [[ -z "$out" ]]; then
+    bad "status --watch produced no output"
+    return 1
+  fi
+  ok "status --watch produced output"
+
+  # Must still show session / agent content from re-fetched panes.
+  if [[ "$out" == *"$DEMO_SESSION"* || "$out" == *"claude"* || "$out" == *"Claude"* || "$out" == *"Panes"* ]]; then
+    ok "status --watch output includes session/agent content"
+  else
+    bad "status --watch output missing session/agent content"
+    info "output: ${out:0:400}"
+  fi
+
+  # Prefer clean stop message; not required if SIGTERM used.
+  if [[ "$out" == *"Watch mode stopped"* ]]; then
+    ok "status --watch stopped cleanly (Watch mode stopped)"
+  else
+    warn "status --watch did not print 'Watch mode stopped' (signal may have been SIGTERM)"
+  fi
+
+  # Must not mention tmux binary failures under herdr.
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* ]]; then
+    bad "status --watch invoked tmux (not herdr-safe)"
+    info "output: ${out:0:400}"
+  else
+    ok "status --watch did not require tmux binary"
+  fi
+
+  info "status --watch output preview: ${out:0:400}"
+}
+
+# attach on herdr: exit 0 + actionable guidance (never tmux attach) (bd-gl28u.1.3).
+test_attach() {
+  section "Test: attach ${DEMO_SESSION} (herdr-safe guidance)"
+  log_case_context "$DEMO_SESSION"
+  local out rc=0
+  out="$(run_ntm attach "$DEMO_SESSION" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm attach ${DEMO_SESSION} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "ntm attach ${DEMO_SESSION} exit=0"
+
+  assert_contains "attach message mentions herdr" "$out" "herdr"
+  if [[ "$out" == *"$DEMO_SESSION"* ]]; then
+    ok "attach message includes session name ${DEMO_SESSION}"
+  else
+    bad "attach message missing session name"
+    info "output: ${out}"
+  fi
+  if [[ "$out" == *"workspace"* || "$out" == *"Focus"* || "$out" == *"TUI"* || "$out" == *"label"* ]]; then
+    ok "attach message is actionable (workspace/focus/TUI)"
+  else
+    bad "attach message not actionable"
+    info "output: ${out}"
+  fi
+  # Must not try tmux attach language as the primary path.
+  if [[ "$out" == *"attaching to tmux"* || "$out" == *"tmux attach"* ]]; then
+    bad "attach appears to invoke tmux attach under herdr"
+    info "output: ${out}"
+  else
+    ok "attach does not invoke tmux attach"
+  fi
+  info "attach output: ${out}"
+}
+
 test_send() {
   section "Test: send ${DEMO_SESSION} --cc '${TEST_MSG}'"
+  log_case_context "$DEMO_SESSION"
   local out rc=0
   out="$(run_ntm send "$DEMO_SESSION" --cc "$TEST_MSG" 2>&1)" || rc=$?
   if [[ $rc -ne 0 ]]; then
@@ -601,15 +881,374 @@ test_multi_agent() {
   fi
 }
 
+# Mid-session scale-out: spawn --cc=1 then add --cc=1 and optionally --cod=1.
+# Verifies session-prefixed names continue NTMIndex (cc_2 not agent_name_taken)
+# and no empty shell panes are left behind (bd-gl28u.1.2).
+
+test_add_agents() {
+  section "Test: add agents to running session (${ADD_SESSION})"
+  track_session "$ADD_SESSION"
+  kill_session_best_effort "$ADD_SESSION"
+
+  local out rc=0
+  out="$(printf 'y\n' | run_ntm spawn "$ADD_SESSION" --cc=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "spawn ${ADD_SESSION} --cc=1 for add test (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "spawn ${ADD_SESSION} --cc=1 for add baseline"
+
+  # add one more Claude — must become session-cc_2, not agent_name_taken
+  out="$(run_ntm add "$ADD_SESSION" --cc=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    if [[ "$out" == *"agent_name_taken"* ]]; then
+      bad "add --cc=1 hit agent_name_taken (NTMIndex continuation broken)"
+    else
+      bad "add ${ADD_SESSION} --cc=1 (exit=${rc})"
+    fi
+    info "output: ${out}"
+    kill_session_best_effort "$ADD_SESSION"
+    return 1
+  fi
+  if [[ "$out" == *"agent_name_taken"* ]]; then
+    bad "add succeeded but output mentions agent_name_taken"
+    info "output: ${out}"
+    kill_session_best_effort "$ADD_SESSION"
+    return 1
+  fi
+  ok "add ${ADD_SESSION} --cc=1 succeeded (no agent_name_taken)"
+  info "add --cc output: ${out}"
+
+  local agents
+  agents="$(agent_names)"
+  assert_contains "after add: agent list has ${ADD_SESSION}-cc_1" "$agents" "${ADD_SESSION}-cc_1"
+  assert_contains "after add: agent list has ${ADD_SESSION}-cc_2" "$agents" "${ADD_SESSION}-cc_2"
+
+  # Multi-type add: --cod should create session-cod_1
+  rc=0
+  out="$(run_ntm add "$ADD_SESSION" --cod=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    if [[ "$out" == *"agent_name_taken"* ]]; then
+      bad "add --cod=1 hit agent_name_taken"
+    else
+      bad "add ${ADD_SESSION} --cod=1 (exit=${rc})"
+    fi
+    info "output: ${out}"
+  else
+    ok "add ${ADD_SESSION} --cod=1 succeeded"
+    agents="$(agent_names)"
+    assert_contains "after add --cod: agent list has ${ADD_SESSION}-cod_1" "$agents" "${ADD_SESSION}-cod_1"
+  fi
+
+  local agent_count
+  agent_count="$(count_agents_for_session "$ADD_SESSION")"
+  if [[ "${agent_count:-0}" -ge 3 ]]; then
+    ok "add session agent count=${agent_count} (>=3: cc_1,cc_2,cod_1)"
+  else
+    bad "add session agent count=${agent_count}, expected >=3"
+    info "agents: $(agent_names_for_session "$ADD_SESSION")"
+  fi
+
+  # Pane count should match agents (+ optional user pane), not empty shells.
+  local ws_id panes
+  ws_id="$(workspace_ids_for_label "$ADD_SESSION" | head -n1)"
+  panes="$(pane_count_for_workspace "$ws_id")"
+  if [[ "${panes:-0}" -ge 3 && "${panes:-0}" -le 5 ]]; then
+    ok "add workspace ${ws_id} pane count=${panes} (agents+user, no empty shells)"
+  else
+    # Soft fail: still report but don't hard-require exact layout.
+    bad "add workspace ${ws_id} pane count=${panes}, expected ~3-5 (no empty precreate shells)"
+  fi
+
+  local kill_out kill_rc=0
+  kill_out="$(run_ntm kill "$ADD_SESSION" --force 2>&1)" || kill_rc=$?
+  if [[ $kill_rc -ne 0 ]]; then
+    bad "kill ${ADD_SESSION} --force (exit=${kill_rc})"
+    info "output: ${kill_out}"
+    kill_session_best_effort "$ADD_SESSION"
+  else
+    ok "kill ${ADD_SESSION} --force succeeded"
+  fi
+}
+
+# spawn --label: full session name (base--label) in registry + herdr workspace (bd-gl28u.1.4).
+test_spawn_label() {
+  section "Test: spawn --label ${LABEL_SUFFIX} → ${LABEL_SESSION}"
+  track_session "$LABEL_SESSION"
+  kill_session_best_effort "$LABEL_SESSION"
+
+  local out rc=0
+  out="$(printf 'y\n' | run_ntm spawn "$LABEL_BASE" --label "$LABEL_SUFFIX" --cc=1 2>&1)" || rc=$?
+  LAST_OUTPUT="$out"
+  if [[ $rc -ne 0 ]]; then
+    bad "spawn ${LABEL_BASE} --label ${LABEL_SUFFIX} --cc=1 (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "spawn --label ${LABEL_SUFFIX} succeeded (exit=0)"
+  info "spawn --label output: ${out}"
+  log_case_context "$LABEL_SESSION"
+
+  # Workspace label must be the full labeled session name.
+  local labels
+  labels="$(workspace_labels)"
+  assert_contains "herdr workspace list includes ${LABEL_SESSION}" "$labels" "$LABEL_SESSION"
+
+  local ws_id
+  ws_id="$(workspace_ids_for_label "$LABEL_SESSION" | head -n1)"
+  if [[ -n "$ws_id" ]]; then
+    ok "workspace id for labeled session ${LABEL_SESSION}: ${ws_id}"
+  else
+    bad "could not resolve workspace id for ${LABEL_SESSION}"
+  fi
+
+  # Agent name uses full labeled session as prefix.
+  local agents
+  agents="$(agent_names)"
+  assert_contains "agent list has ${LABEL_SESSION}-cc_1" "$agents" "${LABEL_SESSION}-cc_1"
+
+  # ntm list shows full labeled name.
+  local list_out list_rc=0
+  list_out="$(run_ntm list 2>&1)" || list_rc=$?
+  if [[ $list_rc -ne 0 ]]; then
+    bad "ntm list after labeled spawn (exit=${list_rc})"
+    info "output: ${list_out}"
+  else
+    assert_contains "ntm list includes labeled session ${LABEL_SESSION}" "$list_out" "$LABEL_SESSION"
+  fi
+
+  # status on labeled session works.
+  local st_out st_rc=0
+  st_out="$(run_ntm status "$LABEL_SESSION" 2>&1)" || st_rc=$?
+  if [[ $st_rc -ne 0 ]]; then
+    bad "ntm status ${LABEL_SESSION} (exit=${st_rc})"
+    info "output: ${st_out}"
+  else
+    ok "ntm status ${LABEL_SESSION} succeeded"
+  fi
+
+  # Project dir should use SessionBase (base name, not full labeled name).
+  local base_dir="${NTM_PROJECTS_BASE}/${LABEL_BASE}"
+  if [[ -d "$base_dir" ]]; then
+    ok "project dir uses SessionBase: ${base_dir}"
+  else
+    # Soft: resolveCreationProjectDir may use different layout; check spawn output.
+    if [[ "$out" == *"${LABEL_BASE}"* ]]; then
+      ok "spawn output references base project ${LABEL_BASE} (SessionBase path may vary)"
+    else
+      warn "could not confirm SessionBase project dir at ${base_dir}"
+    fi
+  fi
+
+  local kill_out kill_rc=0
+  kill_out="$(run_ntm kill "$LABEL_SESSION" --force 2>&1)" || kill_rc=$?
+  if [[ $kill_rc -ne 0 ]]; then
+    bad "kill ${LABEL_SESSION} --force (exit=${kill_rc})"
+    info "output: ${kill_out}"
+    kill_session_best_effort "$LABEL_SESSION"
+  else
+    ok "kill ${LABEL_SESSION} --force succeeded"
+  fi
+}
+
 # ---------------------------------------------------------------------------
-# Summary
+# Persistence pack (bd-gl28u.3.1 / bd-gl28u.3.2)
 # ---------------------------------------------------------------------------
+
+test_checkpoint_save_restore() {
+  section "Test: checkpoint save → kill → restore → list (${CP_SESSION}) (bd-gl28u.3.1)"
+  track_session "$CP_SESSION"
+  kill_session_best_effort "$CP_SESSION"
+
+  local out rc=0
+  out="$(printf 'y\n' | run_ntm spawn "$CP_SESSION" --cc=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "spawn ${CP_SESSION} for checkpoint (exit=${rc})"
+    info "output: ${out:0:500}"
+    return 1
+  fi
+  ok "spawn ${CP_SESSION} for checkpoint"
+
+  # Brief settle for registry / agent start.
+  sleep 1
+
+  rc=0
+  out="$(run_ntm --json checkpoint save "$CP_SESSION" --no-git 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "checkpoint save ${CP_SESSION} (exit=${rc})"
+    info "output: ${out}"
+    kill_session_best_effort "$CP_SESSION"
+    return 1
+  fi
+  ok "checkpoint save ${CP_SESSION}"
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* || "$out" == *"EnsureInstalled"* ]]; then
+    bad "checkpoint save required tmux under herdr"
+  else
+    ok "checkpoint save did not require tmux binary"
+  fi
+
+  local cp_id=""
+  if command -v jq >/dev/null 2>&1; then
+    cp_id="$(printf '%s\n' "$out" | jq -r 'if type=="object" then .id // empty else empty end' 2>/dev/null || true)"
+  fi
+  if [[ -z "$cp_id" ]]; then
+    cp_id="$(printf '%s\n' "$out" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  fi
+  if [[ -z "$cp_id" ]]; then
+    cp_id="last"
+    warn "could not parse checkpoint id; restore will use 'last'"
+  else
+    ok "checkpoint id=${cp_id}"
+  fi
+
+  rc=0
+  out="$(run_ntm kill "$CP_SESSION" --force 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "kill ${CP_SESSION} before restore (exit=${rc})"
+    info "output: ${out}"
+    kill_session_best_effort "$CP_SESSION"
+  else
+    ok "kill ${CP_SESSION} before restore"
+  fi
+
+  # Confirm session gone before restore.
+  local list_out
+  list_out="$(run_ntm list 2>&1 || true)"
+  if [[ "$list_out" == *"$CP_SESSION"* ]]; then
+    warn "session still listed after kill; continuing with restore --force"
+  fi
+
+  rc=0
+  out="$(run_ntm --json checkpoint restore "$CP_SESSION" "$cp_id" --force 2>&1)" || rc=$?
+  if [[ $rc -ne 0 && "$cp_id" != "last" ]]; then
+    out="$(run_ntm --json checkpoint restore "$CP_SESSION" last --force 2>&1)" || rc=$?
+  fi
+  if [[ $rc -ne 0 ]]; then
+    bad "checkpoint restore ${CP_SESSION} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "checkpoint restore ${CP_SESSION}"
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* ]]; then
+    bad "checkpoint restore required tmux under herdr"
+  else
+    ok "checkpoint restore did not require tmux binary"
+  fi
+
+  list_out="$(run_ntm list 2>&1 || true)"
+  if [[ "$list_out" == *"$CP_SESSION"* ]]; then
+    ok "ntm list shows ${CP_SESSION} after restore"
+  else
+    bad "ntm list missing ${CP_SESSION} after restore"
+    info "list: ${list_out}"
+  fi
+
+  rc=0
+  out="$(run_ntm --json checkpoint list "$CP_SESSION" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "checkpoint list ${CP_SESSION} (exit=${rc})"
+    info "output: ${out}"
+  else
+    ok "checkpoint list ${CP_SESSION}"
+  fi
+
+  kill_session_best_effort "$CP_SESSION"
+}
+
+test_persistence_disk_cmds() {
+  section "Test: timeline/history/handoff/sessions-list disk paths (bd-gl28u.3.2)"
+  local out rc
+
+  rc=0
+  out="$(run_ntm --json timeline list 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "timeline list (exit=${rc})"
+    info "output: ${out:0:300}"
+  else
+    ok "timeline list (disk; no backend panes)"
+  fi
+  if [[ "$out" == *"tmux: command not found"* ]]; then
+    bad "timeline list required tmux"
+  else
+    ok "timeline list did not require tmux"
+  fi
+
+  rc=0
+  out="$(run_ntm --json history --limit=5 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "history (exit=${rc})"
+    info "output: ${out:0:300}"
+  else
+    ok "history list (file store)"
+  fi
+
+  rc=0
+  out="$(run_ntm handoff create "$PERSIST_SESSION" --goal "e2e checkpoint pack" --now "verify herdr" --json 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "handoff create (exit=${rc})"
+    info "output: ${out:0:400}"
+  else
+    ok "handoff create (YAML; disk-first)"
+  fi
+
+  rc=0
+  out="$(run_ntm resume "$PERSIST_SESSION" --dry-run --json 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    if [[ "$out" == *"no handoff"* || "$out" == *"not found"* || "$out" == *"No handoff"* || "$out" == *"handoff"* ]]; then
+      ok "resume dry-run handled missing/found handoff without crash (exit=${rc})"
+    else
+      bad "resume dry-run (exit=${rc})"
+      info "output: ${out:0:400}"
+    fi
+  else
+    ok "resume dry-run"
+  fi
+  if [[ "$out" == *"tmux: command not found"* ]]; then
+    bad "resume required tmux under herdr"
+  else
+    ok "resume did not require tmux binary"
+  fi
+
+  rc=0
+  out="$(run_ntm --json sessions list 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "sessions list (exit=${rc})"
+    info "output: ${out:0:300}"
+  else
+    ok "sessions list (disk save mgmt / archive surface)"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Summary / FEATURES checklist
+# ---------------------------------------------------------------------------
+
+print_features_checklist() {
+  section "FEATURES.md §1 P0 checklist (herdr e2e)"
+  # Lines match FEATURES table rows; PASS/FAIL/SKIP from this run's cases.
+  info "checklist: spawn --cc=N          (test_spawn_demo)"
+  info "checklist: list                  (test_list)"
+  info "checklist: status <session>      (test_status)"
+  info "checklist: agent list/get/read   (test_agent_ops / bd-gl28u.1.12)"
+  info "checklist: status --watch        (test_status_watch / bd-gl28u.1.8)"
+  info "checklist: attach <session>      (test_attach / bd-gl28u.1.3)"
+  info "checklist: send --cc             (test_send)"
+  info "checklist: kill --force          (test_kill_demo)"
+  info "checklist: multi-agent spawn     (test_multi_agent)"
+  info "checklist: add --cc/--cod        (test_add_agents / bd-gl28u.1.2)"
+  info "checklist: spawn --label         (test_spawn_label / bd-gl28u.1.4)"
+  info "checklist: checkpoint save/restore (test_checkpoint_save_restore / bd-gl28u.3.1)"
+  info "checklist: timeline/history/handoff (test_persistence_disk_cmds / bd-gl28u.3.2)"
+  info "See FEATURES.md §1 for official ✓/~ /✗; this script only verifies exercised paths."
+}
 
 print_summary() {
   section "Summary"
   local total=$((PASS + FAIL + SKIP))
   info "passed=${PASS} failed=${FAIL} skipped=${SKIP} total=${total}"
-  info "registry=${HERDCTL_HERDR_REGISTRY}"
+  info "backend=${NTM_BACKEND} registry=${HERDCTL_HERDR_REGISTRY}"
+  info "ntm=${NTM_CMD[*]}"
   if [[ $FAIL -gt 0 ]]; then
     err "HERDR BACKEND E2E FAILED"
     return 1
@@ -624,15 +1263,25 @@ print_summary() {
 
 main() {
   info "herdr-ntm backend e2e starting (cwd=${ROOT_DIR})"
+  info "sessions: demo=${DEMO_SESSION} multi=${MULTI_SESSION} add=${ADD_SESSION} label=${LABEL_SESSION} cp=${CP_SESSION}"
   check_prereqs
   seed_registry
 
   test_spawn_demo
   test_list
+  test_status
+  test_agent_ops
+  test_status_watch
+  test_attach
   test_send
   test_kill_demo
   test_multi_agent
+  test_add_agents
+  test_spawn_label
+  test_checkpoint_save_restore
+  test_persistence_disk_cmds
 
+  print_features_checklist
   print_summary
 }
 

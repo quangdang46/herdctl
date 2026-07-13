@@ -105,7 +105,7 @@ func runActivity(session string, opts activityOptions) error {
 	// bd-ixy2t: emit a JSON envelope on early-fail when --json is set so
 	// automation pipelines (`ntm activity --json | jq ...`) always see a
 	// parseable failure on stdout instead of a stderr "Error:" line.
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		if jsonOutput {
 			return outputActivityError(session, err)
 		}
@@ -125,7 +125,7 @@ func runActivity(session string, opts activityOptions) error {
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		if jsonOutput {
 			return outputActivityError(session, fmt.Errorf("session '%s' not found", session))
 		}
@@ -238,7 +238,7 @@ type agentInfo struct {
 }
 
 func collectActivityData(session string, opts activityOptions) (*activityResult, error) {
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -263,12 +263,19 @@ func collectActivityData(session string, opts activityOptions) (*activityResult,
 			continue
 		}
 
-		// Create classifier and get state
+		// Create classifier and get state. Capture via mux so herdr backend
+		// works (StateClassifier.Classify() still calls raw tmux capture).
 		classifier := robot.NewStateClassifier(pane.ID, &robot.ClassifierConfig{
 			AgentType: agentType,
 		})
 
-		activity, err := classifier.Classify()
+		var activity *robot.AgentActivity
+		var err error
+		if captured, capErr := muxCaptureForStatusDetection(pane.ID); capErr == nil {
+			activity, err = classifier.ClassifyWithOutput(captured)
+		} else {
+			activity, err = classifier.Classify()
+		}
 		if err != nil {
 			// Include with unknown state on error
 			result.Agents = append(result.Agents, agentInfo{

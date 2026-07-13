@@ -102,7 +102,7 @@ func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
 		promptToSend = beadPrompt
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.Failed = append(output.Failed, RestartError{
 			Pane:   "session",
 			Reason: fmt.Sprintf("session '%s' not found", opts.Session),
@@ -115,7 +115,7 @@ func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
 		return output, nil
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.Failed = append(output.Failed, RestartError{
 			Pane:   "panes",
@@ -207,7 +207,7 @@ func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
 			}
 
 			launchCmd := restartAgentLaunchCommand(cfg, info.ResolvedType)
-			if err := tmux.SendKeysForAgent(info.Target, launchCmd, true, info.AgentType); err != nil {
+			if err := backendSendKeysForAgent(info.Target, launchCmd, true, info.AgentType); err != nil {
 				output.AgentRelaunched[paneKey] = false
 				output.ProcessAlive[paneKey] = false
 				output.Failed = append(output.Failed, RestartError{
@@ -256,7 +256,7 @@ func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
 			}
 			promptTargets = append(promptTargets, info)
 		}
-		promptErrors = append(promptErrors, sendRestartPrompts(promptTargets, promptToSend, tmux.SendKeysForAgentDoubleEnter)...)
+		promptErrors = append(promptErrors, sendRestartPrompts(promptTargets, promptToSend, backendSendKeysForAgentDoubleEnter)...)
 
 		if len(promptErrors) > 0 {
 			output.PromptSent = false
@@ -365,7 +365,7 @@ func waitForPaneAgentReady(target string, shellPID int, agentType string, timeou
 	deadline := time.Now().Add(timeout)
 	for {
 		ready := false
-		if captured, err := tmux.CapturePaneOutput(target, 50); err == nil && isAgentReady(captured, agentType) {
+		if captured, err := backendCapturePaneOutput(target, 50); err == nil && isAgentReady(captured, agentType) {
 			ready = true
 		}
 		if ready && shellPID > 0 && !process.HasChildAlive(shellPID) {

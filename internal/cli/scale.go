@@ -109,7 +109,10 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 		return err
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return outputError(err)
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return outputError(err)
 	}
 
@@ -120,7 +123,7 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 	}
 	session = resolvedSession
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return outputError(fmt.Errorf("session '%s' does not exist", session))
 	}
 
@@ -144,7 +147,7 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 	}
 
 	// Get current panes
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return outputError(fmt.Errorf("getting panes: %w", err))
 	}
@@ -323,7 +326,7 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 		slog.Default().Info("[E2E-SCALE] kill", "session", session, "agent_type", action.AgentType, "count", action.Count)
 
 		// Re-fetch panes to get current state after scale-up
-		currentPanes, err := tmux.GetPanes(session)
+		currentPanes, err := muxGetPanes(session)
 		if err != nil {
 			errMsg := fmt.Sprintf("refetch panes for kill: %v", err)
 			errors = append(errors, errMsg)
@@ -345,7 +348,7 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 		for i := 0; i < action.Count && i < len(matchingPanes); i++ {
 			p := matchingPanes[i]
 			slog.Default().Info("[E2E-SCALE] kill-pane", "session", session, "agent_type", action.AgentType, "pane_id", p.ID, "title", p.Title)
-			if err := tmux.KillPane(p.ID); err != nil {
+			if err := muxKillPane(p.ID); err != nil {
 				errMsg := fmt.Sprintf("kill pane %s: %v", p.Title, err)
 				errors = append(errors, errMsg)
 				if !IsJSONOutput() {
@@ -364,14 +367,14 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 		}
 	}
 
-	// Re-tile layout after changes
-	_ = tmux.ApplyTiledLayout(session)
+	// Re-tile layout after changes (best-effort; herdr has no tiled layout primitive)
+	_ = muxApplyTiledLayout(session)
 
 	// Build response
 	success := len(errors) == 0
 
 	// Re-fetch final state
-	finalPanes, fetchErr := tmux.GetPanes(session)
+	finalPanes, fetchErr := muxGetPanes(session)
 	if fetchErr != nil {
 		slog.Warn("scale: could not verify final pane state", "session", session, "error", fetchErr)
 	}
@@ -422,7 +425,7 @@ func runScale(session string, targets []scaleTarget, dryRun, force bool) error {
 func resolveScaleSession(session string) (string, error) {
 	session = strings.TrimSpace(session)
 	if session != "" {
-		if err := tmux.ValidateSessionName(session); err != nil {
+		if err := muxValidateSessionName(session); err != nil {
 			return "", fmt.Errorf("invalid session name: %w", err)
 		}
 	}

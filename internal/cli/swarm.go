@@ -9,13 +9,16 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/claudeconfig"
 	"github.com/Dicklesworthstone/ntm/internal/health"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/status"
@@ -296,6 +299,10 @@ func runSwarm(ctx context.Context, opts swarmOptions) error {
 	}
 	logger := slog.Default()
 
+	if err := muxEnsureInstalled(); err != nil {
+		return err
+	}
+
 	initialPrompt, promptSource, promptPath, err := resolveSwarmInitialPrompt(opts.InitialPrompt, opts.PromptFile)
 	if err != nil {
 		return err
@@ -397,31 +404,6 @@ func runSwarm(ctx context.Context, opts swarmOptions) error {
 		staggerDelay = 0
 	}
 
-	// Create a tmux session orchestrator (local or remote).
-	var sessOrch *swarm.SessionOrchestrator
-	if opts.Remote != "" {
-		sessOrch = swarm.NewRemoteSessionOrchestrator(opts.Remote)
-		sessOrch.StaggerDelay = staggerDelay
-		output.PrintInfof("Creating swarm on remote host: %s", opts.Remote)
-	} else {
-		sessOrch = swarm.NewSessionOrchestrator()
-		sessOrch.StaggerDelay = staggerDelay
-	}
-
-	// Derive a concrete tmux client for follow-up actions.
-	tmuxClient := sessOrch.TmuxClient
-	if tmuxClient == nil {
-		tmuxClient = tmux.DefaultClient
-	}
-
-	executor := &swarm.SwarmOrchestrator{
-		SessionOrchestrator: sessOrch,
-		PaneLauncher:        swarm.NewPaneLauncherWithClient(tmuxClient).WithLogger(logger),
-		PromptInjector:      swarm.NewPromptInjectorWithClient(tmuxClient).WithLogger(logger),
-		Logger:              logger,
-		StaggerDelay:        staggerDelay,
-	}
-
 	// Reconcile any stale Claude Code model snapshot from a previous swarm
 	// that crashed / was killed before its shutdown path ran. Safe no-op when
 	// there's nothing to reconcile (issue #110).
@@ -432,7 +414,39 @@ func runSwarm(ctx context.Context, opts swarmOptions) error {
 	// can restore it. Non-fatal on failure (issue #110).
 	_ = snapshotClaudeModelForSwarm(plan, logger)
 
-	execResult, err := executor.Execute(ctx, plan, initialPrompt)
+	var execResult *swarm.SwarmOrchestrationResult
+	if backend.IsHerdr() {
+		if opts.Remote != "" {
+			return fmt.Errorf("swarm --remote is not supported on NTM_BACKEND=herdr (herdr has no SSH tmux relay)")
+		}
+		execResult, err = executeSwarmHerdr(ctx, plan, initialPrompt, staggerDelay, logger)
+	} else {
+		// Create a tmux session orchestrator (local or remote).
+		var sessOrch *swarm.SessionOrchestrator
+		if opts.Remote != "" {
+			sessOrch = swarm.NewRemoteSessionOrchestrator(opts.Remote)
+			sessOrch.StaggerDelay = staggerDelay
+			output.PrintInfof("Creating swarm on remote host: %s", opts.Remote)
+		} else {
+			sessOrch = swarm.NewSessionOrchestrator()
+			sessOrch.StaggerDelay = staggerDelay
+		}
+
+		// Derive a concrete tmux client for follow-up actions.
+		tmuxClient := sessOrch.TmuxClient
+		if tmuxClient == nil {
+			tmuxClient = tmux.DefaultClient
+		}
+
+		executor := &swarm.SwarmOrchestrator{
+			SessionOrchestrator: sessOrch,
+			PaneLauncher:        swarm.NewPaneLauncherWithClient(tmuxClient).WithLogger(logger),
+			PromptInjector:      swarm.NewPromptInjectorWithClient(tmuxClient).WithLogger(logger),
+			Logger:              logger,
+			StaggerDelay:        staggerDelay,
+		}
+		execResult, err = executor.Execute(ctx, plan, initialPrompt)
+	}
 	if err != nil {
 		return err
 	}
@@ -473,7 +487,7 @@ func runSwarm(ctx context.Context, opts swarmOptions) error {
 			timeout = 30 * time.Second
 		}
 		output.PrintInfof("Waiting for agents to reach ready state (timeout: %s)...", timeout)
-		ready, total := waitForSwarmAgentsReady(ctx, plan, tmuxClient, timeout, logger)
+		ready, total := waitForSwarmAgentsReady(ctx, plan, timeout, logger)
 		if ready == total {
 			output.PrintSuccessf("All %d agents are ready", total)
 		} else {
@@ -673,11 +687,11 @@ func newSwarmStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Show current swarm status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 
-			sessions, err := tmux.ListSessions()
+			sessions, err := muxListSessions()
 			if err != nil {
 				return err
 			}
@@ -876,9 +890,14 @@ Examples:
 				cfg.GracefulTimeout = timeout
 			}
 
-			// Execute shutdown
-			orchestrator := swarm.NewSwarmOrchestrator()
-			result, err := orchestrator.GracefulShutdown(ctx, sessions, cfg)
+			// Execute shutdown (herdr: interrupt+kill workspaces; tmux: existing graceful path)
+			var result *swarm.ShutdownResult
+			if backend.IsHerdr() {
+				result, err = gracefulShutdownHerdr(ctx, sessions, cfg)
+			} else {
+				orchestrator := swarm.NewSwarmOrchestrator()
+				result, err = orchestrator.GracefulShutdown(ctx, sessions, cfg)
+			}
 			if err != nil {
 				return fmt.Errorf("shutdown failed: %w", err)
 			}
@@ -923,10 +942,8 @@ Examples:
 
 // discoverSwarmSessions finds tmux sessions matching the given patterns.
 func discoverSwarmSessions(patterns []string) ([]string, error) {
-	client := tmux.DefaultClient
-
-	// List all sessions
-	allSessions, err := client.ListSessions()
+	// List all sessions via active backend (tmux or herdr)
+	allSessions, err := muxListSessions()
 	if err != nil {
 		return nil, fmt.Errorf("listing sessions: %w", err)
 	}
@@ -988,11 +1005,12 @@ var swarmAgentTypeToLong = map[string]string{
 // waitForSwarmAgentsReady polls all agent panes in the swarm plan until they
 // show idle/ready state or the timeout expires.  Returns (readyCount, totalCount).
 // This implements the readiness gate for --wait-ready (issue #61).
-func waitForSwarmAgentsReady(ctx context.Context, plan *swarm.SwarmPlan, client *tmux.Client, timeout time.Duration, logger *slog.Logger) (int, int) {
+func waitForSwarmAgentsReady(ctx context.Context, plan *swarm.SwarmPlan, timeout time.Duration, logger *slog.Logger) (int, int) {
 	deadline := time.Now().Add(timeout)
 	pollInterval := 500 * time.Millisecond
 
-	// Collect all pane targets: "session:0.index"
+	// Collect all pane targets. Prefer live backend pane IDs (herdr wN:pM / tmux %N)
+	// when the session exists; fall back to session:window.pane grammar for tmux.
 	type paneInfo struct {
 		target    string
 		shortType string // "cc", "cod", "gmi", "agy" (for status package)
@@ -1006,11 +1024,36 @@ func waitForSwarmAgentsReady(ctx context.Context, plan *swarm.SwarmPlan, client 
 			longType = sess.AgentType
 		}
 
-		firstWin, err := client.GetFirstWindow(sess.Name)
-		if err != nil {
-			firstWin = 1 // fallback
+		livePanes, err := muxGetPanes(sess.Name)
+		if err == nil && len(livePanes) > 0 {
+			// Match plan panes by title suffix or order (skip pure user root if extra).
+			for i, ps := range sess.Panes {
+				target := ""
+				// Prefer NTM-index / title match
+				wantTitle := muxFormatPaneName(sess.Name, ps.AgentType, ps.Index, "")
+				for _, lp := range livePanes {
+					if lp.Title == wantTitle || (lp.NTMIndex > 0 && lp.NTMIndex == ps.Index) {
+						target = lp.ID
+						break
+					}
+				}
+				if target == "" && i < len(livePanes) {
+					target = livePanes[i].ID
+				}
+				if target == "" {
+					continue
+				}
+				panes = append(panes, paneInfo{
+					target:    target,
+					shortType: sess.AgentType,
+					longType:  longType,
+				})
+			}
+			continue
 		}
 
+		// Fallback: tmux-style session:window.pane
+		firstWin := 1
 		for _, ps := range sess.Panes {
 			target := fmt.Sprintf("%s:%d.%d", sess.Name, firstWin, ps.Index)
 			panes = append(panes, paneInfo{
@@ -1036,7 +1079,7 @@ func waitForSwarmAgentsReady(ctx context.Context, plan *swarm.SwarmPlan, client 
 				continue
 			}
 
-			captured, err := client.CapturePaneOutput(panes[i].target, 50)
+			captured, err := muxCapturePaneOutput(panes[i].target, 50)
 			if err != nil {
 				allReady = false
 				continue
@@ -1067,4 +1110,327 @@ func waitForSwarmAgentsReady(ctx context.Context, plan *swarm.SwarmPlan, client 
 		}
 	}
 	return readyCount, len(panes)
+}
+
+
+// executeSwarmHerdr creates herdr workspaces and starts agents via agent.start
+// (no tmux SplitWindow / send-keys launch). Prompt injection uses muxSendKeys.
+func executeSwarmHerdr(ctx context.Context, plan *swarm.SwarmPlan, prompt string, staggerDelay time.Duration, logger *slog.Logger) (*swarm.SwarmOrchestrationResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if plan == nil {
+		return nil, fmt.Errorf("plan cannot be nil")
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+
+	result := &swarm.SwarmOrchestrationResult{
+		StartedAt: time.Now().UTC(),
+		Plan:      plan,
+	}
+	orchResult := &swarm.OrchestrationResult{
+		Sessions: make([]swarm.CreateSessionResult, 0, len(plan.Sessions)),
+	}
+	launchResult := &swarm.BatchLaunchResult{
+		TotalPanes: plan.TotalAgents,
+		Results:    make([]swarm.PaneLaunchResult, 0, plan.TotalAgents),
+	}
+
+	// paneID by session+plan index for prompt injection
+	type paneKey struct {
+		session string
+		index   int
+	}
+	paneIDs := make(map[paneKey]string)
+
+	for si, sess := range plan.Sessions {
+		if err := ctx.Err(); err != nil {
+			result.Sessions = orchResult
+			result.Launch = launchResult
+			return result, err
+		}
+		if si > 0 && staggerDelay > 0 {
+			time.Sleep(staggerDelay)
+		}
+
+		// Directory from first pane project
+		directory := "/tmp"
+		if len(sess.Panes) > 0 && sess.Panes[0].Project != "" {
+			directory = sess.Panes[0].Project
+		}
+
+		sessRes := swarm.CreateSessionResult{
+			SessionSpec: sess,
+			SessionName: sess.Name,
+			PaneIDs:     make([]string, 0, len(sess.Panes)),
+		}
+
+		if muxSessionExists(sess.Name) {
+			sessRes.Error = fmt.Errorf("session %q already exists", sess.Name)
+			orchResult.Sessions = append(orchResult.Sessions, sessRes)
+			orchResult.Errors = append(orchResult.Errors, sessRes.Error)
+			orchResult.TotalPanes += sess.PaneCount
+			orchResult.FailedPanes += sess.PaneCount
+			continue
+		}
+
+		if err := muxCreateSessionWithHistoryLimit(sess.Name, directory, muxDefaultHistoryLimit()); err != nil {
+			sessRes.Error = fmt.Errorf("create session %q: %w", sess.Name, err)
+			orchResult.Sessions = append(orchResult.Sessions, sessRes)
+			orchResult.Errors = append(orchResult.Errors, sessRes.Error)
+			orchResult.TotalPanes += sess.PaneCount
+			orchResult.FailedPanes += sess.PaneCount
+			continue
+		}
+
+		// Prefer agent.start for each plan pane (creates panes; workspace root may remain).
+		for pi, ps := range sess.Panes {
+			if err := ctx.Err(); err != nil {
+				break
+			}
+			if pi > 0 && staggerDelay > 0 {
+				time.Sleep(staggerDelay)
+			}
+			cwd := directory
+			if ps.Project != "" {
+				cwd = ps.Project
+			}
+			agentType := swarmShortToHerdrAgentType(ps.AgentType)
+			idx := ps.Index
+			if idx <= 0 {
+				idx = pi + 1
+			}
+			title := muxFormatPaneName(sess.Name, string(agentType), idx, "")
+			argv := swarmHerdrArgv(ps.AgentType)
+			launchStart := time.Now()
+			paneLaunch := swarm.PaneLaunchResult{
+				SessionName: sess.Name,
+				PaneIndex:   idx,
+				AgentType:   ps.AgentType,
+				Project:     cwd,
+				Command:     strings.Join(argv, " "),
+			}
+			launched, launchErr := herdr.StartAgent(ctx, herdr.StartAgentOptions{
+				Session:   sess.Name,
+				Name:      fmt.Sprintf("%s-%s_%d", sess.Name, agentType, idx),
+				AgentType: agentType,
+				Index:     idx,
+				Cwd:       cwd,
+				Argv:      argv,
+				Focus:     false,
+				Split:     "right",
+			})
+			if launchErr != nil {
+				// Fallback: split + send-keys shell command
+				logger.Warn("[swarm-herdr] agent.start failed; trying split+send",
+					"session", sess.Name, "pane", idx, "error", launchErr)
+				paneID, splitErr := muxSplitWindow(sess.Name, cwd)
+				if splitErr != nil {
+					paneLaunch.Success = false
+					paneLaunch.Error = splitErr.Error()
+					paneLaunch.Duration = time.Since(launchStart)
+					launchResult.Failed++
+					launchResult.Results = append(launchResult.Results, paneLaunch)
+					launchResult.Errors = append(launchResult.Errors, splitErr)
+					continue
+				}
+				_ = muxSetPaneTitle(paneID, title)
+				shellCmd := strings.Join(argv, " ")
+				if err := muxSendKeys(paneID, shellCmd, true); err != nil {
+					paneLaunch.Success = false
+					paneLaunch.Error = err.Error()
+					paneLaunch.Duration = time.Since(launchStart)
+					launchResult.Failed++
+					launchResult.Results = append(launchResult.Results, paneLaunch)
+					launchResult.Errors = append(launchResult.Errors, err)
+					continue
+				}
+				paneLaunch.Success = true
+				paneLaunch.PaneTarget = paneID
+				paneLaunch.Duration = time.Since(launchStart)
+				launchResult.Successful++
+				launchResult.Results = append(launchResult.Results, paneLaunch)
+				sessRes.PaneIDs = append(sessRes.PaneIDs, paneID)
+				paneIDs[paneKey{session: sess.Name, index: idx}] = paneID
+				continue
+			}
+			if title != "" {
+				_ = herdr.SetPaneTitle(launched.ID, title)
+			}
+			paneLaunch.Success = true
+			paneLaunch.PaneTarget = launched.ID
+			paneLaunch.Duration = time.Since(launchStart)
+			launchResult.Successful++
+			launchResult.Results = append(launchResult.Results, paneLaunch)
+			sessRes.PaneIDs = append(sessRes.PaneIDs, launched.ID)
+			paneIDs[paneKey{session: sess.Name, index: idx}] = launched.ID
+		}
+
+		// Best-effort unzoom (tiled N/A on herdr)
+		_ = muxApplyTiledLayout(sess.Name)
+
+		orchResult.Sessions = append(orchResult.Sessions, sessRes)
+		orchResult.TotalPanes += sess.PaneCount
+		orchResult.SuccessfulPanes += len(sessRes.PaneIDs)
+		orchResult.FailedPanes += sess.PaneCount - len(sessRes.PaneIDs)
+		if len(sessRes.PaneIDs) == 0 {
+			sessRes.Error = fmt.Errorf("no panes launched in session %q", sess.Name)
+			orchResult.Errors = append(orchResult.Errors, sessRes.Error)
+		}
+	}
+
+	result.Sessions = orchResult
+	result.Launch = launchResult
+
+	// Optional prompt injection
+	if strings.TrimSpace(prompt) != "" {
+		inj := &swarm.BatchInjectionResult{
+			TotalPanes: len(paneIDs),
+			Results:    make([]swarm.InjectionResult, 0, len(paneIDs)),
+		}
+		start := time.Now()
+		for key, paneID := range paneIDs {
+			if err := ctx.Err(); err != nil {
+				break
+			}
+			// Resolve agent type from plan
+			agentType := "cc"
+			for _, sess := range plan.Sessions {
+				if sess.Name != key.session {
+					continue
+				}
+				for _, ps := range sess.Panes {
+					if ps.Index == key.index {
+						agentType = ps.AgentType
+						break
+					}
+				}
+			}
+			ir := swarm.InjectionResult{
+				SessionPane: paneID,
+				AgentType:   agentType,
+				SentAt:      time.Now().UTC(),
+			}
+			aType := tmux.AgentType(swarmShortToHerdrAgentType(agentType))
+			if err := muxSendKeysForAgent(paneID, prompt, false, aType); err != nil {
+				ir.Success = false
+				ir.Error = err.Error()
+				inj.Failed++
+			} else {
+				// Enter to submit
+				_ = muxSendKeys(paneID, "", true)
+				ir.Success = true
+				inj.Successful++
+			}
+			inj.Results = append(inj.Results, ir)
+			if staggerDelay > 0 {
+				time.Sleep(staggerDelay)
+			}
+		}
+		inj.Duration = time.Since(start)
+		result.Injection = inj
+	}
+
+	result.ErrorCount = len(result.Errors) + len(orchResult.Errors) + len(launchResult.Errors)
+	return result, nil
+}
+
+func swarmShortToHerdrAgentType(short string) herdr.AgentType {
+	switch strings.ToLower(strings.TrimSpace(short)) {
+	case "cc", "claude", "claude-code":
+		return herdr.AgentClaude
+	case "cod", "codex":
+		return herdr.AgentCodex
+	case "gmi", "gemini":
+		return herdr.AgentGemini
+	case "agy", "antigravity":
+		return herdr.AgentAntigravity
+	case "cursor":
+		return herdr.AgentCursor
+	case "windsurf":
+		return herdr.AgentWindsurf
+	case "aider":
+		return herdr.AgentAider
+	case "oc", "opencode":
+		return herdr.AgentOpencode
+	case "ollama":
+		return herdr.AgentOllama
+	default:
+		return herdr.AgentType(short)
+	}
+}
+
+func swarmHerdrArgv(agentType string) []string {
+	switch strings.ToLower(strings.TrimSpace(agentType)) {
+	case "cc", "claude", "claude-code":
+		return []string{"claude", "--dangerously-skip-permissions"}
+	case "cod", "codex":
+		return []string{"codex"}
+	case "gmi", "gemini":
+		return []string{"gemini", "--yolo"}
+	case "agy", "antigravity":
+		return []string{"agy", "--dangerously-skip-permissions"}
+	case "cursor":
+		return []string{"cursor"}
+	case "windsurf":
+		return []string{"windsurf"}
+	case "aider":
+		return []string{"aider"}
+	case "oc", "opencode":
+		return []string{"opencode"}
+	case "ollama":
+		return []string{"ollama", "run", "codellama:latest"}
+	default:
+		if agentType == "" {
+			return []string{"claude", "--dangerously-skip-permissions"}
+		}
+		return []string{agentType}
+	}
+}
+
+// gracefulShutdownHerdr interrupts agent panes then closes herdr workspaces.
+func gracefulShutdownHerdr(ctx context.Context, sessionNames []string, cfg swarm.ShutdownConfig) (*swarm.ShutdownResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	start := time.Now()
+	result := &swarm.ShutdownResult{}
+	for _, sessionName := range sessionNames {
+		if err := ctx.Err(); err != nil {
+			result.Duration = time.Since(start)
+			return result, err
+		}
+		if !muxSessionExists(sessionName) {
+			continue
+		}
+		panes, err := muxGetPanes(sessionName)
+		if err == nil && !cfg.ForceKill {
+			for _, pane := range panes {
+				if err := muxSendInterrupt(pane.ID); err == nil {
+					result.GracefulExits++
+					result.PanesKilled++
+				}
+			}
+			if cfg.GracefulTimeout > 0 && result.GracefulExits > 0 {
+				select {
+				case <-ctx.Done():
+					result.Duration = time.Since(start)
+					return result, ctx.Err()
+				case <-time.After(cfg.GracefulTimeout):
+				}
+			}
+		} else if err == nil {
+			result.ForceKills += len(panes)
+			result.PanesKilled += len(panes)
+		}
+		if err := muxKillSession(sessionName); err != nil {
+			result.Errors = append(result.Errors, err)
+		} else {
+			result.SessionsDestroyed++
+		}
+	}
+	result.Duration = time.Since(start)
+	return result, nil
 }

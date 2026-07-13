@@ -233,7 +233,7 @@ func (pi *PaneIndicator) updateAll(ctx context.Context) {
 
 // getPanes returns the pane list to monitor.
 func (pi *PaneIndicator) getPanes() ([]tmux.Pane, error) {
-	allPanes, err := tmux.GetPanes(pi.config.Session)
+	allPanes, err := backendGetPanes(pi.config.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (pi *PaneIndicator) updatePane(ctx context.Context, pane tmux.Pane) {
 	}
 
 	// Capture pane content.
-	output, err := tmux.CapturePaneOutputContext(ctx, target, pi.config.LinesCaptured)
+	output, err := backendCapturePaneOutputContext(ctx, target, pi.config.LinesCaptured)
 	if err != nil {
 		return // best-effort
 	}

@@ -160,7 +160,7 @@ func PrintHealth() error {
 // getSystemHealth returns system-level health metrics
 func getSystemHealth() SystemHealthInfo {
 	info := SystemHealthInfo{
-		TmuxOK: tmux.IsInstalled(),
+		TmuxOK: backendIsInstalled(),
 	}
 
 	// Get disk free space (platform-specific)
@@ -253,7 +253,7 @@ func populateAgentHealth(output *HealthOutput) {
 		return
 	}
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := backendListSessions()
 	if err != nil {
 		output.Alerts = append(output.Alerts, fmt.Sprintf("failed to list sessions: %v", err))
 		return
@@ -265,7 +265,7 @@ func populateAgentHealth(output *HealthOutput) {
 			Agents:  make(map[string]AgentHealthInfo),
 		}
 
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := backendGetPanes(sess.Name)
 		if err != nil {
 			output.Alerts = append(output.Alerts, fmt.Sprintf("%s: failed to get panes: %v", sess.Name, err))
 			sessHealth.Healthy = false
@@ -316,7 +316,7 @@ func getAgentHealth(session string, pane tmux.Pane) AgentHealthInfo {
 	// Capture recent output to detect error states
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	captured, err := tmux.CapturePaneOutputContext(ctx, pane.ID, 20)
+	captured, err := backendCapturePaneOutputContext(ctx, pane.ID, 20)
 	if err == nil {
 		agentType := paneAgentType(pane)
 		shortAgentType := translateAgentTypeForStatus(agentType)
@@ -478,7 +478,7 @@ func checkProcess(paneID string, shellPID int) *ProcessCheckResult {
 	// Capture pane output to check for exit indicators
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	output, err := tmux.CapturePaneOutputContext(ctx, paneID, 30)
+	output, err := backendCapturePaneOutputContext(ctx, paneID, 30)
 	if err != nil {
 		result.Reason = "failed to capture pane output"
 		return result
@@ -601,7 +601,7 @@ func checkErrors(paneID string) *ErrorCheckResult {
 	// Capture pane output
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	output, err := tmux.CapturePaneOutputContext(ctx, paneID, 50)
+	output, err := backendCapturePaneOutputContext(ctx, paneID, 50)
 	if err != nil {
 		result.Reason = "failed to capture pane output"
 		return result
@@ -784,7 +784,7 @@ func GetSessionHealth(session string) (*SessionHealthOutput, error) {
 	}
 
 	// Check if session exists
-	if !tmux.SessionExists(session) {
+	if !backendSessionExists(session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", session),
 			ErrCodeSessionNotFound,
@@ -794,7 +794,7 @@ func GetSessionHealth(session string) (*SessionHealthOutput, error) {
 	}
 
 	// Get panes in the session
-	panes, err := tmux.GetPanes(session)
+	panes, err := backendGetPanes(session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			err,
@@ -1803,7 +1803,7 @@ func (rm *RestartManager) trySoftRestart(ctx context.Context, paneID, agentType 
 
 	// Send Ctrl+C (target format: session:pane)
 	target := fmt.Sprintf("%s:%s", rm.session, paneID)
-	if err := tmux.SendInterrupt(target); err != nil {
+	if err := backendSendInterrupt(target); err != nil {
 		result.Reason = fmt.Sprintf("failed to send Ctrl+C: %v", err)
 		return result
 	}
@@ -1823,7 +1823,7 @@ func (rm *RestartManager) trySoftRestart(ctx context.Context, paneID, agentType 
 			return result
 		case <-ticker.C:
 			// Check if agent is now idle
-			output, err := tmux.CapturePaneOutputContext(timeoutCtx, target, 5)
+			output, err := backendCapturePaneOutputContext(timeoutCtx, target, 5)
 			if err != nil {
 				continue
 			}
@@ -1858,7 +1858,7 @@ func (rm *RestartManager) tryHardRestart(ctx context.Context, paneID, agentType 
 		default:
 		}
 
-		if err := tmux.SendInterrupt(target); err != nil {
+		if err := backendSendInterrupt(target); err != nil {
 			continue
 		}
 
@@ -1878,7 +1878,7 @@ func (rm *RestartManager) tryHardRestart(ctx context.Context, paneID, agentType 
 		return result
 	case <-time.After(500 * time.Millisecond):
 	}
-	output, _ := tmux.CapturePaneOutputContext(ctx, target, 5)
+	output, _ := backendCapturePaneOutputContext(ctx, target, 5)
 
 	// If still not at prompt, try Ctrl+D
 	if !isShellPrompt(output) {
@@ -1899,7 +1899,7 @@ func (rm *RestartManager) tryHardRestart(ctx context.Context, paneID, agentType 
 	}
 
 	// Send the agent command
-	if err := tmux.SendKeys(target, agentCmd, true); err != nil {
+	if err := backendSendKeys(target, agentCmd, true); err != nil {
 		result.Reason = fmt.Sprintf("failed to launch agent: %v", err)
 		return result
 	}
@@ -1913,7 +1913,7 @@ func (rm *RestartManager) tryHardRestart(ctx context.Context, paneID, agentType 
 	}
 
 	// Verify agent started
-	output, captureErr := tmux.CapturePaneOutputContext(ctx, target, 10)
+	output, captureErr := backendCapturePaneOutputContext(ctx, target, 10)
 	if captureErr != nil {
 		result.Reason = fmt.Sprintf("failed to capture output: %v", captureErr)
 		return result

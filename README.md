@@ -64,7 +64,8 @@ NTM gives you a single local system for:
 
 NTM is a pure Go project, but the runtime experience is intentionally integration-heavy.
 
-- Required: `tmux`
+- Required (default backend): `tmux`
+- Optional backend: `herdr` via `NTM_BACKEND=herdr` (Herdctl dual-backend; see Herdr UX below)
 - Required for agent spawning: whichever CLIs you want to run, typically Claude Code, Codex, and Antigravity CLI (Gemini CLI is supported as legacy)
 - Optional but powerful: `br`, `bv`, Agent Mail, `cass`, `dcg`, `pt`
 - Sanity check everything with `ntm deps -v`
@@ -105,11 +106,34 @@ ntm serve --port 7337
 ntm --robot-snapshot
 ```
 
+### Herdr UX (`NTM_BACKEND=herdr`)
+
+When the mux backend is herdr, interactive **tmux-native** NTM surfaces are not ported.
+Use herdr's own TUI as the status cockpit and ntm CLI for orchestration:
+
+```bash
+export NTM_BACKEND=herdr
+
+ntm spawn api --cc=2 --cod=1
+ntm status api
+ntm status api --watch
+ntm attach api                 # prints herdr workspace focus guidance (does not tmux-attach)
+herdr                          # open herdr TUI sidebar / pane focus
+ntm send api --all "..."       # dispatch without the Bubbletea palette
+ntm plugins list               # file-based plugins still work
+ntm tutorial                   # interactive tutorial (backend-agnostic)
+```
+
+Not applicable on herdr (intentional substitutes, not missing work): `ntm dashboard`,
+`ntm palette` (interactive), `ntm overlay`, and `ntm bind` (tmux keybinds only).
+See `FEATURES.md` §10.
+
 ## Core Workflows
 
 ### 1. Multi-Agent Session Orchestration
 
-NTM is built around named `tmux` sessions with explicit agent panes and a user pane.
+NTM is built around named `tmux` sessions with explicit agent panes and a user pane
+(or herdr workspaces when `NTM_BACKEND=herdr`).
 It handles session naming, pane layout, agent startup, labels, and inspection so you
 can treat a swarm like a manageable unit instead of a pile of terminals.
 
@@ -580,7 +604,9 @@ state lives under that directory's `.ntm/` tree.
 
 ### Does NTM replace tmux?
 
-No. NTM is a structured orchestration layer on top of `tmux`.
+No. NTM is a structured orchestration layer on top of `tmux` by default.
+With `NTM_BACKEND=herdr` it orchestrates herdr workspaces instead; herdr owns the
+interactive TUI (sidebar/pane attach), while ntm remains the swarm control plane.
 
 ### Can I use it with one agent instead of a swarm?
 
@@ -607,10 +633,11 @@ of the normal product model.
 
 ## Limitations
 
-- NTM is intentionally `tmux`-centric.
+- Default backend is intentionally `tmux`-centric; `NTM_BACKEND=herdr` is dual-backend (see Herdr UX).
 - Linux and macOS are the primary environments.
 - Some advanced workflows depend on external tools such as Agent Mail, `br`, `bv`, `cass`, or worktree helpers.
 - The system is local-first. It is not a hosted SaaS control plane.
+- On herdr, NTM Bubbletea dashboard/palette/overlay and `ntm bind` are N/A; use herdr TUI + CLI substitutes.
 
 ## Development
 

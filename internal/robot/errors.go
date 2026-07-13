@@ -163,7 +163,7 @@ func GetErrors(opts ErrorsOptions) (*ErrorsOutput, error) {
 		return output, nil
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			nil,
 			ErrCodeSessionNotFound,
@@ -174,7 +174,7 @@ func GetErrors(opts ErrorsOptions) (*ErrorsOutput, error) {
 	}
 
 	// Get panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			err,
@@ -211,7 +211,7 @@ func GetErrors(opts ErrorsOptions) (*ErrorsOutput, error) {
 		}
 
 		// Capture pane output before filtering so enhanced detection can use it.
-		paneOutput, err := tmux.CapturePaneOutput(pane.ID, opts.Lines)
+		paneOutput, err := backendCapturePaneOutput(pane.ID, opts.Lines)
 		if err != nil {
 			continue
 		}

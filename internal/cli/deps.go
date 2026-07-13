@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tools"
@@ -26,8 +27,9 @@ func newDepsCmd() *cobra.Command {
 		Short:   "Check for required dependencies and agent CLIs",
 		Long: `Check that all required tools and AI agent CLIs are installed:
 
-Required:
-  - tmux (terminal multiplexer)
+Required (depends on NTM_BACKEND):
+  - herdr  when NTM_BACKEND=herdr (default binary multiplexer)
+  - tmux   when NTM_BACKEND=tmux  (or unset)
 
 Optional agents:
   - claude (Claude Code CLI)
@@ -40,7 +42,8 @@ Also checks for recommended tools like fzf.
 Examples:
   ntm deps           # Quick check
   ntm deps -v        # Verbose output with versions
-  ntm deps --json    # JSON output for scripts`,
+  ntm deps --json    # JSON output for scripts
+  NTM_BACKEND=herdr ntm deps  # Require herdr instead of tmux`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeps(verbose)
 		},
@@ -105,19 +108,53 @@ func init() {
 }
 
 func defaultDepChecks() []depCheck {
-	return []depCheck{
-		// Required
-		{
+	checks := make([]depCheck, 0, 8)
+
+	// Required backend binary depends on NTM_BACKEND (herdr|tmux).
+	if backend.IsHerdr() {
+		herdrCmd := "herdr"
+		if env := strings.TrimSpace(os.Getenv("HERDR_BIN_PATH")); env != "" {
+			herdrCmd = env
+		}
+		checks = append(checks, depCheck{
+			Name:        "herdr",
+			Command:     herdrCmd,
+			VersionArgs: []string{"--version"},
+			Required:    true,
+			Category:    "Required",
+			InstallHint: "install herdr (https://herdr.dev) or set HERDR_BIN_PATH; start the herdr server before spawning",
+		})
+		// Keep tmux visible as optional so dual-backend installs are easy to audit.
+		checks = append(checks, depCheck{
+			Name:        "tmux",
+			Command:     "tmux",
+			VersionArgs: []string{"-V"},
+			Required:    false,
+			Category:    "Recommended",
+			InstallHint: "brew install tmux (macOS) / apt install tmux (Linux) — optional when NTM_BACKEND=herdr",
+		})
+	} else {
+		checks = append(checks, depCheck{
 			Name:        "tmux",
 			Command:     "tmux",
 			VersionArgs: []string{"-V"},
 			Required:    true,
 			Category:    "Required",
 			InstallHint: "brew install tmux (macOS) / apt install tmux (Linux)",
-		},
+		})
+		checks = append(checks, depCheck{
+			Name:        "herdr",
+			Command:     "herdr",
+			VersionArgs: []string{"--version"},
+			Required:    false,
+			Category:    "Recommended",
+			InstallHint: "install herdr (https://herdr.dev) for NTM_BACKEND=herdr",
+		})
+	}
 
+	checks = append(checks,
 		// Agents
-		{
+		depCheck{
 			Name:        "Claude Code",
 			Command:     "claude",
 			VersionArgs: []string{"--version"},
@@ -125,7 +162,7 @@ func defaultDepChecks() []depCheck {
 			Category:    "AI Agents",
 			InstallHint: "npm install -g @anthropic-ai/claude-code",
 		},
-		{
+		depCheck{
 			Name:        "OpenAI Codex",
 			Command:     "codex",
 			VersionArgs: []string{"--version"},
@@ -133,7 +170,7 @@ func defaultDepChecks() []depCheck {
 			Category:    "AI Agents",
 			InstallHint: "npm install -g @openai/codex",
 		},
-		{
+		depCheck{
 			Name:        "Antigravity CLI (agy)",
 			Command:     "agy",
 			VersionArgs: []string{"--version"},
@@ -141,7 +178,7 @@ func defaultDepChecks() []depCheck {
 			Category:    "AI Agents",
 			InstallHint: "curl -fsSL https://antigravity.google/cli/install.sh | bash (then `agy` once to authenticate via Google OAuth)",
 		},
-		{
+		depCheck{
 			Name:        "Gemini CLI (legacy)",
 			Command:     "gemini",
 			VersionArgs: []string{"--version"},
@@ -151,7 +188,7 @@ func defaultDepChecks() []depCheck {
 		},
 
 		// Recommended
-		{
+		depCheck{
 			Name:        "fzf",
 			Command:     "fzf",
 			VersionArgs: []string{"--version"},
@@ -159,7 +196,7 @@ func defaultDepChecks() []depCheck {
 			Category:    "Recommended",
 			InstallHint: "brew install fzf (macOS) / apt install fzf (Linux)",
 		},
-		{
+		depCheck{
 			Name:        "git",
 			Command:     "git",
 			VersionArgs: []string{"--version"},
@@ -167,7 +204,8 @@ func defaultDepChecks() []depCheck {
 			Category:    "Recommended",
 			InstallHint: "brew install git (macOS) / apt install git (Linux)",
 		},
-	}
+	)
+	return checks
 }
 
 func runDeps(verbose bool) error {

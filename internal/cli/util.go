@@ -312,7 +312,7 @@ func normalizeProjectScopedSessionName(session string, allowPrefix bool) (string
 	if session == "" {
 		return "", nil
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", fmt.Errorf("invalid session name: %w", err)
 	}
 
@@ -398,11 +398,12 @@ func normalizeConfiguredProjectBase(base string, allowPrefix bool) (string, erro
 }
 
 func defaultProjectScopedSession(projectDir string) string {
-	if current := strings.TrimSpace(tmux.GetCurrentSession()); current != "" {
+	// Prefer the active backend's current session (herdr or tmux via mux).
+	if current := strings.TrimSpace(muxGetCurrentSession()); current != "" {
 		return current
 	}
 
-	if sessionList, err := tmux.ListSessions(); err == nil {
+	if sessionList, err := muxListSessions(); err == nil {
 		if inferred, _ := inferSessionFromCWD(sessionList); inferred != "" {
 			return inferred
 		}
@@ -430,7 +431,7 @@ func storedSessionCandidatesFromDir(baseDir string) ([]tmux.Session, error) {
 		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || entry.Type()&os.ModeSymlink != 0 {
 			continue
 		}
-		if err := tmux.ValidateSessionName(entry.Name()); err != nil {
+		if err := muxValidateSessionName(entry.Name()); err != nil {
 			continue
 		}
 		candidates = append(candidates, tmux.Session{Name: entry.Name()})
@@ -653,6 +654,19 @@ func projectDirCandidatesForSession(session string, includeCWDHint bool) (string
 	if session != "" && activeCfg != nil {
 		sessionProject = activeCfg.GetProjectDir(session)
 	}
+	// Prefer live backend session directory (herdr workspace cwd / tmux session path)
+	// when the session is currently running — avoids requiring config projects_base.
+	if session != "" {
+		if live, err := muxGetSession(session); err == nil && live != nil {
+			if dir := strings.TrimSpace(live.Directory); dir != "" {
+				// Live directory is the strongest signal for an online session.
+				savedProject = bestUsableProjectDir(savedProject, dir)
+				if sessionProject == "" {
+					sessionProject = dir
+				}
+			}
+		}
+	}
 	if session != "" {
 		registryHints := []string{sessionProject}
 		if includeCWDHint {
@@ -688,7 +702,7 @@ func bestUsableProjectDir(candidates ...string) string {
 func resolveProjectDirForSession(session string, preferSession bool) string {
 	session = strings.TrimSpace(session)
 	if session != "" {
-		if err := tmux.ValidateSessionName(session); err != nil {
+		if err := muxValidateSessionName(session); err != nil {
 			return ""
 		}
 	}
@@ -719,7 +733,7 @@ func resolveExplicitProjectDirForSession(session string) (string, error) {
 	if session == "" {
 		return "", fmt.Errorf("session is required")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", err
 	}
 
@@ -785,7 +799,7 @@ func resolveCreationProjectDirForSession(session string) (string, error) {
 		}
 		return "", fmt.Errorf("getting project root failed")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", err
 	}
 

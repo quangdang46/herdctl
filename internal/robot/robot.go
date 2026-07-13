@@ -1607,6 +1607,9 @@ type SystemInfo struct {
 	OS        string `json:"os"`
 	Arch      string `json:"arch"`
 	TmuxOK    bool   `json:"tmux_available"`
+	// Backend is the active session backend ("tmux" or "herdr"), selected via NTM_BACKEND.
+	// Additive field for dual-backend robot consumers (bd-gl28u.4.3).
+	Backend string `json:"backend,omitempty"`
 }
 
 // StatusOutput is the structured output for robot-status
@@ -1992,6 +1995,8 @@ func RenderHelp() string {
 	builder.WriteString(`ntm (Named Tmux Manager) AI Agent Interface
 =============================================
 Robot mode provides a JSON API for AI agents to orchestrate coding sessions.
+Dual backend: set NTM_BACKEND=herdr (or tmux, default) so session/pane ops route
+through the selected backend. Prefer --robot-capabilities for schema discovery.
 
 API Design Principles (see docs/robot-api-design.md):
 -----------------------------------------------------
@@ -2222,7 +2227,8 @@ func newStatusOutput(cfg *config.Config) *StatusOutput {
 			GoVersion: runtime.Version(),
 			OS:        runtime.GOOS,
 			Arch:      runtime.GOARCH,
-			TmuxOK:    tmux.IsInstalled(),
+			TmuxOK:    backendIsInstalled(),
+			Backend:   backendName(),
 		},
 		Sessions:        []StatusSessionHeader{},
 		Summary:         StatusSummary{AgentsByState: map[string]int{}, AgentsByType: map[string]int{}},
@@ -2939,8 +2945,8 @@ func GetMail(opts MailOptions) (*MailOutput, error) {
 
 	// Best-effort pane mapping when a session is provided and tmux is available.
 	assigned := make(map[string]bool)
-	if opts.Session != "" && tmux.IsInstalled() && tmux.SessionExists(opts.Session) {
-		if panes, err := tmux.GetPanes(opts.Session); err == nil {
+	if opts.Session != "" && backendIsInstalled() && backendSessionExists(opts.Session) {
+		if panes, err := backendGetPanes(opts.Session); err == nil {
 			mapping := resolveAgentsForSession(panes, agents)
 			paneInfos := parseNTMPanes(panes)
 
@@ -3436,6 +3442,8 @@ func GetVersion() (*VersionOutput, error) {
 			GoVersion: runtime.Version(),
 			OS:        runtime.GOOS,
 			Arch:      runtime.GOARCH,
+			TmuxOK:    backendIsInstalled(),
+			Backend:   backendName(),
 		},
 	}, nil
 }
@@ -3453,7 +3461,7 @@ func PrintVersion() error {
 // GetSessions returns a minimal session list.
 // This function returns the data struct directly, enabling CLI/REST parity.
 func GetSessions() ([]SessionInfo, error) {
-	sessions, err := tmux.ListSessions()
+	sessions, err := backendListSessions()
 	if err != nil {
 		return []SessionInfo{}, nil
 	}
@@ -3490,20 +3498,29 @@ func GetPlan() (*PlanOutput, error) {
 		BeadActions:   []BeadAction{},
 	}
 
-	// Check tmux availability
-	if !tmux.IsInstalled() {
-		plan.Recommendation = "Install tmux first"
-		plan.Warnings = append(plan.Warnings, "tmux is not installed or not in PATH")
-		plan.Actions = append(plan.Actions, PlanAction{
-			Priority:    1,
-			Command:     "brew install tmux",
-			Description: "Install tmux using Homebrew (macOS)",
-		})
+	// Check active backend availability (tmux or herdr via NTM_BACKEND)
+	if !backendIsInstalled() {
+		name := backendName()
+		plan.Recommendation = fmt.Sprintf("Install %s first (or set NTM_BACKEND)", name)
+		plan.Warnings = append(plan.Warnings, name+" is not installed or not in PATH")
+		if name == "herdr" {
+			plan.Actions = append(plan.Actions, PlanAction{
+				Priority:    1,
+				Command:     "herdr --help",
+				Description: "Ensure herdr is installed and on PATH (NTM_BACKEND=herdr)",
+			})
+		} else {
+			plan.Actions = append(plan.Actions, PlanAction{
+				Priority:    1,
+				Command:     "brew install tmux",
+				Description: "Install tmux using Homebrew (macOS)",
+			})
+		}
 		return plan, nil
 	}
 
 	// Check for existing sessions
-	sessions, _ := tmux.ListSessions()
+	sessions, _ := backendListSessions()
 
 	if len(sessions) == 0 {
 		plan.Recommendation = "Create your first coding session"
@@ -3921,7 +3938,7 @@ func GetTail(opts TailOptions) (*TailOutput, error) {
 	// so callers don't need to know the exact tmux session name. (ntm#104)
 	opts.Session = resolveSessionName(opts.Session)
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return &TailOutput{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
@@ -4646,14 +4663,24 @@ func GetSnapshotWithOptions(cfg *config.Config, opts PaginationOptions) (*Snapsh
 	feed := GetAttentionFeed()
 	populateSnapshotFeedMetadata(output, feed)
 
-	// Check tmux availability
-	if !tmux.IsInstalled() {
+	// Check active backend availability (tmux or herdr via NTM_BACKEND)
+	if !backendIsInstalled() {
+		name := backendName()
 		output.RobotResponse = NewErrorResponse(
-			fmt.Errorf("tmux is not installed"),
+			fmt.Errorf("%s backend is not installed or not on PATH", name),
 			ErrCodeDependencyMissing,
-			"Install tmux to enable snapshot",
+			fmt.Sprintf("Install %s (or set NTM_BACKEND=tmux|herdr) to enable snapshot", name),
 		)
-		output.Alerts = append(output.Alerts, "tmux is not installed")
+		output.Alerts = append(output.Alerts, name+" backend is not installed")
+		return output, nil
+	}
+	if err := backendRequireReady(); err != nil {
+		output.RobotResponse = NewErrorResponse(
+			err,
+			ErrCodeDependencyMissing,
+			backendMissingHint(),
+		)
+		output.Alerts = append(output.Alerts, err.Error())
 		return output, nil
 	}
 
@@ -4679,7 +4706,7 @@ func GetSnapshotWithOptions(cfg *config.Config, opts PaginationOptions) (*Snapsh
 	}
 
 	// Get all sessions
-	sessions, err := tmux.ListSessions()
+	sessions, err := backendListSessions()
 	if err != nil {
 		// No sessions is not an error for snapshot
 		return output, nil
@@ -4700,7 +4727,7 @@ func GetSnapshotWithOptions(cfg *config.Config, opts PaginationOptions) (*Snapsh
 		}
 
 		// Get panes for this session
-		panes, err := tmux.GetPanes(sess.Name)
+		panes, err := backendGetPanes(sess.Name)
 		if err != nil {
 			output.Alerts = append(output.Alerts, fmt.Sprintf("failed to get panes for %s: %v", sess.Name, err))
 			continue
@@ -4708,12 +4735,14 @@ func GetSnapshotWithOptions(cfg *config.Config, opts PaginationOptions) (*Snapsh
 
 		// Resolve agent mapping for this session
 		agentMapping := resolveAgentsForSession(panes, mailAgents)
+		// Herdr native agent_status (idle/working/blocked/done) when available.
+		herdrStatuses := backendHerdrAgentStatuses(sess.Name)
 
 		for _, pane := range panes {
 			// Capture output for state detection and enhanced type detection
 			captured := ""
 			capturedErr := error(nil)
-			captured, capturedErr = tmux.CapturePaneOutput(pane.ID, 50)
+			captured, capturedErr = backendCapturePaneOutput(pane.ID, 50)
 
 			// Use enhanced agent type detection
 			detection := DetectAgentTypeEnhanced(pane, captured)
@@ -4749,11 +4778,16 @@ func GetSnapshotWithOptions(cfg *config.Config, opts PaginationOptions) (*Snapsh
 				}
 			}
 
-			// Process captured output for state
+			// Prefer herdr agent_status when present; fall back to scrollback classification.
+			if hs, ok := herdrStatuses[pane.ID]; ok && strings.TrimSpace(hs) != "" {
+				agent.State = backendMapHerdrAgentState(hs)
+			}
 			if capturedErr == nil {
 				lines := splitLines(status.StripANSI(captured))
 				agent.OutputTailLines = len(lines)
-				agent.State = determineState(captured, agent.Type)
+				if agent.State == "unknown" {
+					agent.State = determineState(captured, agent.Type)
+				}
 			}
 
 			snapSession.Agents = append(snapSession.Agents, agent)
@@ -5432,7 +5466,7 @@ func snapshotPaneLabelMap(tmuxSessions []tmux.Session) map[string]string {
 	for _, sess := range tmuxSessions {
 		panes := append([]tmux.Pane(nil), sess.Panes...)
 		if len(panes) == 0 {
-			if fetched, err := tmux.GetPanes(sess.Name); err == nil {
+			if fetched, err := backendGetPanes(sess.Name); err == nil {
 				panes = fetched
 			}
 		}
@@ -6664,7 +6698,7 @@ func (robotDispatchProtocolPlanner) PlanDelivery(_ context.Context, target dispa
 
 func newRobotDispatchService(redactCfg redaction.Config, deliverer dispatchsvc.Deliverer, pacer dispatchsvc.Pacer) (*dispatchsvc.Service, *robotFinalMessageRedactor, error) {
 	if deliverer == nil {
-		deliverer = dispatchsvc.TMUXDeliverer{}
+		deliverer = backendDispatchDeliverer("")
 	}
 	redactor := &robotFinalMessageRedactor{config: redactCfg}
 	service, err := dispatchsvc.NewService(dispatchsvc.Ports{
@@ -6677,13 +6711,17 @@ func newRobotDispatchService(redactCfg redaction.Config, deliverer dispatchsvc.D
 }
 
 func robotPreparedDispatchRequest(allPanes, targetPanes []tmux.Pane, opts SendOptions, message string, submit bool) dispatchsvc.Request {
+	// Prefer native pane IDs only when they parse as N / W.P / %N. Herdr IDs
+	// look like "w6:p2" and must fall back to numeric W.P so PlanTargets works.
 	selectors := make([]string, 0, len(targetPanes))
 	for _, pane := range targetPanes {
 		if pane.ID != "" {
-			selectors = append(selectors, pane.ID)
-		} else {
-			selectors = append(selectors, pane.Ref().Physical())
+			if _, err := tmux.ParsePaneSelector(pane.ID); err == nil {
+				selectors = append(selectors, pane.ID)
+				continue
+			}
 		}
+		selectors = append(selectors, pane.Ref().Physical())
 	}
 	return dispatchsvc.Request{
 		Session:           opts.Session,
@@ -6754,7 +6792,7 @@ func GetSend(opts SendOptions) (*SendOutput, error) {
 		}), nil
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return finalizeTerminalSendActuation(trace, opts, &SendOutput{
 			RobotResponse:  NewErrorResponse(fmt.Errorf("session '%s' not found", opts.Session), ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions"),
 			Session:        opts.Session,
@@ -6769,7 +6807,7 @@ func GetSend(opts SendOptions) (*SendOutput, error) {
 		}), nil
 	}
 
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		return finalizeTerminalSendActuation(trace, opts, &SendOutput{
 			RobotResponse:  NewErrorResponse(fmt.Errorf("failed to get panes: %w", err), ErrCodeInternalError, "Check tmux is running"),
@@ -7300,7 +7338,7 @@ func collectNormalizedTmuxProjection(projectDir string, staleAfter time.Duration
 
 	_, mailAgents, mailStats := fetchAgentMailData(projectDir)
 
-	sessions, err := tmux.ListSessions()
+	sessions, err := backendListSessions()
 	if err != nil {
 		return &NormalizedSnapshot{
 			Sessions:    []state.RuntimeSession{},
@@ -7310,7 +7348,7 @@ func collectNormalizedTmuxProjection(projectDir string, staleAfter time.Duration
 	}
 
 	// Optimization: Get all panes across all sessions in one tmux call
-	allPanes, err := tmux.GetAllPanes()
+	allPanes, err := backendGetAllPanes()
 	if err != nil {
 		// Fallback: create empty map if failed
 		allPanes = make(map[string][]tmux.Pane)
@@ -7360,9 +7398,9 @@ func collectNormalizedTmuxProjection(projectDir string, staleAfter time.Duration
 		go func() {
 			defer wg.Done()
 			for job := range jobs {
-				captureFn := tmux.CaptureForStatusDetection
+				captureFn := backendCaptureForStatusDetection
 				if job.modelName != "" {
-					captureFn = tmux.CaptureForFullContext
+					captureFn = backendCaptureForFullContext
 				}
 				if captured, err := captureFn(job.paneID); err == nil {
 					resultsChan <- captureResult{job.paneID, captured}
@@ -8997,13 +9035,13 @@ func buildCorrelationGraph() *GraphCorrelation {
 	}
 
 	// Best-effort tmux pane mapping for Agent Mail agents (NTM sessions).
-	if tmux.IsInstalled() {
-		sessions, err := tmux.ListSessions()
+	if backendIsInstalled() {
+		sessions, err := backendListSessions()
 		if err != nil {
 			corr.Errors = append(corr.Errors, fmt.Sprintf("tmux list_sessions: %v", err))
 		} else {
 			for _, sess := range sessions {
-				panes, err := tmux.GetPanes(sess.Name)
+				panes, err := backendGetPanes(sess.Name)
 				if err != nil {
 					continue
 				}
@@ -9961,7 +9999,7 @@ func generateContextHints(lowUsage, highUsage []string, highCount, total int) *C
 // GetContext retrieves context window usage information for all agents in a session.
 // This function returns the data struct directly, enabling CLI/REST parity.
 func GetContext(session string, lines int) (*ContextOutput, error) {
-	if !tmux.SessionExists(session) {
+	if !backendSessionExists(session) {
 		return &ContextOutput{
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", session),
@@ -9973,7 +10011,7 @@ func GetContext(session string, lines int) (*ContextOutput, error) {
 		}, nil
 	}
 
-	panes, err := tmux.GetPanes(session)
+	panes, err := backendGetPanes(session)
 	if err != nil {
 		return &ContextOutput{
 			RobotResponse: NewErrorResponse(err, ErrCodeInternalError, "Failed to get panes"),
@@ -10004,7 +10042,7 @@ func GetContext(session string, lines int) (*ContextOutput, error) {
 
 		model := detectModel(agentType, pane.Title)
 
-		scrollback, _ := tmux.CapturePaneOutput(pane.ID, lines)
+		scrollback, _ := backendCapturePaneOutput(pane.ID, lines)
 		cleanText := stripANSI(scrollback)
 		state := determineState(cleanText, agentType)
 
@@ -10219,7 +10257,7 @@ func GetActivity(opts ActivityOptions) (*ActivityOutput, error) {
 		},
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -10610,7 +10648,7 @@ func GetDiff(opts DiffOptions) (*DiffOutput, error) {
 	}
 
 	// Validate session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -10620,7 +10658,7 @@ func GetDiff(opts DiffOptions) (*DiffOutput, error) {
 	}
 
 	// Get panes for agent activity
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("failed to get panes: %w", err),
@@ -10643,7 +10681,7 @@ func GetDiff(opts DiffOptions) (*DiffOutput, error) {
 	// Analyze activity windows per pane
 	for _, pane := range panes {
 		// Capture pane output for state detection
-		captured, _ := tmux.CapturePaneOutput(pane.ID, 100)
+		captured, _ := backendCapturePaneOutput(pane.ID, 100)
 		detection := DetectAgentTypeEnhanced(pane, captured)
 		agentType := stateAgentTypeForPane(pane, detection.Type)
 		lines := splitLines(captured)

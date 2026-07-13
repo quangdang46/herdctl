@@ -92,7 +92,7 @@ func runProfileSwitch(agentID, newProfileName, sessionName, customPrompt string,
 		return outputProfileSwitchError(agentID, "", "", err)
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return outputProfileSwitchError(agentID, "", newProfileName, err)
 	}
 
@@ -125,7 +125,7 @@ func runProfileSwitch(agentID, newProfileName, sessionName, customPrompt string,
 	}
 
 	// Get session panes
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := muxGetPanes(sessionName)
 	if err != nil {
 		return outputProfileSwitchError(agentID, "", newProfileName, fmt.Errorf("getting panes for session %s: %w", sessionName, err))
 	}
@@ -165,7 +165,7 @@ func runProfileSwitch(agentID, newProfileName, sessionName, customPrompt string,
 
 	// Update pane title while preserving any existing pane tags.
 	newTitle := formatProfileSwitchPaneTitle(sessionName, agentType, agentIndex, newProfile.Name, targetPane.Tags)
-	if err := tmux.SetPaneTitle(targetPane.ID, newTitle); err != nil {
+	if err := muxSetPaneTitle(targetPane.ID, newTitle); err != nil {
 		return outputProfileSwitchError(agentID, targetPane.ID, newProfileName, fmt.Errorf("updating pane title: %w", err))
 	}
 

@@ -8,7 +8,6 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/assign"
 	"github.com/Dicklesworthstone/ntm/internal/bv"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // AssignOptions configures work assignment analysis
@@ -99,7 +98,7 @@ func GetAssignRecommendations(opts AssignOptions) ([]DistributeRecommendation, e
 		return nil, fmt.Errorf("session name is required")
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		return nil, fmt.Errorf("session '%s' not found", opts.Session)
 	}
 
@@ -109,8 +108,8 @@ func GetAssignRecommendations(opts AssignOptions) ([]DistributeRecommendation, e
 		strategy = "balanced"
 	}
 
-	// Get agents from tmux panes
-	panes, err := tmux.GetPanes(opts.Session)
+	// Get agents from backend panes (tmux or herdr via NTM_BACKEND)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -118,6 +117,7 @@ func GetAssignRecommendations(opts AssignOptions) ([]DistributeRecommendation, e
 	// Build agent info
 	var agents []assignAgentInfo
 	var idleAgentPanes []string
+	herdrStatuses := backendHerdrAgentStatuses(opts.Session)
 
 	for _, pane := range panes {
 		agentType := routePaneAgentType(pane)
@@ -125,10 +125,17 @@ func GetAssignRecommendations(opts AssignOptions) ([]DistributeRecommendation, e
 			continue
 		}
 
-		// Capture state — use 20 lines to reliably detect Claude Code
-		// welcome screens and status bars (matches LinesStatusDetection).
-		scrollback, _ := tmux.CapturePaneOutput(pane.ID, 20)
-		state := determineState(scrollback, agentType)
+		// Prefer herdr agent_status; fall back to scrollback classification.
+		state := "unknown"
+		if hs, ok := herdrStatuses[pane.ID]; ok && strings.TrimSpace(hs) != "" {
+			state = backendMapHerdrAgentState(hs)
+		}
+		if state == "unknown" {
+			// Capture state — use 20 lines to reliably detect Claude Code
+			// welcome screens and status bars (matches LinesStatusDetection).
+			scrollback, _ := backendCapturePaneOutput(pane.ID, 20)
+			state = determineState(scrollback, agentType)
+		}
 
 		agents = append(agents, assignAgentInfo{
 			paneIdx:   pane.Index,
@@ -208,7 +215,7 @@ func GetAssign(opts AssignOptions) (*AssignOutput, error) {
 		return output, nil
 	}
 
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -235,13 +242,13 @@ func GetAssign(opts AssignOptions) (*AssignOutput, error) {
 	output.Strategy = strategy
 	output.GeneratedAt = time.Now().UTC()
 
-	// Get agents from tmux panes
-	panes, err := tmux.GetPanes(opts.Session)
+	// Get agents from backend panes (tmux or herdr via NTM_BACKEND)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("failed to get panes: %w", err),
 			ErrCodeInternalError,
-			"Check tmux is running and session is accessible",
+			"Check backend is running and session is accessible",
 		)
 		return output, nil
 	}
@@ -249,6 +256,7 @@ func GetAssign(opts AssignOptions) (*AssignOutput, error) {
 	// Build agent info
 	var agents []assignAgentInfo
 	var idleAgentPanes []string
+	herdrStatuses := backendHerdrAgentStatuses(opts.Session)
 
 	for _, pane := range panes {
 		agentType := routePaneAgentType(pane)
@@ -258,10 +266,17 @@ func GetAssign(opts AssignOptions) (*AssignOutput, error) {
 
 		model := detectModel(agentType, pane.Title)
 
-		// Capture state — use 20 lines to reliably detect Claude Code
-		// welcome screens and status bars (matches LinesStatusDetection).
-		scrollback, _ := tmux.CapturePaneOutput(pane.ID, 20)
-		state := determineState(scrollback, agentType)
+		// Prefer herdr agent_status; fall back to scrollback classification.
+		state := "unknown"
+		if hs, ok := herdrStatuses[pane.ID]; ok && strings.TrimSpace(hs) != "" {
+			state = backendMapHerdrAgentState(hs)
+		}
+		if state == "unknown" {
+			// Capture state — use 20 lines to reliably detect Claude Code
+			// welcome screens and status bars (matches LinesStatusDetection).
+			scrollback, _ := backendCapturePaneOutput(pane.ID, 20)
+			state = determineState(scrollback, agentType)
+		}
 
 		agents = append(agents, assignAgentInfo{
 			paneIdx:   pane.Index,

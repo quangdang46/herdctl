@@ -213,7 +213,7 @@ func normalizeRanoWindow(window string) (string, error) {
 }
 
 func collectRanoTargetPanes(ctx context.Context, panesFilter []int) (map[string]tmux.Pane, error) {
-	sessions, err := tmux.ListSessions()
+	sessions, err := backendListSessions()
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +225,7 @@ func collectRanoTargetPanes(ctx context.Context, panesFilter []int) (map[string]
 
 	targets := make(map[string]tmux.Pane)
 	for _, sess := range sessions {
-		panes, err := tmux.GetPanesContext(ctx, sess.Name)
+		panes, err := backendGetPanesContext(ctx, sess.Name)
 		if err != nil {
 			return nil, err
 		}

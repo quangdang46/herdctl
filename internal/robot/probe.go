@@ -26,27 +26,27 @@ type TmuxClient interface {
 type defaultTmuxClient struct{}
 
 func (c *defaultTmuxClient) CaptureForStatusDetection(target string) (string, error) {
-	return tmux.CaptureForStatusDetection(target)
+	return backendCaptureForStatusDetection(target)
 }
 
 func (c *defaultTmuxClient) CapturePaneOutput(target string, lines int) (string, error) {
-	return tmux.CapturePaneOutput(target, lines)
+	return backendCapturePaneOutput(target, lines)
 }
 
 func (c *defaultTmuxClient) SendKeys(target, keys string, enter bool) error {
-	return tmux.SendKeys(target, keys, enter)
+	return backendSendKeys(target, keys, enter)
 }
 
 func (c *defaultTmuxClient) SendInterrupt(target string) error {
-	return tmux.SendInterrupt(target)
+	return backendSendInterrupt(target)
 }
 
 func (c *defaultTmuxClient) SessionExists(name string) bool {
-	return tmux.SessionExists(name)
+	return backendSessionExists(name)
 }
 
 func (c *defaultTmuxClient) GetPanes(session string) ([]tmux.Pane, error) {
-	return tmux.GetPanes(session)
+	return backendGetPanes(session)
 }
 
 // CurrentTmuxClient is the client used for tmux operations.

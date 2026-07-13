@@ -27,22 +27,31 @@ type CapturedOutput struct {
 	TokenEstimate int
 }
 
+// CaptureClient is the minimal backend surface OutputCapture needs.
+// *tmux.Client satisfies it; CLI mux adapters also implement it under herdr.
+type CaptureClient interface {
+	GetPanes(session string) ([]tmux.Pane, error)
+	CapturePaneOutput(target string, lines int) (string, error)
+}
+
 // OutputCapture captures and parses ensemble agent output.
 type OutputCapture struct {
-	tmuxClient *tmux.Client
-	maxLines   int
-	validator  *SchemaValidator
+	client    CaptureClient
+	maxLines  int
+	validator *SchemaValidator
 }
 
 // NewOutputCapture creates a new OutputCapture with defaults.
-func NewOutputCapture(client *tmux.Client) *OutputCapture {
+// Pass nil to use tmux.DefaultClient; under NTM_BACKEND=herdr the CLI should
+// pass a mux-backed CaptureClient instead.
+func NewOutputCapture(client CaptureClient) *OutputCapture {
 	if client == nil {
 		client = tmux.DefaultClient
 	}
 	return &OutputCapture{
-		tmuxClient: client,
-		maxLines:   defaultCaptureLines,
-		validator:  NewSchemaValidator(),
+		client:    client,
+		maxLines:  defaultCaptureLines,
+		validator: NewSchemaValidator(),
 	}
 }
 
@@ -64,7 +73,7 @@ func (c *OutputCapture) CaptureAll(session *EnsembleSession) ([]CapturedOutput, 
 
 	c.ensureDefaults()
 
-	panes, err := c.tmuxClient.GetPanes(session.SessionName)
+	panes, err := c.client.GetPanes(session.SessionName)
 	if err != nil {
 		return nil, fmt.Errorf("get panes: %w", err)
 	}
@@ -167,7 +176,7 @@ func (c *OutputCapture) capturePane(pane string) (string, error) {
 	if lines <= 0 {
 		lines = defaultCaptureLines
 	}
-	return c.tmuxClient.CapturePaneOutput(pane, lines)
+	return c.client.CapturePaneOutput(pane, lines)
 }
 
 func (c *OutputCapture) extractYAML(raw string) (string, bool) {
@@ -206,8 +215,8 @@ func (c *OutputCapture) extractYAML(raw string) (string, bool) {
 }
 
 func (c *OutputCapture) ensureDefaults() {
-	if c.tmuxClient == nil {
-		c.tmuxClient = tmux.DefaultClient
+	if c.client == nil {
+		c.client = tmux.DefaultClient
 	}
 	if c.maxLines <= 0 {
 		c.maxLines = defaultCaptureLines

@@ -149,7 +149,7 @@ func collectSpawnAdmissionInput(opts SpawnOptions, cfg *config.Config, totalAgen
 		input.Pressure = collectSystemPressureSnapshot()
 	}
 
-	panesBySession, err := tmux.GetAllPanes()
+	panesBySession, err := backendGetAllPanes()
 	if err != nil {
 		return input
 	}
@@ -281,21 +281,26 @@ func GetSpawn(opts SpawnOptions, cfg *config.Config) (*SpawnOutput, error) {
 	}()
 
 	// Validate session name
-	if err := tmux.ValidateSessionName(opts.Session); err != nil {
+	if err := backendValidateSessionName(opts.Session); err != nil {
 		output.Error = fmt.Sprintf("invalid session name: %v", err)
-		output.RobotResponse = NewErrorResponse(err, ErrCodeInvalidFlag, "Use a valid tmux session name")
+		output.RobotResponse = NewErrorResponse(err, ErrCodeInvalidFlag, "Use a valid session name (a-z A-Z 0-9 _ -)")
 		return output, nil
 	}
 
-	// Check tmux availability
-	if !tmux.IsInstalled() {
-		output.Error = "tmux is not installed"
-		output.RobotResponse = NewErrorResponse(fmt.Errorf("%s", output.Error), ErrCodeDependencyMissing, "Install tmux to spawn sessions")
+	// Check backend availability (tmux default / herdr when NTM_BACKEND=herdr)
+	if !backendIsInstalled() {
+		output.Error = backendMissingError().Error()
+		output.RobotResponse = NewErrorResponse(backendMissingError(), ErrCodeDependencyMissing, backendMissingHint())
+		return output, nil
+	}
+	if err := backendRequireReady(); err != nil {
+		output.Error = err.Error()
+		output.RobotResponse = NewErrorResponse(err, ErrCodeDependencyMissing, backendMissingHint())
 		return output, nil
 	}
 
 	// Safety check: fail if session already exists (when --spawn-safety is enabled)
-	if opts.Safety && tmux.SessionExists(opts.Session) {
+	if opts.Safety && backendSessionExists(opts.Session) {
 		output.Error = fmt.Sprintf("session '%s' already exists (--spawn-safety mode prevents reuse; use 'ntm kill %s' first)", opts.Session, opts.Session)
 		output.RobotResponse = NewErrorResponse(fmt.Errorf("%s", output.Error), ErrCodeInvalidFlag, "Choose a new session name or disable --spawn-safety")
 		return output, nil
@@ -435,14 +440,14 @@ func GetSpawn(opts SpawnOptions, cfg *config.Config) (*SpawnOutput, error) {
 
 	// Create session if it doesn't exist
 	sessionCreated := false
-	if !tmux.SessionExists(opts.Session) {
+	if !backendSessionExists(opts.Session) {
 		historyLimit := tmux.DefaultHistoryLimit
 		if cfg != nil && cfg.Tmux.HistoryLimit > 0 {
 			historyLimit = cfg.Tmux.HistoryLimit
 		}
-		if err := tmux.CreateSessionWithHistoryLimit(opts.Session, dir, historyLimit); err != nil {
+		if err := backendCreateSessionWithHistoryLimit(opts.Session, dir, historyLimit); err != nil {
 			output.Error = fmt.Sprintf("creating session: %v", err)
-			output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check tmux availability and session name")
+			output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check backend availability and session name")
 			return output, nil
 		}
 		sessionCreated = true
@@ -450,37 +455,40 @@ func GetSpawn(opts SpawnOptions, cfg *config.Config) (*SpawnOutput, error) {
 	}
 
 	// Get current panes
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := backendGetPanes(opts.Session)
 	if err != nil {
 		output.Error = fmt.Sprintf("getting panes: %v", err)
-		output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check tmux session state")
+		output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check session state")
 		return output, nil
 	}
 
-	// Add more panes if needed
+	// On herdr, agent panes are created by agent.start (which splits as needed).
+	// Pre-creating empty shell panes would leave unused panes behind.
+	// On tmux, pre-create panes then launch agents into them via send-keys.
+	useHerdrStart := backendName() == "herdr"
 	existingPanes := len(panes)
-	if existingPanes < totalPanes {
+	if !useHerdrStart && existingPanes < totalPanes {
 		toAdd := totalPanes - existingPanes
 		auditPanesAdded = toAdd
 		for i := 0; i < toAdd; i++ {
-			if _, err := tmux.SplitWindow(opts.Session, dir); err != nil {
+			if _, err := backendSplitWindow(opts.Session, dir); err != nil {
 				output.Error = fmt.Sprintf("creating pane: %v", err)
-				output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check tmux pane layout constraints")
+				output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check pane layout constraints")
 				return output, nil
 			}
 		}
 	}
 
-	// Get updated pane list
-	panes, err = tmux.GetPanes(opts.Session)
+	// Get updated pane list (tmux after splits; herdr after session create)
+	panes, err = backendGetPanes(opts.Session)
 	if err != nil {
 		output.Error = fmt.Sprintf("getting panes: %v", err)
-		output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check tmux session state")
+		output.RobotResponse = NewErrorResponse(err, ErrCodeInternalError, "Check session state")
 		return output, nil
 	}
 
-	// Apply tiled layout
-	_ = tmux.ApplyTiledLayout(opts.Session)
+	// Apply tiled layout (best-effort; herdr may return not-supported)
+	_ = backendApplyTiledLayout(opts.Session)
 
 	// Initialize agent name map
 	var nameMap *AgentNameMap
@@ -496,7 +504,7 @@ func GetSpawn(opts SpawnOptions, cfg *config.Config) (*SpawnOutput, error) {
 		startIdx = 1
 		// Add user pane info
 		if len(panes) > 0 {
-			userPaneRef := fmt.Sprintf("0.%d", panes[0].Index)
+			userPaneRef := fmt.Sprintf("%d.%d", panes[0].WindowIndex, panes[0].Index)
 			userName := nameMap.AssignNew("user", userPaneRef)
 			output.Agents = append(output.Agents, SpawnedAgent{
 				Pane:      userPaneRef,
@@ -513,35 +521,63 @@ func GetSpawn(opts SpawnOptions, cfg *config.Config) (*SpawnOutput, error) {
 	agentCommands := getAgentCommands(cfg)
 
 	// Launch Claude agents
-	for i := 0; i < opts.CCCount && agentNum < len(panes); i++ {
-		agent := launchAgent(panes[agentNum], opts.Session, "claude", i+1, dir, agentCommands["claude"])
+	for i := 0; i < opts.CCCount; i++ {
+		var agent SpawnedAgent
+		if useHerdrStart {
+			agent = launchAgentHerdr(opts.Session, "claude", i+1, dir)
+		} else if agentNum < len(panes) {
+			agent = launchAgent(panes[agentNum], opts.Session, "claude", i+1, dir, agentCommands["claude"])
+			agentNum++
+		} else {
+			break
+		}
 		agent.Name = nameMap.AssignNew("claude", agent.Pane)
 		output.Agents = append(output.Agents, agent)
-		agentNum++
 	}
 
 	// Launch Codex agents
-	for i := 0; i < opts.CodCount && agentNum < len(panes); i++ {
-		agent := launchAgent(panes[agentNum], opts.Session, "codex", i+1, dir, agentCommands["codex"])
+	for i := 0; i < opts.CodCount; i++ {
+		var agent SpawnedAgent
+		if useHerdrStart {
+			agent = launchAgentHerdr(opts.Session, "codex", i+1, dir)
+		} else if agentNum < len(panes) {
+			agent = launchAgent(panes[agentNum], opts.Session, "codex", i+1, dir, agentCommands["codex"])
+			agentNum++
+		} else {
+			break
+		}
 		agent.Name = nameMap.AssignNew("codex", agent.Pane)
 		output.Agents = append(output.Agents, agent)
-		agentNum++
 	}
 
 	// Launch Gemini agents
-	for i := 0; i < opts.GmiCount && agentNum < len(panes); i++ {
-		agent := launchAgent(panes[agentNum], opts.Session, "gemini", i+1, dir, agentCommands["gemini"])
+	for i := 0; i < opts.GmiCount; i++ {
+		var agent SpawnedAgent
+		if useHerdrStart {
+			agent = launchAgentHerdr(opts.Session, "gemini", i+1, dir)
+		} else if agentNum < len(panes) {
+			agent = launchAgent(panes[agentNum], opts.Session, "gemini", i+1, dir, agentCommands["gemini"])
+			agentNum++
+		} else {
+			break
+		}
 		agent.Name = nameMap.AssignNew("gemini", agent.Pane)
 		output.Agents = append(output.Agents, agent)
-		agentNum++
 	}
 
 	// Launch Antigravity agents
-	for i := 0; i < opts.AgyCount && agentNum < len(panes); i++ {
-		agent := launchAgent(panes[agentNum], opts.Session, "antigravity", i+1, dir, agentCommands["antigravity"])
+	for i := 0; i < opts.AgyCount; i++ {
+		var agent SpawnedAgent
+		if useHerdrStart {
+			agent = launchAgentHerdr(opts.Session, "antigravity", i+1, dir)
+		} else if agentNum < len(panes) {
+			agent = launchAgent(panes[agentNum], opts.Session, "antigravity", i+1, dir, agentCommands["antigravity"])
+			agentNum++
+		} else {
+			break
+		}
 		agent.Name = nameMap.AssignNew("antigravity", agent.Pane)
 		output.Agents = append(output.Agents, agent)
-		agentNum++
 	}
 
 	// Wait for agents to be ready if requested
@@ -582,7 +618,7 @@ func PrintSpawn(opts SpawnOptions, cfg *config.Config) error {
 	return encodeTerminalRobotOutput(output, output.RobotResponse, "robot spawn failed")
 }
 
-// launchAgent launches a single agent and returns its info.
+// launchAgent launches a single agent into an existing pane (tmux path) and returns its info.
 func launchAgent(pane tmux.Pane, session, agentType string, num int, dir, command string) SpawnedAgent {
 	startTime := time.Now()
 
@@ -595,7 +631,7 @@ func launchAgent(pane tmux.Pane, session, agentType string, num int, dir, comman
 	}
 
 	// Set pane title
-	if err := tmux.SetPaneTitle(pane.ID, title); err != nil {
+	if err := backendSetPaneTitle(pane.ID, title); err != nil {
 		agent.Error = fmt.Sprintf("setting title: %v", err)
 		agent.StartupMs = time.Since(startTime).Milliseconds()
 		return agent
@@ -617,12 +653,51 @@ func launchAgent(pane tmux.Pane, session, agentType string, num int, dir, comman
 	}
 
 	// Use SendKeysForAgent to handle different submission methods (buffer vs send-keys)
-	if err := tmux.SendKeysForAgent(pane.ID, cmd, true, tmux.AgentType(agentTypeShort(agentType))); err != nil {
+	if err := backendSendKeysForAgent(pane.ID, cmd, true, tmux.AgentType(agentTypeShort(agentType))); err != nil {
 		agent.Error = fmt.Sprintf("launching: %v", err)
 		agent.StartupMs = time.Since(startTime).Milliseconds()
 		return agent
 	}
 
+	agent.StartupMs = time.Since(startTime).Milliseconds()
+	return agent
+}
+
+// launchAgentHerdr creates a pane+process via herdr agent.start (NTM_BACKEND=herdr).
+func launchAgentHerdr(session, agentType string, num int, dir string) SpawnedAgent {
+	startTime := time.Now()
+	short := agentTypeShort(agentType)
+	title := fmt.Sprintf("%s__%s_%d", session, short, num)
+	name := fmt.Sprintf("%s-%s_%d", session, short, num)
+	agent := SpawnedAgent{
+		Type:  agentType,
+		Title: title,
+		Ready: false,
+	}
+
+	argv := backendPreferredAgentArgv(agentType)
+	if len(argv) == 0 {
+		agent.Error = fmt.Sprintf("no preferred argv for agent type %s", agentType)
+		agent.StartupMs = time.Since(startTime).Milliseconds()
+		return agent
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	pane, err := backendStartAgent(ctx, session, name, tmux.AgentType(agentType), num, "", dir, argv, title)
+	if err != nil {
+		agent.Error = fmt.Sprintf("herdr agent.start: %v", err)
+		agent.StartupMs = time.Since(startTime).Milliseconds()
+		return agent
+	}
+	agent.Pane = fmt.Sprintf("%d.%d", pane.WindowIndex, pane.Index)
+	if agent.Pane == "0.0" && pane.ID != "" {
+		// Fall back to herdr pane id when window/index mapping is unavailable.
+		agent.Pane = pane.ID
+	}
+	if pane.Title != "" {
+		agent.Title = pane.Title
+	}
 	agent.StartupMs = time.Since(startTime).Milliseconds()
 	return agent
 }
@@ -635,6 +710,21 @@ func waitForAgentsReady(output *SpawnOutput, timeout time.Duration) {
 	for time.Now().Before(deadline) {
 		allReady := true
 
+		// Refresh herdr agent_status + pane id map once per poll when applicable.
+		herdrStatuses := backendHerdrAgentStatuses(output.Session)
+		paneIDByRef := map[string]string{}
+		if len(herdrStatuses) > 0 || backendName() == "herdr" {
+			if panes, err := backendGetPanes(output.Session); err == nil {
+				for _, p := range panes {
+					ref := fmt.Sprintf("%d.%d", p.WindowIndex, p.Index)
+					paneIDByRef[ref] = p.ID
+					if p.ID != "" {
+						paneIDByRef[p.ID] = p.ID
+					}
+				}
+			}
+		}
+
 		for i := range output.Agents {
 			if output.Agents[i].Type == "user" {
 				continue // User pane is always ready
@@ -643,16 +733,31 @@ func waitForAgentsReady(output *SpawnOutput, timeout time.Duration) {
 				continue // Already detected as ready
 			}
 
-			// Build tmux target from session and pane reference
-			// The Pane field is in "window.index" format (e.g., "0.2")
-			// For tmux capture, use "session:window.pane" format
 			paneRef := output.Agents[i].Pane
 
-			// We can use the paneRef directly as it contains window.index
-			target := fmt.Sprintf("%s:%s", output.Session, paneRef)
+			// Prefer herdr agent_status when we can resolve a pane id.
+			if paneID := paneIDByRef[paneRef]; paneID != "" {
+				if hs, ok := herdrStatuses[paneID]; ok {
+					switch backendMapHerdrAgentState(hs) {
+					case "idle":
+						output.Agents[i].Ready = true
+						continue
+					}
+				}
+			}
+
+			// Build capture target: herdr pane ids (wN:pM) pass through; else session:W.P.
+			target := paneRef
+			if !strings.Contains(paneRef, ":") {
+				if paneID := paneIDByRef[paneRef]; paneID != "" {
+					target = paneID
+				} else {
+					target = fmt.Sprintf("%s:%s", output.Session, paneRef)
+				}
+			}
 
 			// Capture pane output (50 lines to catch Claude's TUI)
-			captured, err := tmux.CapturePaneOutput(target, 50)
+			captured, err := backendCapturePaneOutput(target, 50)
 			if err != nil {
 				allReady = false
 				continue
@@ -1053,13 +1158,13 @@ func spawnAssignmentDeps(custom *SpawnAssignmentDependencies) SpawnAssignmentDep
 	observer := statuspkg.NewSessionObserver(statuspkg.NewDetector())
 	deps := SpawnAssignmentDependencies{
 		FetchTriage:       bv.GetTriage,
-		ListPanes:         tmux.GetPanes,
+		ListPanes:         backendGetPanes,
 		LoadStore:         assignment.LoadStoreStrict,
 		ClaimBead:         bv.ClaimBead,
 		GetBeadStatus:     bv.GetBeadStatus,
 		NewIdempotencyKey: assignment.NewAssignmentIdempotencyKey,
 		ObserveSession:    observer.Observe,
-		DispatchDeliverer: dispatchsvc.TMUXDeliverer{},
+		DispatchDeliverer: backendDispatchDeliverer(""),
 	}
 	if custom == nil {
 		return deps

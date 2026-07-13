@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -69,19 +72,20 @@ func newViewCmd() *cobra.Command {
 		Use:     "view [session-name]",
 		Aliases: []string{"v", "tile"},
 		Short:   "View all panes in a session (unzoom, tile, attach)",
-		Long: `View all panes in a tmux session by:
+		Long: `View all panes in a session by:
 1. Unzooming any zoomed panes
-2. Applying tiled layout to all windows
-3. Attaching/switching to the session
+2. Applying tiled layout to all windows (tmux); herdr unzooms only
+3. Attaching/switching to the session (tmux) or printing herdr TUI guidance
 
 If no session is specified:
-- If inside tmux, operates on the current session
+- If inside tmux/herdr, operates on the current session
 - Otherwise, shows a session selector
 
 Examples:
   ntm view myproject
   ntm view                 # Select session or use current
-  ntm tile myproject       # Alias`,
+  ntm tile myproject       # Alias
+  NTM_BACKEND=herdr ntm view myproject`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string
@@ -98,7 +102,10 @@ Examples:
 }
 
 func runView(w io.Writer, session string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return err
 	}
 
@@ -114,13 +121,39 @@ func runView(w io.Writer, session string) error {
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(fmt.Sprintf("session '%s' not found", session)))
 		}
 		cliErr := output.SessionNotFoundError(session)
 		output.PrintCLIError(cliErr)
 		return cliErr
+	}
+
+	// Herdr: unzoom all panes (no select-layout tiled), then print attach guidance.
+	// Do not call tmux.AttachOrSwitch or fail closed on missing tile API.
+	if backend.IsHerdr() {
+		unzoomErr := muxUnzoomAllPanes(session)
+		msg := fmt.Sprintf("unzoomed panes in '%s' (herdr has no select-layout tiled; open herdr TUI to rearrange)", session)
+		if unzoomErr != nil {
+			msg = fmt.Sprintf("view '%s': unzoom attempted with errors: %v; open herdr TUI to tile/focus panes", session, unzoomErr)
+		}
+		if IsJSONOutput() {
+			if unzoomErr != nil {
+				// Partial success: session exists, layout API incomplete.
+				return output.PrintJSON(output.NewSuccess(msg))
+			}
+			return output.PrintJSON(output.NewSuccess(msg))
+		}
+		if unzoomErr != nil {
+			fmt.Printf("%s~%s %s\n", colorize(t.Warning), colorize(t.Text), msg)
+		} else {
+			fmt.Printf("%s✓%s Unzoomed panes in '%s'\n",
+				colorize(t.Success), colorize(t.Text), session)
+			fmt.Printf("%s  herdr has no select-layout tiled — open the herdr TUI to rearrange panes%s\n",
+				colorize(t.Subtext), colorize(t.Text))
+		}
+		return printHerdrAttachGuidance(session)
 	}
 
 	result, err := kernel.Run(context.Background(), "sessions.view", SessionViewInput{Session: session})
@@ -161,7 +194,10 @@ func coerceSuccessResponse(result any, command string) (output.SuccessResponse, 
 }
 
 func buildViewResponse(session string) (output.SuccessResponse, error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return output.SuccessResponse{}, err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return output.SuccessResponse{}, err
 	}
 	resolvedSession, err := normalizeExplicitLiveSessionName(session, true)
@@ -169,10 +205,31 @@ func buildViewResponse(session string) (output.SuccessResponse, error) {
 		return output.SuccessResponse{}, err
 	}
 	session = resolvedSession
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return output.SuccessResponse{}, fmt.Errorf("session '%s' not found", session)
 	}
-	if err := tmux.ApplyTiledLayout(session); err != nil {
+	if backend.IsHerdr() {
+		// Unzoom is the herdr-native substitute for "view all panes".
+		// ApplyTiledLayout always returns ErrNotSupported after best-effort unzoom.
+		if err := muxUnzoomAllPanes(session); err != nil {
+			return output.NewSuccess(fmt.Sprintf(
+				"view '%s': unzoom attempted with errors: %v; open herdr TUI to tile panes",
+				session, err,
+			)), nil
+		}
+		return output.NewSuccess(fmt.Sprintf(
+			"unzoomed panes in '%s' (herdr has no select-layout tiled; open herdr TUI to rearrange)",
+			session,
+		)), nil
+	}
+	if err := muxApplyTiledLayout(session); err != nil {
+		// Herdr path handled above; keep this for any future dual-backend edge.
+		if backend.IsHerdr() && errors.Is(err, herdr.ErrNotSupported) {
+			return output.NewSuccess(fmt.Sprintf(
+				"unzoomed panes in '%s' (herdr has no select-layout tiled; open herdr TUI to rearrange)",
+				session,
+			)), nil
+		}
 		return output.SuccessResponse{}, fmt.Errorf("failed to apply layout: %w", err)
 	}
 	return output.NewSuccess(fmt.Sprintf("tiled layout applied to '%s'", session)), nil

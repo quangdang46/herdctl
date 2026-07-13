@@ -13,6 +13,24 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
+// logsSessionExists / logsGetPanes / logsCapturePaneOutput dispatch through
+// backend helpers so robot logs work under NTM_BACKEND=herdr.
+func logsSessionExists(name string) bool {
+	return backendSessionExists(name)
+}
+
+func logsGetPanes(session string) ([]tmux.Pane, error) {
+	return backendGetPanes(session)
+}
+
+func logsGetPanesContext(ctx context.Context, session string) ([]tmux.Pane, error) {
+	return backendGetPanesContext(ctx, session)
+}
+
+func logsCapturePaneOutputContext(ctx context.Context, target string, lines int) (string, error) {
+	return backendCapturePaneOutputContext(ctx, target, lines)
+}
+
 // LogsOptions configures the robot-logs operation.
 type LogsOptions struct {
 	Session string        // Session name
@@ -78,7 +96,7 @@ func GetLogs(opts LogsOptions) (*LogsOutput, error) {
 	}
 
 	// Check if session exists
-	if !tmux.SessionExists(opts.Session) {
+	if !logsSessionExists(opts.Session) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
@@ -88,12 +106,12 @@ func GetLogs(opts LogsOptions) (*LogsOutput, error) {
 	}
 
 	// Get panes in the session
-	panes, err := tmux.GetPanes(opts.Session)
+	panes, err := logsGetPanes(opts.Session)
 	if err != nil {
 		output.RobotResponse = NewErrorResponse(
 			err,
 			ErrCodeInternalError,
-			"Check tmux session state",
+			"Check session state",
 		)
 		return output, nil
 	}
@@ -164,7 +182,7 @@ func capturePaneLogs(pane tmux.Pane, agentType string, limit int, filterRe *rege
 		captureLines = 200
 	}
 
-	output, err := tmux.CapturePaneOutputContext(ctx, pane.ID, captureLines)
+	output, err := logsCapturePaneOutputContext(ctx, pane.ID, captureLines)
 	if err != nil {
 		logs.Lines = []string{fmt.Sprintf("[error capturing pane output: %v]", err)}
 		logs.LineCount = 1
@@ -361,7 +379,7 @@ func (ls *LogsStreamer) Poll(ctx context.Context) ([]LogsStreamEntry, error) {
 	var entries []LogsStreamEntry
 
 	// Get panes
-	panes, err := tmux.GetPanesContext(ctx, ls.opts.Session)
+	panes, err := logsGetPanesContext(ctx, ls.opts.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -384,7 +402,7 @@ func (ls *LogsStreamer) Poll(ctx context.Context) ([]LogsStreamEntry, error) {
 		}
 
 		// Capture output
-		output, err := tmux.CapturePaneOutputContext(ctx, pane.ID, 200)
+		output, err := logsCapturePaneOutputContext(ctx, pane.ID, 200)
 		if err != nil {
 			continue
 		}

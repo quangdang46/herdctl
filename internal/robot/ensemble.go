@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Dicklesworthstone/ntm/internal/ensemble"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // ErrCodeEnsembleNotFound indicates the session has no ensemble state.
@@ -109,7 +108,7 @@ func GetEnsemble(session string) (*EnsembleOutput, error) {
 	state, err := ensemble.LoadSession(session)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			if !tmux.SessionExists(session) {
+			if !backendSessionExists(session) {
 				output.RobotResponse = NewErrorResponse(
 					fmt.Errorf("session '%s' not found", session),
 					ErrCodeSessionNotFound,

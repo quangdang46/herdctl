@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/Dicklesworthstone/ntm/internal/session"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 func mustGetwd() string {
@@ -25,7 +24,7 @@ func mustGetwd() string {
 // session names (e.g. "myproject--frontend") consistently with list/status,
 // even when called from the REST API or other non-CLI entry points.
 func resolveSessionName(name string) string {
-	sessions, err := tmux.ListSessions()
+	sessions, err := backendListSessions()
 	if err != nil || len(sessions) == 0 {
 		return name
 	}

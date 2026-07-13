@@ -10,6 +10,8 @@ import (
 
 	"github.com/Dicklesworthstone/ntm/internal/agentsession"
 	"github.com/Dicklesworthstone/ntm/internal/audit"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -48,12 +50,12 @@ func Capture(sessionName string) (state *SessionState, err error) {
 		_ = audit.LogEvent(sessionName, audit.EventTypeCommand, audit.ActorSystem, "session.capture", payload, nil)
 	}()
 
-	session, err := tmux.GetSession(sessionName)
+	session, err := getSessionBackend(sessionName)
 	if err != nil {
 		return nil, err
 	}
 
-	panes, err := tmux.GetPanes(sessionName)
+	panes, err := getPanesBackend(sessionName)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +138,33 @@ func Capture(sessionName string) (state *SessionState, err error) {
 // the active window's layout. Returns nil if the session cannot be listed; the
 // caller then relies on the whole-session Layout fallback.
 func captureWindows(sessionName string) []WindowState {
+	if backend.IsHerdr() {
+		// Herdr has no tmux list-windows; derive a single synthetic window from panes.
+		panes, err := herdr.GetPanes(sessionName)
+		if err != nil || len(panes) == 0 {
+			return nil
+		}
+		// Collapse unique window indices into WindowState records (layout unknown).
+		seen := map[int]bool{}
+		var windows []WindowState
+		for _, p := range panes {
+			idx := p.WindowIndex
+			if idx <= 0 {
+				idx = 0
+			}
+			if seen[idx] {
+				continue
+			}
+			seen[idx] = true
+			windows = append(windows, WindowState{
+				Index:  idx,
+				Name:   sessionName,
+				Active: p.Active,
+				Layout: "tiled",
+			})
+		}
+		return windows
+	}
 	// Use the same printable delimiter as GetPanes: tmux escapes non-printable
 	// bytes (e.g. \x1f) in format output, so a control-char separator would not
 	// survive. Window names/layouts will not contain this token.
@@ -334,6 +363,10 @@ func paneCurrentPath(paneID string) string {
 }
 
 func paneCurrentPathContext(ctx context.Context, paneID string) string {
+	if backend.IsHerdr() {
+		// Herdr pane cwd is not exposed via display-message; Capture uses session Directory.
+		return ""
+	}
 	output, err := tmux.DefaultClient.RunContext(ctx, "display-message", "-t", paneID, "-p", "#{pane_current_path}")
 	if err != nil {
 		return ""
@@ -343,27 +376,34 @@ func paneCurrentPathContext(ctx context.Context, paneID string) string {
 
 // detectWorkDir attempts to detect the working directory for the session.
 func detectWorkDir(sessionName string, panes []tmux.Pane) string {
-	// Try to get the active pane's current path via tmux
-	for _, p := range panes {
-		if p.Active {
-			output, err := tmux.DefaultClient.Run("display-message", "-t", p.ID, "-p", "#{pane_current_path}")
+	if backend.IsHerdr() {
+		if s, err := herdr.GetSession(sessionName); err == nil && s != nil && s.Directory != "" {
+			return s.Directory
+		}
+		// Fall through to process cwd / home.
+	} else {
+		// Try to get the active pane's current path via tmux
+		for _, p := range panes {
+			if p.Active {
+				output, err := tmux.DefaultClient.Run("display-message", "-t", p.ID, "-p", "#{pane_current_path}")
+				if err == nil && len(output) > 0 {
+					path := strings.TrimSpace(output)
+					if path != "" {
+						return path
+					}
+				}
+				break
+			}
+		}
+
+		// Fallback: try the first pane if no active pane or it failed
+		if len(panes) > 0 {
+			output, err := tmux.DefaultClient.Run("display-message", "-t", panes[0].ID, "-p", "#{pane_current_path}")
 			if err == nil && len(output) > 0 {
 				path := strings.TrimSpace(output)
 				if path != "" {
 					return path
 				}
-			}
-			break
-		}
-	}
-
-	// Fallback: try the first pane if no active pane or it failed
-	if len(panes) > 0 {
-		output, err := tmux.DefaultClient.Run("display-message", "-t", panes[0].ID, "-p", "#{pane_current_path}")
-		if err == nil && len(output) > 0 {
-			path := strings.TrimSpace(output)
-			if path != "" {
-				return path
 			}
 		}
 	}
@@ -411,6 +451,10 @@ func runGitInfoCommand(dir string, timeout time.Duration, args ...string) string
 
 // getLayout gets the current tmux layout for the session.
 func getLayout(sessionName string) string {
+	if backend.IsHerdr() {
+		// Herdr has no tmux window_layout string; tiled is the restore default.
+		return "tiled"
+	}
 	output, err := tmux.DefaultClient.Run("display-message", "-t", sessionName, "-p", "#{window_layout}")
 	if err != nil {
 		return "tiled" // Default fallback
@@ -418,4 +462,55 @@ func getLayout(sessionName string) string {
 	// Return the layout string as-is. tmux select-layout accepts both
 	// named layouts (tiled, even-horizontal) and serialized geometry strings.
 	return strings.TrimSpace(output)
+}
+
+// getSessionBackend / getPanesBackend dispatch session metadata reads.
+func getSessionBackend(name string) (*tmux.Session, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetSession(name)
+	}
+	s, err := herdr.GetSession(name)
+	if err != nil {
+		return nil, err
+	}
+	return &tmux.Session{
+		Name:      s.Name,
+		Directory: s.Directory,
+		Windows:   s.Windows,
+		Attached:  s.Attached,
+		Created:   s.Created,
+	}, nil
+}
+
+func getPanesBackend(name string) ([]tmux.Pane, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetPanes(name)
+	}
+	panes, err := herdr.GetPanes(name)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tmux.Pane, 0, len(panes))
+	for i, p := range panes {
+		idx := p.Index
+		if idx == 0 {
+			idx = i
+		}
+		out = append(out, tmux.Pane{
+			ID:          p.ID,
+			Index:       idx,
+			WindowIndex: p.WindowIndex,
+			NTMIndex:    p.NTMIndex,
+			Title:       p.Title,
+			Type:        tmux.AgentType(p.Type),
+			Variant:     p.Variant,
+			Tags:        append([]string{}, p.Tags...),
+			Command:     p.Command,
+			Width:       p.Width,
+			Height:      p.Height,
+			Active:      p.Active,
+			PID:         p.PID,
+		})
+	}
+	return out, nil
 }

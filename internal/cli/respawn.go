@@ -1,11 +1,17 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
+	"github.com/Dicklesworthstone/ntm/internal/config"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
@@ -21,12 +27,11 @@ func newRespawnCmd() *cobra.Command {
 		Use:     "respawn <session>",
 		Aliases: []string{"restart"},
 		Short:   "Kill and restart worker agents in a session",
-		Long: `Kill and restart worker agents in a tmux session.
+		Long: `Kill and restart worker agents in a session.
 
-This command uses tmux's respawn-pane -k to kill each selected pane's
-process and restore a fresh shell, then relaunches the pane's agent CLI
-(agent CLIs are started by keystroke after spawn, so a bare respawn
-would otherwise leave an empty shell) and waits for it to become ready.
+On tmux this uses respawn-pane -k then relaunches the agent CLI by keystroke.
+On herdr (NTM_BACKEND=herdr) it kills each pane and starts a fresh agent via
+agent.start using registry metadata (type/index/variant/cwd/command).
 
 By default, only agent panes are restarted (not the user pane at index 0).
 Use --all to include all panes, or --panes to target specific indices.
@@ -54,7 +59,10 @@ Examples:
 }
 
 func runRespawn(session string, force bool, panesFlag string, agentType string, all bool, dryRun bool) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return err
 	}
 
@@ -67,7 +75,7 @@ func runRespawn(session string, force bool, panesFlag string, agentType string, 
 	}
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return fmt.Errorf("session '%s' not found", session)
 	}
 
@@ -81,7 +89,7 @@ func runRespawn(session string, force bool, panesFlag string, agentType string, 
 	}
 
 	// Get panes to determine targets
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return fmt.Errorf("failed to get panes: %w", err)
 	}
@@ -116,6 +124,11 @@ func runRespawn(session string, force bool, panesFlag string, agentType string, 
 			fmt.Println("Aborted.")
 			return nil
 		}
+	}
+
+	// Herdr: kill pane + StartAgent with registry meta (no tmux respawn-pane).
+	if backend.IsHerdr() {
+		return runRespawnHerdr(session, targetPanes)
 	}
 
 	// Restart targets via the shared robot engine, which relaunches agent
@@ -154,6 +167,198 @@ func runRespawn(session string, force bool, panesFlag string, agentType string, 
 	}
 
 	return nil
+}
+
+// runRespawnHerdr kills each target pane and starts a fresh agent via
+// herdr agent.start, preserving NTM index/type/variant from registry meta.
+func runRespawnHerdr(session string, targetPanes []tmux.Pane) error {
+	fmt.Printf("Restarting %d pane(s) via herdr (kill + agent.start)...\n", len(targetPanes))
+
+	dir, dirErr := resolveExplicitProjectDirForSession(session)
+	if dirErr != nil {
+		// Fall back to empty cwd; StartAgent will use registry session directory.
+		dir = ""
+	}
+
+	cwdForCfg, _ := os.Getwd()
+	cfg, cfgErr := config.LoadMerged(cwdForCfg, config.DefaultPath())
+	if cfgErr != nil {
+		cfg = config.Default()
+	}
+
+	var restarted []string
+	var failed []string
+
+	for _, pane := range targetPanes {
+		paneKey := fmt.Sprintf("%d", pane.Index)
+		if pane.ID != "" {
+			paneKey = pane.ID
+		}
+
+		resolvedType := respawnPaneAgentType(pane)
+		if resolvedType == "user" || resolvedType == "unknown" || resolvedType == "" {
+			// No agent CLI to relaunch: just kill the pane (best-effort).
+			if err := muxKillPane(pane.ID); err != nil {
+				failed = append(failed, fmt.Sprintf("%s: kill: %v", paneKey, err))
+				fmt.Printf("  - Pane %s: kill FAILED: %v\n", paneKey, err)
+			} else {
+				restarted = append(restarted, paneKey)
+				fmt.Printf("  - Pane %s: killed (no agent type to relaunch)\n", paneKey)
+			}
+			continue
+		}
+
+		// Capture meta before kill (KillPane drops registry entry).
+		agentType := AgentType(pane.Type.Canonical())
+		if agentType == "" || string(agentType) == "unknown" {
+			agentType = AgentType(resolvedType)
+			// Map robot long names to short AgentType when needed.
+			switch normalizeAgentType(resolvedType) {
+			case "claude":
+				agentType = AgentTypeClaude
+			case "codex":
+				agentType = AgentTypeCodex
+			case "gemini":
+				agentType = AgentTypeGemini
+			case "antigravity":
+				agentType = AgentTypeAntigravity
+			case "cursor":
+				agentType = AgentTypeCursor
+			case "windsurf":
+				agentType = AgentTypeWindsurf
+			case "aider":
+				agentType = AgentTypeAider
+			case "oc":
+				agentType = AgentTypeOpencode
+			case "ollama":
+				agentType = AgentTypeOllama
+			}
+		}
+		ntmIndex := pane.NTMIndex
+		if ntmIndex <= 0 {
+			ntmIndex = pane.Index
+		}
+		variant := pane.Variant
+		cwd := dir
+		// Prefer command stored in registry meta (surfaced on pane.Command).
+		cmdStr := strings.TrimSpace(pane.Command)
+
+		argv := resolveHerdrAgentArgv(agentType, variant, "", "", cmdStr)
+		if len(argv) == 0 {
+			// Build from config template as last resort.
+			tmpl := respawnAgentTemplate(cfg, agentType)
+			if tmpl != "" {
+				rendered, err := config.GenerateAgentCommand(tmpl, config.AgentTemplateVars{
+					AgentType:   string(agentType),
+					SessionName: session,
+					PaneIndex:   ntmIndex,
+					ProjectDir:  cwd,
+				})
+				if err == nil {
+					argv = resolveHerdrAgentArgv(agentType, variant, "", "", rendered)
+				}
+			}
+		}
+		if len(argv) == 0 {
+			argv = herdrPreferredAgentArgv(agentType, variant, "", "")
+		}
+		if len(argv) == 0 {
+			failed = append(failed, fmt.Sprintf("%s: could not resolve agent argv for type %s", paneKey, agentType))
+			fmt.Printf("  - Pane %s: FAILED (no argv for %s)\n", paneKey, agentType)
+			continue
+		}
+
+		title := pane.Title
+		if strings.TrimSpace(title) == "" {
+			title = muxFormatPaneName(session, string(agentType), ntmIndex, variant)
+		}
+
+		if err := muxKillPane(pane.ID); err != nil {
+			failed = append(failed, fmt.Sprintf("%s: kill: %v", paneKey, err))
+			fmt.Printf("  - Pane %s: kill FAILED: %v\n", paneKey, err)
+			continue
+		}
+
+		// Brief settle so herdr releases the closed pane before agent.start.
+		time.Sleep(200 * time.Millisecond)
+
+		launchAgent := FlatAgent{
+			Type:  agentType,
+			Index: ntmIndex,
+			Model: variant,
+		}
+		// Prefer herdrLaunchAgent so naming/title/registry match spawn/add.
+		// If NTM index is known, StartAgent keeps it via herdrLaunchAgent → StartAgent.
+		launched, launchErr := herdrLaunchAgent(session, cwd, launchAgent, argv, title)
+		if launchErr != nil {
+			// Fallback: direct StartAgent with explicit index.
+			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			p, err2 := herdr.StartAgent(ctx, herdr.StartAgentOptions{
+				Session:   session,
+				Name:      fmt.Sprintf("%s-%s_%d", session, agentType, ntmIndex),
+				AgentType: herdr.AgentType(agentType),
+				Index:     ntmIndex,
+				Variant:   variant,
+				Cwd:       cwd,
+				Argv:      argv,
+				Focus:     false,
+				Split:     "right",
+			})
+			cancel()
+			if err2 != nil {
+				failed = append(failed, fmt.Sprintf("%s: start: %v (after kill; original: %v)", paneKey, err2, launchErr))
+				fmt.Printf("  - Pane %s: relaunch FAILED: %v\n", paneKey, err2)
+				continue
+			}
+			if title != "" {
+				_ = herdr.SetPaneTitle(p.ID, title)
+			}
+			launched = tmux.Pane{ID: p.ID, Index: p.Index, NTMIndex: p.NTMIndex, Title: title}
+		}
+
+		restarted = append(restarted, launched.ID)
+		fmt.Printf("  - Pane %s → %s: agent relaunched (%s_%d)\n", paneKey, launched.ID, agentType, ntmIndex)
+	}
+
+	if len(restarted) > 0 {
+		fmt.Printf("Restarted %d pane(s)\n", len(restarted))
+	}
+	if len(failed) > 0 {
+		fmt.Printf("Failed to restart:\n")
+		for _, f := range failed {
+			fmt.Printf("  - %s\n", f)
+		}
+		return fmt.Errorf("%d pane(s) failed to restart cleanly", len(failed))
+	}
+	return nil
+}
+
+func respawnAgentTemplate(cfg *config.Config, agentType AgentType) string {
+	if cfg == nil {
+		return ""
+	}
+	switch agentType {
+	case AgentTypeClaude:
+		return cfg.Agents.Claude
+	case AgentTypeCodex:
+		return cfg.Agents.Codex
+	case AgentTypeGemini:
+		return cfg.Agents.Gemini
+	case AgentTypeAntigravity:
+		return cfg.Agents.Antigravity
+	case AgentTypeCursor:
+		return cfg.Agents.Cursor
+	case AgentTypeWindsurf:
+		return cfg.Agents.Windsurf
+	case AgentTypeAider:
+		return cfg.Agents.Aider
+	case AgentTypeOpencode:
+		return opencodeCommandOrDefault(cfg.Agents.Opencode)
+	case AgentTypeOllama:
+		return cfg.Agents.Ollama
+	default:
+		return ""
+	}
 }
 
 func selectRespawnTargets(panes []tmux.Pane, paneFilterMap map[string]bool, agentType string, all bool) []tmux.Pane {

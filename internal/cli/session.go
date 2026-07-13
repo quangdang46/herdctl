@@ -21,9 +21,11 @@ import (
 
 	agentpkg "github.com/Dicklesworthstone/ntm/internal/agent"
 	"github.com/Dicklesworthstone/ntm/internal/assignment"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/cli/suggestions"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/handoff"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	sessionPkg "github.com/Dicklesworthstone/ntm/internal/session"
@@ -289,14 +291,19 @@ func newAttachCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "attach <session-name>",
 		Aliases: []string{"a"},
-		Short:   "Attach to a tmux session",
-		Long: `Attach to an existing tmux session. If already inside tmux,
-switches to the target session instead.
+		Short:   "Attach to a session (tmux) or show herdr TUI guidance",
+		Long: `Attach to an existing session.
+
+On the default tmux backend, attaches (or switches if already inside tmux).
+On NTM_BACKEND=herdr, prints actionable guidance to open the herdr TUI and
+focus the workspace — herdr owns the interactive client, so ntm does not
+shell out to tmux attach.
 
 If the session doesn't exist, shows available sessions.
 
 Examples:
-  ntm attach myproject`,
+  ntm attach myproject
+  NTM_BACKEND=herdr ntm attach myproject`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -323,6 +330,12 @@ func runAttach(session string) error {
 			return output.PrintJSON(output.NewError(err.Error()))
 		}
 		return output.PrintJSON(resp)
+	}
+
+	// Herdr owns the interactive client (TUI / herdr session attach). Never call
+	// tmux.AttachOrSwitch — it is intentionally unsupported on this backend.
+	if backend.IsHerdr() {
+		return runAttachHerdr(session)
 	}
 
 	if err := tmux.EnsureInstalled(); err != nil {
@@ -366,6 +379,133 @@ func runAttach(session string) error {
 	return nil
 }
 
+// runAttachHerdr resolves the session on the herdr backend and prints actionable
+// guidance for opening the herdr TUI. It never shells out to tmux attach.
+func runAttachHerdr(session string) error {
+	if err := muxEnsureInstalled(); err != nil {
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
+		return err
+	}
+
+	if muxSessionExists(session) {
+		updateSessionActivity(session)
+		return printHerdrAttachGuidance(session)
+	}
+
+	sessionList, err := muxListSessions()
+	if err != nil {
+		return err
+	}
+
+	// Prefix resolution via muxListSessions (never tmux.ListSessions).
+	if resolved, _, err := sessionPkg.ResolveExplicitSessionName(session, sessionList, true); err == nil {
+		session = resolved
+		updateSessionActivity(session)
+		return printHerdrAttachGuidance(session)
+	} else {
+		var re *sessionPkg.ResolveExplicitSessionNameError
+		if errors.As(err, &re) && re.Kind == sessionPkg.ResolveExplicitSessionNameErrorAmbiguous {
+			return err
+		}
+	}
+
+	fmt.Printf("Session '%s' does not exist on herdr.\n\n", session)
+	fmt.Println("Available sessions:")
+	if err := runList(nil); err != nil {
+		return err
+	}
+	return fmt.Errorf("session '%s' not found (herdr backend)", session)
+}
+
+// printHerdrAttachGuidance tells the operator how to open the session in herdr.
+// Exit 0: the session exists; attach is a client-side TUI step outside ntm.
+func printHerdrAttachGuidance(session string) error {
+	label := session
+	workspaceID := lookupHerdrWorkspaceID(session)
+
+	if s, err := herdr.GetSession(session); err == nil && s != nil {
+		if s.Label != "" {
+			label = s.Label
+		}
+		if s.WorkspaceID != "" {
+			workspaceID = s.WorkspaceID
+		}
+	}
+
+	fmt.Printf("Session '%s' is managed by herdr (not a tmux session).\n", session)
+	fmt.Println()
+	fmt.Println("ntm cannot attach into herdr the way it attaches to tmux.")
+	fmt.Println("Open the herdr TUI and focus this workspace:")
+	fmt.Println()
+	fmt.Println("  1. Run:  herdr")
+	fmt.Printf("  2. Focus workspace label: %s\n", label)
+	if workspaceID != "" {
+		fmt.Printf("     workspace_id: %s\n", workspaceID)
+	}
+	fmt.Println()
+	fmt.Println("If your herdr CLI supports non-TUI attach:")
+	fmt.Printf("  herdr session attach %s\n", session)
+	if workspaceID != "" {
+		fmt.Printf("  # registry binding: session=%s workspace_id=%s\n", session, workspaceID)
+	}
+	return nil
+}
+
+// printHerdrUISubstitute explains that a tmux-native NTM UI surface is N/A on
+// herdr and points operators at the herdr TUI/sidebar plus CLI substitutes.
+// Exit 0: intentional product choice, not a hard failure.
+// surface is a short label like "dashboard", "palette", "overlay", or "bind".
+func printHerdrUISubstitute(surface, session string) error {
+	surface = strings.TrimSpace(surface)
+	if surface == "" {
+		surface = "ui"
+	}
+	session = strings.TrimSpace(session)
+
+	fmt.Printf("ntm %s is a tmux-native surface (Bubbletea popup / tmux bind-key).\n", surface)
+	fmt.Println("On NTM_BACKEND=herdr it is not ported — use herdr's native TUI instead.")
+	fmt.Println()
+	fmt.Println("Herdr substitutes:")
+	fmt.Println("  herdr                         # open herdr TUI (sidebar = status cockpit)")
+	if session != "" {
+		fmt.Printf("  ntm attach %s             # herdr workspace focus guidance\n", session)
+		fmt.Printf("  ntm status %s             # pane/agent status (CLI)\n", session)
+		fmt.Printf("  ntm status %s --watch     # live status refresh\n", session)
+		fmt.Printf("  ntm agent list            # agents across herdr workspaces\n")
+		fmt.Printf("  ntm send %s --all \"...\"   # dispatch prompts without palette TUI\n", session)
+	} else {
+		fmt.Println("  ntm attach <session>         # herdr workspace focus guidance")
+		fmt.Println("  ntm status <session>         # pane/agent status (CLI)")
+		fmt.Println("  ntm status <session> --watch # live status refresh")
+		fmt.Println("  ntm agent list               # agents across herdr workspaces")
+		fmt.Println("  ntm send <session> --all \"...\"  # dispatch without palette TUI")
+	}
+	fmt.Println("  ntm plugins list             # agent/command plugins (file-based)")
+	fmt.Println("  ntm tutorial                 # interactive NTM tutorial (backend-agnostic)")
+	fmt.Println()
+	fmt.Println("Keybindings: configure inside the herdr TUI; ntm bind only writes ~/.tmux.conf.")
+	if session != "" {
+		return printHerdrAttachGuidance(session)
+	}
+	return nil
+}
+
+// lookupHerdrWorkspaceID returns the registry workspace_id for session, if any.
+// Registry binding wins over live label scans (avoids wrong workspace on duplicate labels).
+func lookupHerdrWorkspaceID(session string) string {
+	reg, err := herdr.LoadRegistry("")
+	if err != nil {
+		return ""
+	}
+	rec, ok := reg.GetSession(session)
+	if !ok {
+		return ""
+	}
+	return rec.WorkspaceID
+}
+
 func newListCmd() *cobra.Command {
 	var tags []string
 	var project string
@@ -407,10 +547,10 @@ func runList(tags []string, project ...string) error {
 	// Text output
 	if len(resp.Sessions) == 0 {
 		if muxBackendLabel() == "herdr" {
-				fmt.Println("No Herdr-backed sessions running")
-			} else {
-				fmt.Println("No tmux sessions running")
-			}
+			fmt.Println("No Herdr-backed sessions running")
+		} else {
+			fmt.Println("No tmux sessions running")
+		}
 		return nil
 	}
 
@@ -643,7 +783,7 @@ func estimatePaneContextUsage(p tmux.Pane) (paneContextUsage, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	out, err := tmux.CaptureForFullContextContext(ctx, p.ID)
+	out, err := muxCaptureForFullContextContext(ctx, p.ID)
 	if err != nil || out == "" {
 		return paneContextUsage{}, false
 	}
@@ -661,8 +801,109 @@ func estimatePaneContextUsage(p tmux.Pane) (paneContextUsage, bool) {
 	}, true
 }
 
+// herdrAgentStatusToStatus maps herdr agent_status onto status.AgentStatus.
+// Unknown/empty returns StateUnknown so callers can fall back to capture
+// classification.
+func herdrAgentStatusToStatus(pane tmux.Pane, agentStatus string) status.AgentStatus {
+	st := status.AgentStatus{
+		PaneID:    pane.ID,
+		PaneName:  pane.Title,
+		AgentType: string(pane.Type),
+		State:     status.StateUnknown,
+		UpdatedAt: time.Now(),
+	}
+	switch strings.ToLower(strings.TrimSpace(agentStatus)) {
+	case herdr.AgentStatusIdle, herdr.AgentStatusDone:
+		st.State = status.StateIdle
+	case herdr.AgentStatusWorking:
+		st.State = status.StateWorking
+	case herdr.AgentStatusBlocked:
+		st.State = status.StateError
+		st.ErrorType = status.ErrorGeneric
+	case herdr.AgentStatusUnknown, "":
+		st.State = status.StateUnknown
+	default:
+		st.State = status.StateUnknown
+	}
+	return st
+}
+
+// observeSessionStatus builds pane list + per-pane agent status via mux.
+// On herdr, prefers agent_status from pane list; falls back to capture
+// classification for unknown/empty. On tmux, uses the existing SessionObserver.
+// Re-fetches panes each call so status --watch stays live.
+func observeSessionStatus(ctx context.Context, session string) ([]tmux.Pane, map[string]status.AgentStatus, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	// Herdr path: topology via muxGetPanes; status from agent_status with
+	// capture classification fallback. Never call tmux list-panes/capture.
+	if backend.IsHerdr() {
+		panes, err := muxGetPanesContext(ctx, session)
+		if err != nil {
+			return nil, nil, err
+		}
+		herdrStatuses := muxHerdrAgentStatuses(session)
+		statusByPaneID := make(map[string]status.AgentStatus, len(panes))
+		detector := status.NewDetector()
+
+		for _, p := range panes {
+			hs := ""
+			if herdrStatuses != nil {
+				hs = herdrStatuses[p.ID]
+			}
+			// Prefer per-pane GetAgentStatus when map miss (fresh pane).
+			if hs == "" {
+				if s, err := muxGetAgentStatus(p.ID); err == nil {
+					hs = s
+				}
+			}
+			agentStatus := herdrAgentStatusToStatus(p, hs)
+			if agentStatus.State == status.StateUnknown && p.Type != tmux.AgentUser {
+				// Fall back to scrollback classification when herdr reports unknown.
+				out, capErr := muxCaptureForStatusDetection(p.ID)
+				if capErr == nil && strings.TrimSpace(out) != "" {
+					agentStatus = detector.Analyze(p.ID, p.Title, string(p.Type), out, time.Now())
+				}
+			}
+			statusByPaneID[p.ID] = agentStatus
+		}
+		return panes, statusByPaneID, nil
+	}
+
+	// Default tmux path: existing observer (capture + topology).
+	observation, err := status.NewSessionObserver(status.NewDetector()).Observe(ctx, session)
+	if err != nil {
+		return nil, nil, err
+	}
+	panes := make([]tmux.Pane, 0, len(observation.Panes))
+	statusByPaneID := make(map[string]status.AgentStatus, len(observation.Panes))
+	for _, paneObservation := range observation.Panes {
+		panes = append(panes, paneObservation.Metadata)
+		statusByPaneID[paneObservation.Pane.ID] = paneObservation.Current.Status
+	}
+	return panes, statusByPaneID, nil
+}
+
+// statusPaneIdentity returns a display string that includes herdr pane id and
+// NTMIndex when present (e.g. "w1:p2 ntm=1"), otherwise empty.
+func statusPaneIdentity(p tmux.Pane) string {
+	parts := make([]string, 0, 2)
+	if backend.IsHerdr() && p.ID != "" {
+		parts = append(parts, p.ID)
+	}
+	if p.NTMIndex > 0 {
+		parts = append(parts, fmt.Sprintf("ntm=%d", p.NTMIndex))
+	}
+	return strings.Join(parts, " ")
+}
+
 func buildStatusResponse(session string, opts statusOptions) (output.StatusResponse, error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return output.StatusResponse{}, err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return output.StatusResponse{}, err
 	}
 	resolvedSession, err := normalizeExplicitLiveSessionName(session, true)
@@ -671,7 +912,7 @@ func buildStatusResponse(session string, opts statusOptions) (output.StatusRespo
 	}
 	session = resolvedSession
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return output.StatusResponse{
 			TimestampedResponse: output.NewTimestamped(),
 			Session:             session,
@@ -679,7 +920,9 @@ func buildStatusResponse(session string, opts statusOptions) (output.StatusRespo
 		}, nil
 	}
 
-	panes, err := tmux.GetPanes(session)
+	statusCtx, cancelStatus := context.WithTimeout(context.Background(), 6*time.Second)
+	panes, statusByPaneID, err := observeSessionStatus(statusCtx, session)
+	cancelStatus()
 	if err != nil {
 		return output.StatusResponse{}, err
 	}
@@ -744,7 +987,7 @@ func buildStatusResponse(session string, opts statusOptions) (output.StatusRespo
 
 	// Check if session is attached
 	attached := false
-	sessions, _ := tmux.ListSessions()
+	sessions, _ := muxListSessions()
 	for _, s := range sessions {
 		if s.Name == session {
 			attached = s.Attached
@@ -786,6 +1029,11 @@ func buildStatusResponse(session string, opts statusOptions) (output.StatusRespo
 			Width:   p.Width,
 			Height:  p.Height,
 			Command: p.Command,
+		}
+		if st, ok := statusByPaneID[p.ID]; ok && st.State != status.StateUnknown {
+			paneResp.Status = string(st.State)
+		} else if st, ok := statusByPaneID[p.ID]; ok {
+			paneResp.Status = string(st.State)
 		}
 		if usage, ok := contextByIndex[p.Index]; ok {
 			paneResp.ContextTokens = usage.Tokens
@@ -858,7 +1106,10 @@ func coerceSessionResponse(result any) (output.SessionResponse, error) {
 }
 
 func buildAttachResponse(session string) (output.SessionResponse, error) {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return output.SessionResponse{}, err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return output.SessionResponse{}, err
 	}
 	resolvedSession, err := normalizeExplicitLiveSessionName(session, true)
@@ -867,7 +1118,7 @@ func buildAttachResponse(session string) (output.SessionResponse, error) {
 	}
 	session = resolvedSession
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return output.SessionResponse{
 			Session: session,
 			Exists:  false,
@@ -875,7 +1126,7 @@ func buildAttachResponse(session string) (output.SessionResponse, error) {
 	}
 
 	attached := false
-	sessions, _ := tmux.ListSessions()
+	sessions, _ := muxListSessions()
 	for _, s := range sessions {
 		if s.Name == session {
 			attached = s.Attached
@@ -990,7 +1241,10 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 		return output.PrintJSON(resp)
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return outputError(err)
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return outputError(err)
 	}
 
@@ -1007,7 +1261,7 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 		sessionInferred = res.Inferred
 	}
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.StatusResponse{
 				TimestampedResponse: output.NewTimestamped(),
@@ -1019,16 +1273,10 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 	}
 
 	statusCtx, cancelStatus := context.WithTimeout(context.Background(), 6*time.Second)
-	observation, err := status.NewSessionObserver(status.NewDetector()).Observe(statusCtx, session)
+	panes, statusByPaneID, err := observeSessionStatus(statusCtx, session)
 	cancelStatus()
 	if err != nil {
 		return outputError(err)
-	}
-	panes := make([]tmux.Pane, 0, len(observation.Panes))
-	statusByPaneID := make(map[string]status.AgentStatus, len(observation.Panes))
-	for _, paneObservation := range observation.Panes {
-		panes = append(panes, paneObservation.Metadata)
-		statusByPaneID[paneObservation.Pane.ID] = paneObservation.Current.Status
 	}
 
 	// Filter panes by tag
@@ -1270,8 +1518,13 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 			cmdPart = fmt.Sprintf(" %s%-*s%s", subtext, cmdWidth, cmd, reset)
 		}
 
-		// Pane info with status
-		fmt.Fprintf(w, "  %s%s %s%s %s%s%s%s %s│%s %s%-8s%s\n",
+		// Pane info with status (include herdr pane id + NTMIndex when present)
+		identity := statusPaneIdentity(p)
+		identityPart := ""
+		if identity != "" {
+			identityPart = fmt.Sprintf(" %s%s%s", overlay, identity, reset)
+		}
+		fmt.Fprintf(w, "  %s%s %s%s %s%s%s%s%s %s│%s %s%-8s%s\n",
 			num,
 			stateIcon,
 			typeColor, typeIcon,
@@ -1279,6 +1532,7 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 			reset,
 			variantPart,
 			cmdPart,
+			identityPart,
 			surface, reset,
 			stateColor, stateText, reset)
 	}
@@ -1570,6 +1824,10 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 	return nil
 }
 
+// runStatusWatch refreshes status on an interval until Ctrl-C / SIGTERM.
+// Each tick calls runStatusOnce → observeSessionStatus, which on herdr uses
+// muxGetPanesContext / muxHerdrAgentStatuses / muxCapture* (never raw tmux
+// list-panes or capture). Do not cache panes across ticks (bd-gl28u.1.8).
 func runStatusWatch(w io.Writer, session string, opts statusOptions) error {
 	if opts.interval <= 0 {
 		opts.interval = 2 * time.Second
@@ -1579,7 +1837,7 @@ func runStatusWatch(w io.Writer, session string, opts statusOptions) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle Ctrl+C
+	// Handle Ctrl+C / SIGTERM: restore cursor and exit loop cleanly.
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
@@ -1618,8 +1876,19 @@ func runStatusWatch(w io.Writer, session string, opts statusOptions) error {
 			fmt.Print("\033[H\033[J")
 		}
 
+		// Fresh mux observation every tick (herdr agent_status + panes).
+		// runStatusOnce may take several seconds (mux/herdr RPCs); check cancel
+		// after it returns so Ctrl-C during a tick still exits cleanly.
 		if err := runStatusOnce(w, session, opts); err != nil {
+			if ctx.Err() != nil {
+				fmt.Fprintln(w, "\nWatch mode stopped.")
+				return nil
+			}
 			fmt.Fprintf(w, "Error: %v\n", err)
+		}
+		if ctx.Err() != nil {
+			fmt.Fprintln(w, "\nWatch mode stopped.")
+			return nil
 		}
 
 		firstRun = false

@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/checkpoint"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/events"
@@ -272,9 +273,13 @@ func runAdd(opts AddOptions) error {
 		return err
 	}
 
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
 		return outputError(err)
 	}
+	if err := muxRequireHerdrServer(); err != nil {
+		return outputError(err)
+	}
+	maybeNoteHerdrBackend()
 
 	resolvedSession, err := resolveAddSession(session)
 	if err != nil {
@@ -283,7 +288,7 @@ func runAdd(opts AddOptions) error {
 	session = resolvedSession
 	opts.Session = session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return outputError(fmt.Errorf("session '%s' does not exist (use 'ntm spawn' to create)", session))
 	}
 
@@ -368,15 +373,15 @@ func runAdd(opts AddOptions) error {
 	// Track newly added panes for JSON output
 	var newPanes []output.PaneResponse
 
-	// Get existing panes to determine next indices
-	panes, err := tmux.GetPanes(session)
+	// Get existing panes to determine next indices (mux: tmux or herdr registry).
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return outputError(err)
 	}
 
 	maxIndices := make(map[string]int)
 
-	// Helper to parse index from title
+	// Helper to parse index from title (…__type_N or …__type_N_variant).
 	parseIndex := func(title string) {
 		typeStr, num, ok := paneTitleTypeAndIndex(title)
 		if ok && num > maxIndices[typeStr] {
@@ -385,6 +390,15 @@ func runAdd(opts AddOptions) error {
 	}
 
 	for _, p := range panes {
+		// Prefer NTMIndex from registry/herdr when present (authoritative for
+		// session-prefixed agent names like sess-cc_2). Fall back to title parse.
+		if p.NTMIndex > 0 && p.Type != "" && p.Type != tmux.AgentUnknown && p.Type != tmux.AgentUser {
+			typeStr := string(p.Type.Canonical())
+			if p.NTMIndex > maxIndices[typeStr] {
+				maxIndices[typeStr] = p.NTMIndex
+			}
+			continue
+		}
 		parseIndex(p.Title)
 	}
 
@@ -445,53 +459,25 @@ func runAdd(opts AddOptions) error {
 		}
 	}
 
+	// Track partial multi-add failures so we report which agents started.
+	var launchedCount int
+	var launchErrors []string
+
 	for _, agent := range flatAgents {
 		agentTypeStr := string(agent.Type)
 
-		paneID, err := tmux.SplitWindow(session, dir)
-		if err != nil {
-			return outputError(fmt.Errorf("creating pane: %w", err))
-		}
-
-		// Wait for pane to initialize before sending commands (fixes #37)
-		if paneInitDelay > 0 {
-			time.Sleep(paneInitDelay)
-		}
-
-		// Increment index for this type
+		// Increment index for this type (continues from existing panes).
 		maxIndices[agentTypeStr]++
 		num := maxIndices[agentTypeStr]
 
-		title := tmux.FormatPaneName(session, agentTypeStr, num, agent.Model)
-		if err := tmux.SetPaneTitle(paneID, title); err != nil {
-			return outputError(fmt.Errorf("setting pane title: %w", err))
-		}
+		// Title uses mux helper so herdr/tmux naming stay consistent.
+		titleVariant := agent.Model
+		title := muxFormatPaneName(session, agentTypeStr, num, titleVariant)
 
 		// Generate command
 		agentCmd, envVars, err := resolveAddAgentCommandTemplate(agent.Type, opts.PluginMap, ollamaHost)
 		if err != nil {
 			return outputError(err)
-		}
-
-		switch agent.Type {
-		case AgentTypeClaude:
-			ccCount++
-		case AgentTypeCodex:
-			codCount++
-		case AgentTypeGemini:
-			gmiCount++
-		case AgentTypeAntigravity:
-			agyCount++
-		case AgentTypeOllama:
-			ollamaCount++
-		case AgentTypeCursor:
-			cursorCount++
-		case AgentTypeWindsurf:
-			windsurfCount++
-		case AgentTypeAider:
-			aiderCount++
-		case AgentTypeOpencode:
-			opencodeCount++
 		}
 
 		// Configure Claude hooks for DCG and RCH integrations
@@ -587,6 +573,11 @@ func runAdd(opts AddOptions) error {
 			}
 		}
 
+		// Persona name goes into the title when present (matches spawn).
+		if personaName != "" {
+			title = muxFormatPaneName(session, agentTypeStr, num, personaName)
+		}
+
 		finalCmd, err := config.GenerateAgentCommand(agentCmd, config.AgentTemplateVars{
 			Model:            resolvedModel,
 			ModelAlias:       agent.Model,
@@ -628,14 +619,94 @@ func runAdd(opts AddOptions) error {
 			}
 		}
 
-		cmd, err := tmux.BuildPaneCommand(dir, safeCmd)
-		if err != nil {
-			return outputError(fmt.Errorf("building agent command: %w", err))
+		// Launch agent: herdr uses agent.start (no SplitWindow precreate);
+		// tmux keeps split + send-keys.
+		var paneID string
+		var cmd string
+
+		if backend.IsHerdr() {
+			// FlatAgent.Index from Flatten() is 1-based within this add batch only;
+			// override with the session-global NTM index so herdrLaunchAgent names
+			// agents as session-type_N without colliding (agent_name_taken).
+			launchAgent := FlatAgent{
+				Type:            agent.Type,
+				Index:           num,
+				Model:           agent.Model,
+				ReasoningEffort: resolvedReasoningEffort,
+				Persona:         agent.Persona,
+			}
+			argv := resolveHerdrAgentArgv(agent.Type, resolvedModel, systemPromptFile, resolvedReasoningEffort, safeCmd)
+			if len(argv) == 0 {
+				errMsg := fmt.Sprintf("%s_%d: empty argv for herdr agent.start", agentTypeStr, num)
+				launchErrors = append(launchErrors, errMsg)
+				if !IsJSONOutput() {
+					output.PrintWarningf("Skipping agent %s_%d: %s", agentTypeStr, num, errMsg)
+				}
+				continue
+			}
+			launched, launchErr := herdrLaunchAgent(session, dir, launchAgent, argv, title)
+			if launchErr != nil {
+				errMsg := fmt.Sprintf("%s_%d: %v", agentTypeStr, num, launchErr)
+				launchErrors = append(launchErrors, errMsg)
+				// Partial multi-add: report and continue so earlier agents stay.
+				if !IsJSONOutput() {
+					output.PrintWarningf("Failed to launch %s agent %d via herdr agent.start: %v", agent.Type, num, launchErr)
+				}
+				continue
+			}
+			paneID = launched.ID
+			cmd = strings.Join(argv, " ")
+			// herdrLaunchAgent / StartAgent already UpsertPane + SetPaneTitle.
+		} else {
+			var splitErr error
+			paneID, splitErr = tmux.SplitWindow(session, dir)
+			if splitErr != nil {
+				return outputError(fmt.Errorf("creating pane: %w", splitErr))
+			}
+
+			// Wait for pane to initialize before sending commands (fixes #37)
+			if paneInitDelay > 0 {
+				time.Sleep(paneInitDelay)
+			}
+
+			if err := tmux.SetPaneTitle(paneID, title); err != nil {
+				return outputError(fmt.Errorf("setting pane title: %w", err))
+			}
+
+			built, buildErr := tmux.BuildPaneCommand(dir, safeCmd)
+			if buildErr != nil {
+				return outputError(fmt.Errorf("building agent command: %w", buildErr))
+			}
+			cmd = built
+
+			if err := tmux.SendKeys(paneID, cmd, true); err != nil {
+				return outputError(fmt.Errorf("launching agent: %w", err))
+			}
 		}
 
-		if err := tmux.SendKeys(paneID, cmd, true); err != nil {
-			return outputError(fmt.Errorf("launching agent: %w", err))
+		// Count only successfully launched agents (partial multi-add safe).
+		launchedCount++
+		switch agent.Type {
+		case AgentTypeClaude:
+			ccCount++
+		case AgentTypeCodex:
+			codCount++
+		case AgentTypeGemini:
+			gmiCount++
+		case AgentTypeAntigravity:
+			agyCount++
+		case AgentTypeOllama:
+			ollamaCount++
+		case AgentTypeCursor:
+			cursorCount++
+		case AgentTypeWindsurf:
+			windsurfCount++
+		case AgentTypeAider:
+			aiderCount++
+		case AgentTypeOpencode:
+			opencodeCount++
 		}
+
 		if rateLimitTracker != nil && agent.Type == AgentTypeCodex {
 			rateLimitTracker.RecordSuccess("openai")
 			if err := rateLimitTracker.SaveToDir(dir); err != nil && !IsJSONOutput() {
@@ -724,6 +795,17 @@ func runAdd(opts AddOptions) error {
 		})
 	}
 
+	if len(launchErrors) > 0 {
+		// Surface partial failure: some agents may have started.
+		msg := fmt.Sprintf("added %d/%d agent(s); failures: %s", launchedCount, totalAgents, strings.Join(launchErrors, "; "))
+		if launchedCount == 0 {
+			return outputError(fmt.Errorf("%s", msg))
+		}
+		if !IsJSONOutput() {
+			output.PrintWarningf("%s", msg)
+		}
+	}
+
 	// Run post-add hooks
 	if hookExec.HasHooksForEvent(hooks.EventPostAdd) {
 		if !IsJSONOutput() {
@@ -747,22 +829,22 @@ func runAdd(opts AddOptions) error {
 			AddedWindsurf:       windsurfCount,
 			AddedAider:          aiderCount,
 			AddedOpencode:       opencodeCount,
-			TotalAdded:          totalAgents,
+			TotalAdded:          launchedCount,
 			NewPanes:            newPanes,
 		})
 	}
 
-	fmt.Printf("✓ Added %d agent(s) (total %d panes now)\n", totalAgents, len(panes)+totalAgents)
+	fmt.Printf("✓ Added %d agent(s) (total %d panes now)\n", launchedCount, len(panes)+launchedCount)
 
 	// Show "What's next?" suggestions
-	output.SuccessFooter(output.AddSuggestions(session, totalAgents)...)
+	output.SuccessFooter(output.AddSuggestions(session, launchedCount)...)
 	return nil
 }
 
 func resolveAddSession(session string) (string, error) {
 	session = strings.TrimSpace(session)
 	if session != "" {
-		if err := tmux.ValidateSessionName(session); err != nil {
+		if err := muxValidateSessionName(session); err != nil {
 			return "", fmt.Errorf("invalid session name: %w", err)
 		}
 	}
@@ -782,7 +864,7 @@ func resolveAddSetupScope(session string) (string, string, error) {
 	if session == "" {
 		return "", "", fmt.Errorf("session is required")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", "", err
 	}
 
@@ -812,7 +894,7 @@ func resolveWorkspaceAddSetupScope(session string) (string, string, error) {
 	if session == "" {
 		return "", "", fmt.Errorf("session is required")
 	}
-	if err := tmux.ValidateSessionName(session); err != nil {
+	if err := muxValidateSessionName(session); err != nil {
 		return "", "", err
 	}
 
