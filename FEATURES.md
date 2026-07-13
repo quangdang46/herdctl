@@ -2,9 +2,17 @@
 
 Source of truth for migrating NTM features from tmux → Herdr backend.
 
-**Implementation tracking:** Epic `bd-gl28u` (and children) is the complete work graph to drive the **herdr** column to **zero ✗**. After all `bd-gl28u*` beads close, run the GATE bead (`bd-gl28u.7`) to recount this file. Rows may be ✓ (works on `NTM_BACKEND=herdr`) or — (N/A with documented Herdr-native substitute); bare ✗ is not allowed at epic close.
+**Implementation tracking:** Epic `bd-gl28u` (and children) is the work graph for remaining herdr parity. Beads are **ready to implement** (`br ready`).
 
-**Legend:** ✓ = works · ~ = partial · ✗ = not yet · — = N/A (Herdr-native or tmux-agnostic)
+**Honesty rule (source of truth):**
+- **✓** only when the feature works on `NTM_BACKEND=herdr` **and** has been verified (manual or e2e). Do not tick from “code merged” alone.
+- **~** only when partially wired (some paths work, known gaps in Notes).
+- **✗** means **not done / not verified** — **keep ✗** until truly complete. Do **not** clear ✗ by inventing — just to close a bead.
+- **—** only for genuine N/A (no herdr equivalent needed; substitute documented). Not a dump for “hard features”.
+
+After implementing a bead: update this file **honestly**, then `br close` with what was actually verified.
+
+**Legend:** ✓ = works (verified) · ~ = partial · ✗ = not yet / not verified · — = N/A (documented substitute)
 
 ---
 
@@ -301,7 +309,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 **Current herdr parity: ~53%** of counted rows (97/184 at least partially working: 62 ✓ + 35 ~).  
 Including robot bulk: **~45%** (97/214).  
 Previous baseline was ~23% (48/210).  
-Goal: 100% before deprecating tmux backend.
+Goal: maximize verified ✓ on herdr; keep ✗ until truly done; deprecate tmux only when remaining ✗ are acceptable or marked — with real substitutes.
 
 ### Recent parity lifts (this pass)
 
