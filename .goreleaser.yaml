@@ -12,7 +12,7 @@ before:
 
 builds:
   - id: ntm
-    main: ./cmd/ntm
+    main: ./cmd/herdctl
     binary: ntm
     env:
       - CGO_ENABLED=0
@@ -148,7 +148,7 @@ release:
 
     # Source build
     git clone --branch {{ .Tag }} --depth 1 https://github.com/Dicklesworthstone/ntm.git
-    cd ntm && go install ./cmd/ntm
+    cd ntm && go install ./cmd/herdctl
     ```
 
     ### Shell Integration

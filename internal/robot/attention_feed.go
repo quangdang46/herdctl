@@ -375,7 +375,7 @@ func (e *CursorExpiredError) ToDetails() CursorExpiredDetails {
 		RequestedCursor: e.RequestedCursor,
 		EarliestCursor:  e.EarliestCursor,
 		RetentionPeriod: e.RetentionPeriod.String(),
-		ResyncCommand:   "ntm --robot-snapshot",
+		ResyncCommand:   "herdctl --robot-snapshot",
 	}
 }
 

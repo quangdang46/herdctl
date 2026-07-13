@@ -412,7 +412,7 @@ func writeAttentionSection(sb *strings.Builder, attention *SnapshotAttentionSumm
 	if len(attention.NextSteps) > 0 {
 		sb.WriteString("### Suggested Next Steps\n")
 		for _, step := range attention.NextSteps {
-			fmt.Fprintf(sb, "- `ntm %s` — %s\n", step.Args, escapeMarkdownCell(step.Reason, 100))
+			fmt.Fprintf(sb, "- `herdctl %s` — %s\n", step.Args, escapeMarkdownCell(step.Reason, 100))
 		}
 		sb.WriteString("\n")
 	}

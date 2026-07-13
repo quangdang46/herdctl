@@ -1442,7 +1442,7 @@ func TestRenderSideEffectManifestTextConcise(t *testing.T) {
 		Phase:       sideEffectPhaseMain,
 		Kind:        sideEffectKindShellCommand,
 		Description: "Run build",
-		Command:     "go build ./cmd/ntm",
+		Command:     "go build ./cmd/herdctl",
 	})
 	manifest.add(SideEffectEntry{
 		StepID:      "release",
@@ -1457,7 +1457,7 @@ func TestRenderSideEffectManifestTextConcise(t *testing.T) {
 	for _, want := range []string{
 		"Side effects: 2 planned",
 		"shell_command=1",
-		"[build] shell_command: go build ./cmd/ntm",
+		"[build] shell_command: go build ./cmd/herdctl",
 		"Rollback/cleanup: 1 action(s)",
 		"[release] agent_mail_release: internal/pipeline/*.go",
 	} {

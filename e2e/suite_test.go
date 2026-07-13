@@ -86,11 +86,11 @@ func ensureE2ENTMBin() (string, error) {
 		}
 		outPath := filepath.Join(outDir, binName)
 
-		cmd := exec.Command("go", "build", "-o", outPath, "./cmd/ntm")
+		cmd := exec.Command("go", "build", "-o", outPath, "./cmd/herdctl")
 		cmd.Dir = repoRoot
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			e2eNTMBinErr = fmt.Errorf("go build ./cmd/ntm: %w output=%s", err, string(out))
+			e2eNTMBinErr = fmt.Errorf("go build ./cmd/herdctl: %w output=%s", err, string(out))
 			return
 		}
 		e2eNTMBinPath = outPath

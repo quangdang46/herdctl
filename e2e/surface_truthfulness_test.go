@@ -96,7 +96,7 @@ func ntmBinary(t *testing.T, tags string) string {
 	if tags != "" {
 		args = append(args, "-tags", tags)
 	}
-	args = append(args, "./cmd/ntm")
+	args = append(args, "./cmd/herdctl")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()

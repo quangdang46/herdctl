@@ -261,7 +261,7 @@ func bulkAssignPaneListError(err error) (string, string) {
 	case tmux.CommandErrorSessionNotFound, tmux.CommandErrorPaneNotFound:
 		// list-panes is session-scoped. tmux commonly reports a missing session as
 		// "can't find window", but there is no pane selector at this boundary.
-		return ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions"
+		return ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions"
 	case tmux.CommandErrorTimeout, tmux.CommandErrorCanceled:
 		return ErrCodeTimeout, "Retry after confirming the tmux server is responsive"
 	default:

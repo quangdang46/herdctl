@@ -310,7 +310,7 @@ func BuildEventsOutput(opts EventsOptions) (EventsOutput, int) {
 		OldestCursor:    stats.OldestCursor,
 		LatestCursor:    stats.NewestCursor,
 		RetentionPeriod: stats.RetentionPeriod.String(),
-		ResyncCommand:   "ntm --robot-snapshot",
+		ResyncCommand:   "herdctl --robot-snapshot",
 	}
 
 	if boundedness != nil {
@@ -460,7 +460,7 @@ func filterAttentionEventsByProfile(events []AttentionEvent, profile string) []A
 }
 
 func buildAttentionNextCommand(opts AttentionOptions, cursor int64) string {
-	parts := []string{fmt.Sprintf("ntm --robot-attention --attention-cursor=%d", cursor)}
+	parts := []string{fmt.Sprintf("herdctl --robot-attention --attention-cursor=%d", cursor)}
 	if opts.Session != "" {
 		parts = append(parts, fmt.Sprintf("--attention-session=%s", opts.Session))
 	}
@@ -594,7 +594,7 @@ func PrintOverlay(opts OverlayOptions) error {
 			OverlayOptions{Session: session, Cursor: opts.Cursor, NoWait: opts.NoWait},
 			fmt.Errorf("session %q not found", session),
 			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		))
 	}
 
@@ -835,7 +835,7 @@ func PrintDigest(opts DigestOptions) error {
 		OldestCursor:    stats.OldestCursor,
 		LatestCursor:    stats.NewestCursor,
 		RetentionPeriod: stats.RetentionPeriod.String(),
-		ResyncCommand:   "ntm --robot-snapshot",
+		ResyncCommand:   "herdctl --robot-snapshot",
 	}
 	activeIncidents, err := snapshotIncidentsFromStore(currentProjectionStore())
 	if err != nil {
@@ -960,7 +960,7 @@ func GetDigest(opts DigestOptions) (*DigestResponse, error) {
 		OldestCursor:    stats.OldestCursor,
 		LatestCursor:    stats.NewestCursor,
 		RetentionPeriod: stats.RetentionPeriod.String(),
-		ResyncCommand:   "ntm --robot-snapshot",
+		ResyncCommand:   "herdctl --robot-snapshot",
 	}
 	activeIncidents, err := snapshotIncidentsFromStore(currentProjectionStore())
 	if err != nil {
@@ -1215,7 +1215,7 @@ func PrintAttention(opts AttentionOptions) int {
 
 	// Build replay window info
 	stats := feed.Stats()
-	resyncCmd := "ntm --robot-snapshot"
+	resyncCmd := "herdctl --robot-snapshot"
 	replayWindow := &SnapshotReplayWindowInfo{
 		Supported:       true,
 		OldestCursor:    stats.OldestCursor,

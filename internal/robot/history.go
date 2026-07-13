@@ -72,7 +72,7 @@ func GetHistory(opts HistoryOptions) (*HistoryOutput, error) {
 			output.RobotResponse = NewErrorResponse(
 				fmt.Errorf("session '%s' not found and no history exists", opts.Session),
 				ErrCodeSessionNotFound,
-				"Use 'ntm list' to see available sessions",
+				"Use 'herdctl list' to see available sessions",
 			)
 			return output, nil
 		}
@@ -323,9 +323,9 @@ func generateHistoryHints(output HistoryOutput, opts HistoryOptions) *HistoryAge
 
 	// Suggested commands
 	hints.SuggestedCommands = []string{
-		fmt.Sprintf("ntm --robot-history=%s --stats", opts.Session),
-		fmt.Sprintf("ntm --robot-history=%s --last=10", opts.Session),
-		fmt.Sprintf("ntm --robot-history=%s --since=1h", opts.Session),
+		fmt.Sprintf("herdctl --robot-history=%s --stats", opts.Session),
+		fmt.Sprintf("herdctl --robot-history=%s --last=10", opts.Session),
+		fmt.Sprintf("herdctl --robot-history=%s --since=1h", opts.Session),
 	}
 
 	if next, pages := paginationHintOffsets(output.Pagination); next != nil {

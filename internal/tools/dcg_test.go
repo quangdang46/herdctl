@@ -136,8 +136,8 @@ func TestExtractRCHInnerCommand(t *testing.T) {
 		},
 		{
 			name:     "legacy rch offload passthrough",
-			command:  "rch offload go build ./cmd/ntm",
-			expected: "go build ./cmd/ntm",
+			command:  "rch offload go build ./cmd/herdctl",
+			expected: "go build ./cmd/herdctl",
 			ok:       true,
 		},
 		{
@@ -153,7 +153,7 @@ func TestExtractRCHInnerCommand(t *testing.T) {
 		},
 		{
 			name:    "non-rch command",
-			command: "go build ./cmd/ntm",
+			command: "go build ./cmd/herdctl",
 			ok:      false,
 		},
 		// Edge cases for coverage

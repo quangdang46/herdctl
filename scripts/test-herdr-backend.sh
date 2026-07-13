@@ -16,7 +16,7 @@
 # Usage (from repo root):
 #   ./scripts/test-herdr-backend.sh
 #   NTM_BIN=/tmp/herdctl ./scripts/test-herdr-backend.sh
-#   go build -o /tmp/herdctl ./cmd/ntm && NTM_BIN=/tmp/herdctl ./scripts/test-herdr-backend.sh
+#   go build -o /tmp/herdctl ./cmd/herdctl && NTM_BIN=/tmp/herdctl ./scripts/test-herdr-backend.sh
 #
 # Exit codes: 0 on full pass, non-zero on any failure.
 # Each case logs backend, registry path, workspace_id, agent names, exit codes.
@@ -155,8 +155,8 @@ resolve_ntm() {
     return 0
   fi
 
-  # Prefer a prebuilt binary (go build -o /tmp/herdctl ./cmd/ntm) over go run.
-  for candidate in /tmp/herdctl "${ROOT_DIR}/ntm" "${ROOT_DIR}/cmd/ntm/ntm"; do
+  # Prefer a prebuilt binary (go build -o /tmp/herdctl ./cmd/herdctl) over go run.
+  for candidate in /tmp/herdctl "${ROOT_DIR}/ntm" "${ROOT_DIR}/cmd/herdctl/ntm"; do
     if [[ -x "$candidate" ]]; then
       # Skip wrong-arch binaries (e.g. cross-compiled leftovers).
       if "$candidate" --help >/dev/null 2>&1 || "$candidate" version >/dev/null 2>&1; then
@@ -169,8 +169,8 @@ resolve_ntm() {
   done
 
   if command -v go >/dev/null 2>&1; then
-    NTM_CMD=(go run ./cmd/ntm)
-    info "using: go run ./cmd/ntm"
+    NTM_CMD=(go run ./cmd/herdctl)
+    info "using: go run ./cmd/herdctl"
     return 0
   fi
 

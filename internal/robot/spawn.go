@@ -301,7 +301,7 @@ func GetSpawn(opts SpawnOptions, cfg *config.Config) (*SpawnOutput, error) {
 
 	// Safety check: fail if session already exists (when --spawn-safety is enabled)
 	if opts.Safety && backendSessionExists(opts.Session) {
-		output.Error = fmt.Sprintf("session '%s' already exists (--spawn-safety mode prevents reuse; use 'ntm kill %s' first)", opts.Session, opts.Session)
+		output.Error = fmt.Sprintf("session '%s' already exists (--spawn-safety mode prevents reuse; use 'herdctl kill %s' first)", opts.Session, opts.Session)
 		output.RobotResponse = NewErrorResponse(fmt.Errorf("%s", output.Error), ErrCodeInvalidFlag, "Choose a new session name or disable --spawn-safety")
 		return output, nil
 	}

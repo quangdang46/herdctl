@@ -61,7 +61,7 @@ mkdir -p "${GOLDEN_DIR}" "${SCREENSHOTS_DIR}" "${VHS_TMP_ROOT}"
 
 # Build the local ntm binary once so tapes can rely on ./ntm.
 echo "Building ntm binary for VHS runs..."
-if ! (cd "${PROJECT_ROOT}" && go build -o ntm ./cmd/ntm) >/dev/null 2>&1; then
+if ! (cd "${PROJECT_ROOT}" && go build -o ntm ./cmd/herdctl) >/dev/null 2>&1; then
     echo -e "${RED}FAILED to build ./ntm for VHS tests${NC}"
     exit 2
 fi

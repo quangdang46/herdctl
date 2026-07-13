@@ -134,7 +134,7 @@ func TestSummarizeSessionStructuredJSON(t *testing.T) {
     "errors": ["Error: foo"],
     "decisions": ["Use cobra"],
     "files": {
-      "created": ["cmd/ntm/main.go"],
+      "created": ["cmd/herdctl/main.go"],
       "modified": ["internal/cli/root.go"],
       "deleted": ["old.txt"]
     }
@@ -159,7 +159,7 @@ func TestSummarizeSessionStructuredJSON(t *testing.T) {
 	var hasCreated, hasModified, hasDeleted bool
 	for _, f := range summary.Files {
 		switch f.Path {
-		case "cmd/ntm/main.go":
+		case "cmd/herdctl/main.go":
 			hasCreated = f.Action == FileActionCreated
 		case "internal/cli/root.go":
 			hasModified = f.Action == FileActionModified
@@ -548,7 +548,7 @@ func TestExtractFileChanges(t *testing.T) {
 			name: "go file paths",
 			lines: []string{
 				"Created internal/summary/generator.go",
-				"Modified cmd/ntm/main.go",
+				"Modified cmd/herdctl/main.go",
 			},
 			expectMin: 2,
 		},
@@ -613,7 +613,7 @@ func TestExtractPathsFromLine(t *testing.T) {
 		},
 		{
 			name:      "cmd path",
-			line:      "Created cmd/ntm/main.go",
+			line:      "Created cmd/herdctl/main.go",
 			expectMin: 1,
 		},
 		{
@@ -1221,7 +1221,7 @@ func BenchmarkSummarizeSession(b *testing.B) {
 func BenchmarkExtractFileChanges(b *testing.B) {
 	lines := []string{
 		"Created internal/summary/generator.go",
-		"Modified cmd/ntm/main.go",
+		"Modified cmd/herdctl/main.go",
 		"Updated src/components/Button.tsx",
 		"Added tests/unit/test_main.py",
 		"Changed config/settings.yaml",

@@ -51,7 +51,7 @@ func TestPrintCompactHelp(t *testing.T) {
 
 	// Verify key components exist
 	expected := []string{
-		"NTM - Named Tmux Manager",
+		"herdctl - Agent Control Plane",
 		"Commands:",
 		"spawn",
 		"Send prompts to agents",
@@ -90,7 +90,7 @@ func TestPrintMinimalHelp(t *testing.T) {
 		"Kill a session",                           // kill description
 		"Show help information",                    // help description
 		"QUICK START",                              // Quick start section
-		"For all commands: ntm --full",             // Instructions for full help
+		"For all commands: herdctl --full",             // Instructions for full help
 	}
 
 	for _, exp := range expected {
@@ -218,8 +218,8 @@ func TestHelpQuickStartSection(t *testing.T) {
 	}
 
 	// Should have an example command
-	if !strings.Contains(output, "ntm spawn") {
-		t.Error("Expected quick start to contain 'ntm spawn' example")
+	if !strings.Contains(output, "herdctl spawn") {
+		t.Error("Expected quick start to contain 'herdctl spawn' example")
 	}
 }
 
@@ -233,7 +233,7 @@ func TestHelpShellSetupSection(t *testing.T) {
 		t.Error("Expected help output to contain 'Shell setup:' section")
 	}
 
-	if !strings.Contains(output, "ntm shell") {
-		t.Error("Expected shell setup to contain 'ntm shell' command")
+	if !strings.Contains(output, "herdctl shell") {
+		t.Error("Expected shell setup to contain 'herdctl shell' command")
 	}
 }

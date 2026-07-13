@@ -30,7 +30,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build \
         -X github.com/Dicklesworthstone/ntm/internal/cli.Commit=${COMMIT} \
         -X github.com/Dicklesworthstone/ntm/internal/cli.Date=${DATE} \
         -X github.com/Dicklesworthstone/ntm/internal/cli.BuiltBy=docker" \
-    -o /ntm ./cmd/ntm
+    -o /ntm ./cmd/herdctl
 
 # Runtime stage
 FROM alpine:3.19

@@ -347,7 +347,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "robot-limit", Flag: "--robot-limit", Type: "int", Required: false, Default: "0", Description: "Max sessions to return (alias: --limit)"},
 				{Name: "robot-offset", Flag: "--robot-offset", Type: "int", Required: false, Default: "0", Description: "Pagination offset for sessions (alias: --offset)"},
 			},
-			Examples: []string{"ntm --robot-status"},
+			Examples: []string{"herdctl --robot-status"},
 		},
 		{
 			Name:        "context",
@@ -357,7 +357,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "session", Flag: "--robot-context", Type: "string", Required: true, Description: "Session name to analyze"},
 			},
-			Examples: []string{"ntm --robot-context=myproject"},
+			Examples: []string{"herdctl --robot-context=myproject"},
 		},
 		{
 			Name:        "ensemble",
@@ -367,7 +367,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "session", Flag: "--robot-ensemble", Type: "string", Required: true, Description: "Session name to inspect"},
 			},
-			Examples: []string{"ntm --robot-ensemble=myproject"},
+			Examples: []string{"herdctl --robot-ensemble=myproject"},
 		},
 		{
 			Name:        "ensemble-modes",
@@ -381,10 +381,10 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "offset", Flag: "--offset", Type: "int", Required: false, Default: "0", Description: "Pagination offset"},
 			},
 			Examples: []string{
-				"ntm --robot-ensemble-modes",
-				"ntm --robot-ensemble-modes --tier=all",
-				"ntm --robot-ensemble-modes --category=Formal --tier=all",
-				"ntm --robot-ensemble-modes --limit=10 --offset=20",
+				"herdctl --robot-ensemble-modes",
+				"herdctl --robot-ensemble-modes --tier=all",
+				"herdctl --robot-ensemble-modes --category=Formal --tier=all",
+				"herdctl --robot-ensemble-modes --limit=10 --offset=20",
 			},
 		},
 		{
@@ -393,7 +393,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "ensemble",
 			Description: "List available ensemble presets with their mode configurations and budgets.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-ensemble-presets"},
+			Examples:    []string{"herdctl --robot-ensemble-presets"},
 		},
 		{
 			Name:        "ensemble-suggest",
@@ -405,8 +405,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "suggest-id-only", Flag: "--suggest-id-only", Type: "bool", Required: false, Description: "Return only the preset ID"},
 			},
 			Examples: []string{
-				"ntm --robot-ensemble-suggest='What security issues exist?'",
-				"ntm --robot-ensemble-suggest='Review architecture' --suggest-id-only",
+				"herdctl --robot-ensemble-suggest='What security issues exist?'",
+				"herdctl --robot-ensemble-suggest='Review architecture' --suggest-id-only",
 			},
 		},
 		{
@@ -420,8 +420,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "stop-no-collect", Flag: "--stop-no-collect", Type: "bool", Required: false, Description: "Skip partial output collection"},
 			},
 			Examples: []string{
-				"ntm --robot-ensemble-stop=myproject",
-				"ntm --robot-ensemble-stop=myproject --stop-force",
+				"herdctl --robot-ensemble-stop=myproject",
+				"herdctl --robot-ensemble-stop=myproject --stop-force",
 			},
 		},
 		{
@@ -436,8 +436,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "robot-offset", Flag: "--robot-offset", Type: "int", Required: false, Default: "0", Description: "Pagination offset for sessions (alias: --offset)"},
 			},
 			Examples: []string{
-				"ntm --robot-snapshot",
-				"ntm --robot-snapshot --since=2025-01-15T10:00:00Z",
+				"herdctl --robot-snapshot",
+				"herdctl --robot-snapshot --since=2025-01-15T10:00:00Z",
 			},
 		},
 		{
@@ -451,8 +451,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "panes", Flag: "--panes", Type: "string", Required: false, Description: "Comma-separated N, W.P, or %N pane selectors"},
 			},
 			Examples: []string{
-				"ntm --robot-tail=myproject",
-				"ntm --robot-tail=myproject --lines=50 --panes=0.1,%7",
+				"herdctl --robot-tail=myproject",
+				"herdctl --robot-tail=myproject --lines=50 --panes=0.1,%7",
 			},
 		},
 		{
@@ -466,9 +466,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "verbose", Flag: "--verbose", Type: "bool", Required: false, Description: "Include raw sample output in the response"},
 			},
 			Examples: []string{
-				"ntm --robot-is-working=myproject",
-				"ntm --robot-is-working=myproject --panes=0.1,%7",
-				"ntm --robot-is-working=myproject --verbose",
+				"herdctl --robot-is-working=myproject",
+				"herdctl --robot-is-working=myproject --panes=0.1,%7",
+				"herdctl --robot-is-working=myproject --verbose",
 			},
 		},
 		{
@@ -484,8 +484,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "type", Flag: "--type", Type: "string", Required: false, Description: "Filter by agent type"},
 			},
 			Examples: []string{
-				"ntm --robot-errors=myproject --lines=100",
-				"ntm --robot-errors=myproject --errors-since=5m --type=claude",
+				"herdctl --robot-errors=myproject --lines=100",
+				"herdctl --robot-errors=myproject --errors-since=5m --type=claude",
 			},
 		},
 		{
@@ -501,8 +501,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "verbose", Flag: "--verbose", Type: "bool", Required: false, Description: "Include raw sample output in the response"},
 			},
 			Examples: []string{
-				"ntm --robot-agent-health=myproject",
-				"ntm --robot-agent-health=myproject --panes=0.1,%7 --verbose",
+				"herdctl --robot-agent-health=myproject",
+				"herdctl --robot-agent-health=myproject --panes=0.1,%7 --verbose",
 			},
 		},
 		{
@@ -513,7 +513,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "session", Flag: "--robot-health-oauth", Type: "string", Required: true, Description: "Session name"},
 			},
-			Examples: []string{"ntm --robot-health-oauth=myproject"},
+			Examples: []string{"herdctl --robot-health-oauth=myproject"},
 		},
 		{
 			Name:        "logs",
@@ -526,8 +526,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "logs-limit", Flag: "--logs-limit", Type: "int", Required: false, Default: "100", Description: "Max lines returned per pane"},
 			},
 			Examples: []string{
-				"ntm --robot-logs=myproject",
-				"ntm --robot-logs=myproject --logs-panes=1,2 --logs-limit=50",
+				"herdctl --robot-logs=myproject",
+				"herdctl --robot-logs=myproject --logs-panes=1,2 --logs-limit=50",
 			},
 		},
 		{
@@ -548,8 +548,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "lines", Flag: "--lines", Type: "int", Required: false, Default: "100", Description: "Lines captured per pane for health sampling"},
 			},
 			Examples: []string{
-				"ntm --robot-monitor=myproject --interval=30s",
-				"ntm --robot-monitor=myproject --panes=2,3 --output=/tmp/monitor.jsonl",
+				"herdctl --robot-monitor=myproject --interval=30s",
+				"herdctl --robot-monitor=myproject --panes=2,3 --output=/tmp/monitor.jsonl",
 			},
 		},
 		{
@@ -565,8 +565,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "interval", Flag: "--interval", Type: "string", Required: false, Default: "30s", Description: "Status polling interval"},
 			},
 			Examples: []string{
-				"ntm --robot-watch-bead=myproject --bead=bd-abc123",
-				"ntm --robot-watch-bead=myproject --bead=bd-abc123 --panes=2,3 --lines=300 --interval=45s",
+				"herdctl --robot-watch-bead=myproject --bead=bd-abc123",
+				"herdctl --robot-watch-bead=myproject --bead=bd-abc123 --panes=2,3 --lines=300 --interval=45s",
 			},
 		},
 		{
@@ -580,7 +580,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "inspect-lines", Flag: "--inspect-lines", Type: "int", Required: false, Default: "100", Description: "Lines to capture"},
 				{Name: "inspect-code", Flag: "--inspect-code", Type: "bool", Required: false, Description: "Parse code blocks from output"},
 			},
-			Examples: []string{"ntm --robot-inspect-pane=myproject --inspect-index=1 --inspect-code"},
+			Examples: []string{"herdctl --robot-inspect-pane=myproject --inspect-index=1 --inspect-code"},
 		},
 		{
 			Name:        "inspect-session",
@@ -590,7 +590,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "session", Flag: "--robot-inspect-session", Type: "string", Required: true, Description: "Session name"},
 			},
-			Examples: []string{"ntm --robot-inspect-session=myproject"},
+			Examples: []string{"herdctl --robot-inspect-session=myproject"},
 		},
 		{
 			Name:        "inspect-agent",
@@ -600,7 +600,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "agent_id", Flag: "--robot-inspect-agent", Type: "string", Required: true, Description: "Runtime agent id in SESSION:PANE form"},
 			},
-			Examples: []string{"ntm --robot-inspect-agent=myproject:%1"},
+			Examples: []string{"herdctl --robot-inspect-agent=myproject:%1"},
 		},
 		{
 			Name:        "inspect-work",
@@ -610,7 +610,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "bead_id", Flag: "--robot-inspect-work", Type: "string", Required: true, Description: "Bead id from snapshot/work surfaces"},
 			},
-			Examples: []string{"ntm --robot-inspect-work=bd-j9jo3.6.6"},
+			Examples: []string{"herdctl --robot-inspect-work=bd-j9jo3.6.6"},
 		},
 		{
 			Name:        "inspect-coordination",
@@ -620,7 +620,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "agent_name", Flag: "--robot-inspect-coordination", Type: "string", Required: true, Description: "Agent Mail identity / coordination key"},
 			},
-			Examples: []string{"ntm --robot-inspect-coordination=BlueLake"},
+			Examples: []string{"herdctl --robot-inspect-coordination=BlueLake"},
 		},
 		{
 			Name:        "inspect-quota",
@@ -630,7 +630,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "quota_id", Flag: "--robot-inspect-quota", Type: "string", Required: true, Description: "Provider/account identity, e.g. claude/default (anthropic/default also accepted)"},
 			},
-			Examples: []string{"ntm --robot-inspect-quota=claude/default"},
+			Examples: []string{"herdctl --robot-inspect-quota=claude/default"},
 		},
 		{
 			Name:        "inspect-incident",
@@ -640,7 +640,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "incident_id", Flag: "--robot-inspect-incident", Type: "string", Required: true, Description: "Incident id from snapshot/attention surfaces"},
 			},
-			Examples: []string{"ntm --robot-inspect-incident=inc_20260323_abc123"},
+			Examples: []string{"herdctl --robot-inspect-incident=inc_20260323_abc123"},
 		},
 		{
 			Name:        "files",
@@ -652,7 +652,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "files-window", Flag: "--files-window", Type: "string", Required: false, Default: "15m", Description: "Time window: 5m, 15m, 1h, all"},
 				{Name: "files-limit", Flag: "--files-limit", Type: "int", Required: false, Default: "100", Description: "Max changes to return"},
 			},
-			Examples: []string{"ntm --robot-files=myproject --files-window=1h"},
+			Examples: []string{"herdctl --robot-files=myproject --files-window=1h"},
 		},
 		{
 			Name:        "metrics",
@@ -663,7 +663,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "session", Flag: "--robot-metrics", Type: "string", Required: false, Description: "Optional session filter"},
 				{Name: "metrics-period", Flag: "--metrics-period", Type: "string", Required: false, Default: "24h", Description: "Period: 1h, 24h, 7d, all"},
 			},
-			Examples: []string{"ntm --robot-metrics=myproject --metrics-period=7d"},
+			Examples: []string{"herdctl --robot-metrics=myproject --metrics-period=7d"},
 		},
 		{
 			Name:        "activity",
@@ -676,8 +676,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "activity-type", Flag: "--activity-type", Type: "string", Required: false, Description: "Comma-separated agent types to filter: claude, codex, gemini"},
 			},
 			Examples: []string{
-				"ntm --robot-activity=myproject --activity-type=claude",
-				"ntm --robot-activity=myproject --panes=0.1,%7 --activity-type=claude,codex",
+				"herdctl --robot-activity=myproject --activity-type=claude",
+				"herdctl --robot-activity=myproject --panes=0.1,%7 --activity-type=claude,codex",
 			},
 		},
 		{
@@ -686,7 +686,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "state",
 			Description: "Dashboard summary as markdown or JSON.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-dashboard"},
+			Examples:    []string{"herdctl --robot-dashboard"},
 		},
 		{
 			Name:        "terse",
@@ -694,7 +694,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "state",
 			Description: "Single-line encoded state for minimal token usage.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-terse"},
+			Examples:    []string{"herdctl --robot-terse"},
 		},
 		{
 			Name:        "markdown",
@@ -707,7 +707,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "md-max-beads", Flag: "--md-max-beads", Type: "int", Required: false, Description: "Max beads per category"},
 				{Name: "md-max-alerts", Flag: "--md-max-alerts", Type: "int", Required: false, Description: "Max alerts to show"},
 			},
-			Examples: []string{"ntm --robot-markdown --md-compact --md-session=myproject"},
+			Examples: []string{"herdctl --robot-markdown --md-compact --md-session=myproject"},
 		},
 		{
 			Name:        "health",
@@ -717,7 +717,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "session", Flag: "--robot-health", Type: "string", Required: false, Description: "Session for per-agent health, empty for project health"},
 			},
-			Examples: []string{"ntm --robot-health=myproject"},
+			Examples: []string{"herdctl --robot-health=myproject"},
 		},
 		{
 			Name:        "diagnose",
@@ -730,7 +730,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "diagnose-brief", Flag: "--diagnose-brief", Type: "bool", Required: false, Description: "Minimal output (summary only)"},
 				{Name: "diagnose-pane", Flag: "--diagnose-pane", Type: "int", Required: false, Description: "Diagnose specific pane only"},
 			},
-			Examples: []string{"ntm --robot-diagnose=myproject --diagnose-fix"},
+			Examples: []string{"herdctl --robot-diagnose=myproject --diagnose-fix"},
 		},
 		{
 			Name:        "health-restart-stuck",
@@ -743,8 +743,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Report stuck panes without restarting"},
 			},
 			Examples: []string{
-				"ntm --robot-health-restart-stuck=myproject",
-				"ntm --robot-health-restart-stuck=myproject --stuck-threshold=10m --dry-run",
+				"herdctl --robot-health-restart-stuck=myproject",
+				"herdctl --robot-health-restart-stuck=myproject --stuck-threshold=10m --dry-run",
 			},
 		},
 		{
@@ -760,8 +760,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "probe-aggressive", Flag: "--probe-aggressive", Type: "bool", Required: false, Description: "Fallback to interrupt_test if keystroke_echo fails"},
 			},
 			Examples: []string{
-				"ntm --robot-probe=myproject",
-				"ntm --robot-probe=myproject --panes=2 --probe-method=interrupt_test",
+				"herdctl --robot-probe=myproject",
+				"herdctl --robot-probe=myproject --panes=2 --probe-method=interrupt_test",
 			},
 		},
 		{
@@ -774,8 +774,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "since", Flag: "--since", Type: "string", Required: false, Default: "15m", Description: "Duration or RFC3339 timestamp to look back from"},
 			},
 			Examples: []string{
-				"ntm --robot-diff=myproject --since=10m",
-				"ntm --robot-diff=myproject --since=2026-03-22T03:50:00Z",
+				"herdctl --robot-diff=myproject --since=10m",
+				"herdctl --robot-diff=myproject --since=2026-03-22T03:50:00Z",
 			},
 		},
 		{
@@ -788,8 +788,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "since", Flag: "--since", Type: "string", Required: false, Default: "30m", Description: "Duration or RFC3339 timestamp to look back from"},
 			},
 			Examples: []string{
-				"ntm --robot-summary=myproject --since=1h",
-				"ntm --robot-summary=myproject --since=2026-03-22T03:50:00Z",
+				"herdctl --robot-summary=myproject --since=1h",
+				"herdctl --robot-summary=myproject --since=2026-03-22T03:50:00Z",
 			},
 		},
 
@@ -812,12 +812,12 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "profile", Flag: "--profile", Type: "string", Required: false, Default: "operator", Description: "Attention profile: operator, debug, minimal, alerts"},
 			},
 			Examples: []string{
-				"ntm --robot-events",
-				"ntm --robot-events --since-cursor=42 --events-limit=50",
-				"ntm --robot-events --events-incident=inc-20260322-abc --events-window-before=5m --events-window-after=1m",
-				"ntm --robot-events --events-as-of=2026-03-22T03:50:00Z --events-limit=25",
-				"ntm --robot-events --events-category=agent --events-actionability=action_required",
-				"ntm --robot-events --profile=debug",
+				"herdctl --robot-events",
+				"herdctl --robot-events --since-cursor=42 --events-limit=50",
+				"herdctl --robot-events --events-incident=inc-20260322-abc --events-window-before=5m --events-window-after=1m",
+				"herdctl --robot-events --events-as-of=2026-03-22T03:50:00Z --events-limit=25",
+				"herdctl --robot-events --events-category=agent --events-actionability=action_required",
+				"herdctl --robot-events --profile=debug",
 			},
 		},
 		{
@@ -829,8 +829,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "profile", Flag: "--profile", Type: "string", Required: false, Default: "operator", Description: "Attention profile: operator, debug, minimal, alerts"},
 			},
 			Examples: []string{
-				"ntm --robot-digest",
-				"ntm --robot-digest --profile=minimal",
+				"herdctl --robot-digest",
+				"herdctl --robot-digest --profile=minimal",
 			},
 		},
 		{
@@ -847,9 +847,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "attention-condition", Flag: "--attention-condition", Type: "string", Required: false, Default: "attention", Description: "Which condition to wait for: attention, action_required, mail_pending"},
 			},
 			Examples: []string{
-				"ntm --robot-attention",
-				"ntm --robot-attention --attention-cursor=42 --attention-timeout=2m",
-				"ntm --robot-attention --attention-session=proj --profile=debug --attention-condition=action_required",
+				"herdctl --robot-attention",
+				"herdctl --robot-attention --attention-cursor=42 --attention-timeout=2m",
+				"herdctl --robot-attention --attention-session=proj --profile=debug --attention-condition=action_required",
 			},
 		},
 
@@ -876,11 +876,11 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview without executing"},
 			},
 			Examples: []string{
-				"ntm --robot-send=proj --msg='Fix auth' --type=claude",
-				"ntm --robot-send=proj --msg='Fix auth' --pane=%3",
-				"ntm --robot-send=proj --msg-file=/tmp/prompt.txt --type=codex",
-				"ntm --robot-send=proj --msg='draft' --enter=false",
-				"ntm --robot-send=proj --msg='hello' --track --timeout=30s",
+				"herdctl --robot-send=proj --msg='Fix auth' --type=claude",
+				"herdctl --robot-send=proj --msg='Fix auth' --pane=%3",
+				"herdctl --robot-send=proj --msg-file=/tmp/prompt.txt --type=codex",
+				"herdctl --robot-send=proj --msg='draft' --enter=false",
+				"herdctl --robot-send=proj --msg='hello' --track --timeout=30s",
 			},
 		},
 		{
@@ -895,7 +895,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "type", Flag: "--type", Type: "string", Required: false, Description: "Filter by agent type"},
 				{Name: "panes", Flag: "--panes", Type: "string", Required: false, Description: "Filter by N, W.P, or %N pane selectors"},
 			},
-			Examples: []string{"ntm --robot-ack=proj --panes=0.1,%7 --timeout=60s"},
+			Examples: []string{"herdctl --robot-ack=proj --panes=0.1,%7 --timeout=60s"},
 		},
 		{
 			Name:        "interrupt",
@@ -914,8 +914,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview without executing"},
 			},
 			Examples: []string{
-				"ntm --robot-interrupt=proj --msg='Stop and fix bug'",
-				"ntm --robot-interrupt=proj --panes=1.0,%7 --force --timeout=15s",
+				"herdctl --robot-interrupt=proj --msg='Stop and fix bug'",
+				"herdctl --robot-interrupt=proj --panes=1.0,%7 --force --timeout=15s",
 			},
 		},
 		{
@@ -929,8 +929,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "overlay-no-wait", Flag: "--overlay-no-wait", Type: "bool", Required: false, Description: "Return after launch instead of blocking until the popup is dismissed"},
 			},
 			Examples: []string{
-				"ntm --robot-overlay --overlay-session=myproject",
-				"ntm --robot-overlay --overlay-cursor=42 --overlay-no-wait",
+				"herdctl --robot-overlay --overlay-session=myproject",
+				"herdctl --robot-overlay --overlay-cursor=42 --overlay-no-wait",
 			},
 		},
 		{
@@ -948,9 +948,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "restart-prompt", Flag: "--restart-prompt", Type: "string", Required: false, Description: "Explicit prompt to send after restart; overrides the bead template"},
 			},
 			Examples: []string{
-				"ntm --robot-restart-pane=proj --panes=1,2",
-				"ntm --robot-restart-pane=proj --type=claude --dry-run",
-				"ntm --robot-restart-pane=proj --panes=2 --restart-bead=bd-abc12",
+				"herdctl --robot-restart-pane=proj --panes=1,2",
+				"herdctl --robot-restart-pane=proj --type=claude --dry-run",
+				"herdctl --robot-restart-pane=proj --panes=2 --restart-bead=bd-abc12",
 			},
 		},
 		{
@@ -970,9 +970,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "hard-kill-only", Flag: "--hard-kill-only", Type: "bool", Required: false, Description: "Skip the normal exit sequence and go straight to kill -9"},
 			},
 			Examples: []string{
-				"ntm --robot-smart-restart=myproject --panes=0.1,%7",
-				"ntm --robot-smart-restart=myproject --dry-run --prompt='resume work'",
-				"ntm --robot-smart-restart=myproject --panes=2 --hard-kill",
+				"herdctl --robot-smart-restart=myproject --panes=0.1,%7",
+				"herdctl --robot-smart-restart=myproject --dry-run --prompt='resume work'",
+				"herdctl --robot-smart-restart=myproject --panes=2 --hard-kill",
 			},
 		},
 		{
@@ -994,9 +994,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "wait-transition", Flag: "--wait-transition", Type: "bool", Required: false, Description: "Require pane-state conditions to leave and re-enter the target state before returning"},
 			},
 			Examples: []string{
-				"ntm --robot-wait=proj --wait-until=idle",
-				"ntm --robot-wait=proj --wait-until=action_required --attention-cursor=42 --profile=operator",
-				"ntm --robot-wait=proj --wait-until=idle --wait-transition --timeout=2m --panes=0.1,%7",
+				"herdctl --robot-wait=proj --wait-until=idle",
+				"herdctl --robot-wait=proj --wait-until=action_required --attention-cursor=42 --profile=operator",
+				"herdctl --robot-wait=proj --wait-until=idle --wait-transition --timeout=2m --panes=0.1,%7",
 			},
 		},
 		{
@@ -1010,7 +1010,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "type", Flag: "--type", Type: "string", Required: false, Description: "Filter by agent type"},
 				{Name: "exclude", Flag: "--exclude", Type: "string", Required: false, Description: "Exclude pane indices"},
 			},
-			Examples: []string{"ntm --robot-route=proj --strategy=least-loaded --type=claude --exclude=0"},
+			Examples: []string{"herdctl --robot-route=proj --strategy=least-loaded --type=claude --exclude=0"},
 		},
 		{
 			Name:        "assign",
@@ -1022,7 +1022,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "beads", Flag: "--beads", Type: "string", Required: false, Description: "Specific bead IDs to assign (comma-separated)"},
 				{Name: "strategy", Flag: "--strategy", Type: "string", Required: false, Default: "balanced", Description: "Strategy: balanced, speed, quality, dependency"},
 			},
-			Examples: []string{"ntm --robot-assign=proj --strategy=speed --beads=bd-abc,bd-xyz"},
+			Examples: []string{"herdctl --robot-assign=proj --strategy=speed --beads=bd-abc,bd-xyz"},
 		},
 		{
 			Name:        "bulk-assign",
@@ -1039,8 +1039,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview assignments without sending prompts"},
 			},
 			Examples: []string{
-				"ntm --robot-bulk-assign=proj --from-bv",
-				"ntm --robot-bulk-assign=proj --allocation='{\"0.1\":\"bd-abc\"}' --skip=%7 --dry-run",
+				"herdctl --robot-bulk-assign=proj --from-bv",
+				"herdctl --robot-bulk-assign=proj --allocation='{\"0.1\":\"bd-abc\"}' --skip=%7 --dry-run",
 			},
 		},
 
@@ -1067,10 +1067,10 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview without executing"},
 			},
 			Examples: []string{
-				"ntm --robot-spawn=myproject --spawn-cc=2 --spawn-cod=1 --spawn-wait --timeout=30s",
-				"ntm --robot-spawn=myproject --spawn-preset=standard",
-				"ntm --robot-spawn=myproject --spawn-label=frontend --spawn-cc=3",
-				"ntm --robot-spawn=myproject --spawn-assign-work --strategy=dependency-aware",
+				"herdctl --robot-spawn=myproject --spawn-cc=2 --spawn-cod=1 --spawn-wait --timeout=30s",
+				"herdctl --robot-spawn=myproject --spawn-preset=standard",
+				"herdctl --robot-spawn=myproject --spawn-label=frontend --spawn-cc=3",
+				"herdctl --robot-spawn=myproject --spawn-assign-work --strategy=dependency-aware",
 			},
 		},
 		{
@@ -1081,7 +1081,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "session", Flag: "--robot-agent-names", Type: "string", Required: true, Description: "Session name"},
 			},
-			Examples: []string{"ntm --robot-agent-names=myproject"},
+			Examples: []string{"herdctl --robot-agent-names=myproject"},
 		},
 		{
 			Name:        "controller-spawn",
@@ -1095,8 +1095,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "controller-no-prompt", Flag: "--controller-no-prompt", Type: "bool", Required: false, Description: "Skip sending the initial prompt"},
 			},
 			Examples: []string{
-				"ntm --robot-controller-spawn=proj",
-				"ntm --robot-controller-spawn=proj --controller-agent-type=cod --controller-no-prompt",
+				"herdctl --robot-controller-spawn=proj",
+				"herdctl --robot-controller-spawn=proj --controller-agent-type=cod --controller-no-prompt",
 			},
 		},
 		{
@@ -1113,8 +1113,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "inject-dry-run", Flag: "--inject-dry-run", Type: "bool", Required: false, Description: "Preview without sending content"},
 			},
 			Examples: []string{
-				"ntm --robot-context-inject=myproject",
-				"ntm --robot-context-inject=myproject --inject-files=AGENTS.md,README.md --inject-dry-run",
+				"herdctl --robot-context-inject=myproject",
+				"herdctl --robot-context-inject=myproject --inject-files=AGENTS.md,README.md --inject-dry-run",
 			},
 		},
 		{
@@ -1137,8 +1137,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "project", Flag: "--project", Type: "string", Required: false, Description: "Project directory override"},
 			},
 			Examples: []string{
-				"ntm --robot-ensemble-spawn=myproject --preset=project-diagnosis --question='Review architecture'",
-				"ntm --robot-ensemble-spawn=myproject --modes=A1,B13 --allow-advanced --question='Analyze risks'",
+				"herdctl --robot-ensemble-spawn=myproject --preset=project-diagnosis --question='Review architecture'",
+				"herdctl --robot-ensemble-spawn=myproject --modes=A1,B13 --allow-advanced --question='Analyze risks'",
 			},
 		},
 		{
@@ -1147,7 +1147,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "spawn",
 			Description: "List available spawn recipes/presets.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-recipes"},
+			Examples:    []string{"herdctl --robot-recipes"},
 		},
 
 		// === BEADS MANAGEMENT ===
@@ -1163,7 +1163,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "beads-type", Flag: "--beads-type", Type: "string", Required: false, Description: "Filter by type: task, bug, feature, epic, chore"},
 				{Name: "beads-limit", Flag: "--beads-limit", Type: "int", Required: false, Default: "20", Description: "Max beads to return"},
 			},
-			Examples: []string{"ntm --robot-beads-list --beads-status=open --beads-priority=1"},
+			Examples: []string{"herdctl --robot-beads-list --beads-status=open --beads-priority=1"},
 		},
 		{
 			Name:        "bead-claim",
@@ -1174,7 +1174,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "bead-id", Flag: "--robot-bead-claim", Type: "string", Required: true, Description: "Bead ID to claim"},
 				{Name: "bead-assignee", Flag: "--bead-assignee", Type: "string", Required: false, Description: "Assignee name"},
 			},
-			Examples: []string{"ntm --robot-bead-claim=bd-abc123 --bead-assignee=agent1"},
+			Examples: []string{"herdctl --robot-bead-claim=bd-abc123 --bead-assignee=agent1"},
 		},
 		{
 			Name:        "bead-create",
@@ -1189,7 +1189,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "bead-labels", Flag: "--bead-labels", Type: "string", Required: false, Description: "Comma-separated labels"},
 				{Name: "bead-depends-on", Flag: "--bead-depends-on", Type: "string", Required: false, Description: "Comma-separated dependency bead IDs"},
 			},
-			Examples: []string{"ntm --robot-bead-create --bead-title='Fix auth bug' --bead-type=bug --bead-priority=1"},
+			Examples: []string{"herdctl --robot-bead-create --bead-title='Fix auth bug' --bead-type=bug --bead-priority=1"},
 		},
 		{
 			Name:        "bead-show",
@@ -1199,7 +1199,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "bead-id", Flag: "--robot-bead-show", Type: "string", Required: true, Description: "Bead ID to show"},
 			},
-			Examples: []string{"ntm --robot-bead-show=bd-abc123"},
+			Examples: []string{"herdctl --robot-bead-show=bd-abc123"},
 		},
 		{
 			Name:        "bead-close",
@@ -1210,7 +1210,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "bead-id", Flag: "--robot-bead-close", Type: "string", Required: true, Description: "Bead ID to close"},
 				{Name: "bead-close-reason", Flag: "--bead-close-reason", Type: "string", Required: false, Description: "Reason for closing"},
 			},
-			Examples: []string{"ntm --robot-bead-close=bd-abc123 --bead-close-reason='Completed'"},
+			Examples: []string{"herdctl --robot-bead-close=bd-abc123 --bead-close-reason='Completed'"},
 		},
 
 		// === BV INTEGRATION ===
@@ -1220,7 +1220,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "bv",
 			Description: "Get bv execution plan with parallelizable tracks.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-plan"},
+			Examples:    []string{"herdctl --robot-plan"},
 		},
 		{
 			Name:        "triage",
@@ -1230,7 +1230,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "triage-limit", Flag: "--triage-limit", Type: "int", Required: false, Default: "10", Description: "Max recommendations per category"},
 			},
-			Examples: []string{"ntm --robot-triage --triage-limit=20"},
+			Examples: []string{"herdctl --robot-triage --triage-limit=20"},
 		},
 		{
 			Name:        "graph",
@@ -1238,7 +1238,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "bv",
 			Description: "Get dependency graph insights.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-graph"},
+			Examples:    []string{"herdctl --robot-graph"},
 		},
 		{
 			Name:        "forecast",
@@ -1248,7 +1248,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "target", Flag: "--robot-forecast", Type: "string", Required: true, Description: "Issue ID or 'all'"},
 			},
-			Examples: []string{"ntm --robot-forecast=bd-123", "ntm --robot-forecast=all"},
+			Examples: []string{"herdctl --robot-forecast=bd-123", "herdctl --robot-forecast=all"},
 		},
 		{
 			Name:        "suggest",
@@ -1256,7 +1256,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "bv",
 			Description: "Get hygiene suggestions from bv.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-suggest"},
+			Examples:    []string{"herdctl --robot-suggest"},
 		},
 		{
 			Name:        "impact",
@@ -1266,7 +1266,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "file", Flag: "--robot-impact", Type: "string", Required: true, Description: "File path to analyze"},
 			},
-			Examples: []string{"ntm --robot-impact=internal/cli/root.go"},
+			Examples: []string{"herdctl --robot-impact=internal/cli/root.go"},
 		},
 		{
 			Name:        "search",
@@ -1277,7 +1277,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "query", Flag: "--robot-search", Type: "string", Required: true, Description: "Search query"},
 				{Name: "limit", Flag: "--limit", Type: "int", Required: false, Default: "20", Description: "Max results"},
 			},
-			Examples: []string{"ntm --robot-search='auth error' --limit=10"},
+			Examples: []string{"herdctl --robot-search='auth error' --limit=10"},
 		},
 		{
 			Name:        "label-attention",
@@ -1287,7 +1287,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "limit", Flag: "--limit", Type: "int", Required: false, Default: "10", Description: "Max labels to return"},
 			},
-			Examples: []string{"ntm --robot-label-attention --limit=20"},
+			Examples: []string{"herdctl --robot-label-attention --limit=20"},
 		},
 		{
 			Name:        "label-flow",
@@ -1295,7 +1295,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "bv",
 			Description: "Get cross-label dependency flow from bv.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-label-flow"},
+			Examples:    []string{"herdctl --robot-label-flow"},
 		},
 		{
 			Name:        "label-health",
@@ -1303,7 +1303,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "bv",
 			Description: "Get per-label health metrics from bv.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-label-health"},
+			Examples:    []string{"herdctl --robot-label-health"},
 		},
 		{
 			Name:        "file-beads",
@@ -1314,7 +1314,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "file", Flag: "--robot-file-beads", Type: "string", Required: true, Description: "File path to analyze"},
 				{Name: "limit", Flag: "--limit", Type: "int", Required: false, Default: "10", Description: "Max bead mappings"},
 			},
-			Examples: []string{"ntm --robot-file-beads=internal/cli/root.go --limit=10"},
+			Examples: []string{"herdctl --robot-file-beads=internal/cli/root.go --limit=10"},
 		},
 		{
 			Name:        "file-hotspots",
@@ -1324,7 +1324,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "limit", Flag: "--limit", Type: "int", Required: false, Default: "10", Description: "Max hotspots"},
 			},
-			Examples: []string{"ntm --robot-file-hotspots --limit=10"},
+			Examples: []string{"herdctl --robot-file-hotspots --limit=10"},
 		},
 		{
 			Name:        "file-relations",
@@ -1336,7 +1336,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "limit", Flag: "--limit", Type: "int", Required: false, Default: "10", Description: "Max relations"},
 				{Name: "threshold", Flag: "--threshold", Type: "float", Required: false, Default: "0.0", Description: "Minimum relation weight"},
 			},
-			Examples: []string{"ntm --robot-file-relations=internal/cli/root.go --limit=10"},
+			Examples: []string{"herdctl --robot-file-relations=internal/cli/root.go --limit=10"},
 		},
 
 		// === CASS INTEGRATION ===
@@ -1348,7 +1348,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "query", Flag: "--robot-cass-search", Type: "string", Required: true, Description: "Search query"},
 			},
-			Examples: []string{"ntm --robot-cass-search='authentication error'"},
+			Examples: []string{"herdctl --robot-cass-search='authentication error'"},
 		},
 		{
 			Name:        "cass-context",
@@ -1358,7 +1358,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "query", Flag: "--robot-cass-context", Type: "string", Required: true, Description: "Task description"},
 			},
-			Examples: []string{"ntm --robot-cass-context='how to implement auth'"},
+			Examples: []string{"herdctl --robot-cass-context='how to implement auth'"},
 		},
 		{
 			Name:        "cass-status",
@@ -1366,7 +1366,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "cass",
 			Description: "Get CASS health and statistics.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-cass-status"},
+			Examples:    []string{"herdctl --robot-cass-status"},
 		},
 		{
 			Name:        "cass-insights",
@@ -1374,7 +1374,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "cass",
 			Description: "Get aggregated CASS insights about topics, patterns, and agent activity.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-cass-insights"},
+			Examples:    []string{"herdctl --robot-cass-insights"},
 		},
 
 		// === PIPELINE ===
@@ -1390,7 +1390,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Validate without executing"},
 				{Name: "pipeline-background", Flag: "--pipeline-background", Type: "bool", Required: false, Description: "Run in background"},
 			},
-			Examples: []string{"ntm --robot-pipeline-run=workflow.yaml --pipeline-session=proj --dry-run"},
+			Examples: []string{"herdctl --robot-pipeline-run=workflow.yaml --pipeline-session=proj --dry-run"},
 		},
 		{
 			Name:        "pipeline-status",
@@ -1400,7 +1400,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "run-id", Flag: "--robot-pipeline", Type: "string", Required: true, Description: "Pipeline run ID"},
 			},
-			Examples: []string{"ntm --robot-pipeline=run-20241230-123456-abcd"},
+			Examples: []string{"herdctl --robot-pipeline=run-20241230-123456-abcd"},
 		},
 		{
 			Name:        "pipeline-list",
@@ -1408,7 +1408,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "pipeline",
 			Description: "List all tracked pipelines.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-pipeline-list"},
+			Examples:    []string{"herdctl --robot-pipeline-list"},
 		},
 		{
 			Name:        "pipeline-cancel",
@@ -1418,7 +1418,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "run-id", Flag: "--robot-pipeline-cancel", Type: "string", Required: true, Description: "Pipeline run ID to cancel"},
 			},
-			Examples: []string{"ntm --robot-pipeline-cancel=run-20241230-123456-abcd"},
+			Examples: []string{"herdctl --robot-pipeline-cancel=run-20241230-123456-abcd"},
 		},
 
 		// === UTILITY ===
@@ -1428,7 +1428,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get human-readable AI agent help documentation.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-help"},
+			Examples:    []string{"herdctl --robot-help"},
 		},
 		{
 			Name:        "version",
@@ -1436,7 +1436,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get ntm version, commit, and build info.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-version"},
+			Examples:    []string{"herdctl --robot-version"},
 		},
 		{
 			Name:        "capabilities",
@@ -1450,10 +1450,10 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "capability-compact", Flag: "--capability-compact", Type: "bool", Required: false, Default: "false", Description: "Omit verbose surface, parameter, example, transport, and attention metadata"},
 			},
 			Examples: []string{
-				"ntm --robot-capabilities --capability-compact",
-				"ntm --robot-capabilities --capability-command=send --capability-compact",
-				"ntm --robot-capabilities --capability-category=control",
-				"ntm --robot-capabilities --capability-search=interrupt",
+				"herdctl --robot-capabilities --capability-compact",
+				"herdctl --robot-capabilities --capability-command=send --capability-compact",
+				"herdctl --robot-capabilities --capability-category=control",
+				"herdctl --robot-capabilities --capability-search=interrupt",
 			},
 		},
 		{
@@ -1465,8 +1465,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "type", Flag: "--robot-schema", Type: "string", Required: true, Description: "Schema type name or all"},
 			},
 			Examples: []string{
-				"ntm --robot-schema=status",
-				"ntm --robot-schema=all",
+				"herdctl --robot-schema=status",
+				"herdctl --robot-schema=all",
 			},
 		},
 		{
@@ -1478,9 +1478,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "topic", Flag: "--robot-docs", Type: "string", Required: false, Default: "", Description: "Documentation topic. Empty returns topic index."},
 			},
 			Examples: []string{
-				"ntm --robot-docs=\"\"",
-				"ntm --robot-docs=quickstart",
-				"ntm --robot-docs=exit-codes",
+				"herdctl --robot-docs=\"\"",
+				"herdctl --robot-docs=quickstart",
+				"herdctl --robot-docs=exit-codes",
 			},
 		},
 		{
@@ -1489,7 +1489,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get tool inventory and health status.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-tools"},
+			Examples:    []string{"herdctl --robot-tools"},
 		},
 		{
 			Name:        "acfs-status",
@@ -1497,7 +1497,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get setup status via ACFS (core tool availability).",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-acfs-status"},
+			Examples:    []string{"herdctl --robot-acfs-status"},
 		},
 		{
 			Name:        "setup-status",
@@ -1505,7 +1505,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Alias for --robot-acfs-status.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-setup"},
+			Examples:    []string{"herdctl --robot-setup"},
 		},
 		{
 			Name:        "default-prompts",
@@ -1513,7 +1513,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get configured per-agent-type default prompts.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-default-prompts"},
+			Examples:    []string{"herdctl --robot-default-prompts"},
 		},
 		{
 			Name:        "profile-list",
@@ -1521,7 +1521,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "List saved session profiles.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-profile-list"},
+			Examples:    []string{"herdctl --robot-profile-list"},
 		},
 		{
 			Name:        "profile-show",
@@ -1531,7 +1531,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "profile", Flag: "--robot-profile-show", Type: "string", Required: true, Description: "Profile name"},
 			},
-			Examples: []string{"ntm --robot-profile-show=myproject"},
+			Examples: []string{"herdctl --robot-profile-show=myproject"},
 		},
 		{
 			Name:        "jfp-status",
@@ -1539,7 +1539,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get JeffreysPrompts (JFP) health status.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-jfp-status"},
+			Examples:    []string{"herdctl --robot-jfp-status"},
 		},
 		{
 			Name:        "jfp-list",
@@ -1550,7 +1550,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "category", Flag: "--category", Type: "string", Required: false, Description: "Filter by category"},
 				{Name: "tag", Flag: "--tag", Type: "string", Required: false, Description: "Filter by tag"},
 			},
-			Examples: []string{"ntm --robot-jfp-list", "ntm --robot-jfp-list --category=debugging"},
+			Examples: []string{"herdctl --robot-jfp-list", "herdctl --robot-jfp-list --category=debugging"},
 		},
 		{
 			Name:        "jfp-search",
@@ -1560,7 +1560,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "query", Flag: "--robot-jfp-search", Type: "string", Required: true, Description: "Search query"},
 			},
-			Examples: []string{"ntm --robot-jfp-search='debugging'"},
+			Examples: []string{"herdctl --robot-jfp-search='debugging'"},
 		},
 		{
 			Name:        "jfp-show",
@@ -1570,7 +1570,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "id", Flag: "--robot-jfp-show", Type: "string", Required: true, Description: "Prompt ID"},
 			},
-			Examples: []string{"ntm --robot-jfp-show=prompt-123"},
+			Examples: []string{"herdctl --robot-jfp-show=prompt-123"},
 		},
 		{
 			Name:        "jfp-suggest",
@@ -1580,7 +1580,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "task", Flag: "--robot-jfp-suggest", Type: "string", Required: true, Description: "Task description"},
 			},
-			Examples: []string{"ntm --robot-jfp-suggest='build a REST API'"},
+			Examples: []string{"herdctl --robot-jfp-suggest='build a REST API'"},
 		},
 		{
 			Name:        "jfp-installed",
@@ -1588,7 +1588,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "List installed Claude Code skills from JFP.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-jfp-installed"},
+			Examples:    []string{"herdctl --robot-jfp-installed"},
 		},
 		{
 			Name:        "jfp-categories",
@@ -1596,7 +1596,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "List JFP categories with counts.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-jfp-categories"},
+			Examples:    []string{"herdctl --robot-jfp-categories"},
 		},
 		{
 			Name:        "jfp-tags",
@@ -1604,7 +1604,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "List JFP tags with counts.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-jfp-tags"},
+			Examples:    []string{"herdctl --robot-jfp-tags"},
 		},
 		{
 			Name:        "jfp-bundles",
@@ -1612,7 +1612,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "List JFP bundles.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-jfp-bundles"},
+			Examples:    []string{"herdctl --robot-jfp-bundles"},
 		},
 		{
 			Name:        "jfp-install",
@@ -1624,7 +1624,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "project", Flag: "--project", Type: "string", Required: false, Description: "Project directory override (alias: --jfp-project)"},
 				{Name: "jfp-project", Flag: "--jfp-project", Type: "string", Required: false, Description: "Optional project directory for installs"},
 			},
-			Examples: []string{"ntm --robot-jfp-install=prompt-123", "ntm --robot-jfp-install=prompt-1,prompt-2 --jfp-project=/path/to/project"},
+			Examples: []string{"herdctl --robot-jfp-install=prompt-123", "herdctl --robot-jfp-install=prompt-1,prompt-2 --jfp-project=/path/to/project"},
 		},
 		{
 			Name:        "jfp-export",
@@ -1635,7 +1635,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "ids", Flag: "--robot-jfp-export", Type: "string", Required: true, Description: "Prompt ID(s), comma-separated"},
 				{Name: "format", Flag: "--jfp-format", Type: "string", Required: false, Description: "Export format (skill or md)"},
 			},
-			Examples: []string{"ntm --robot-jfp-export=prompt-123", "ntm --robot-jfp-export=prompt-123 --jfp-format=md"},
+			Examples: []string{"herdctl --robot-jfp-export=prompt-123", "herdctl --robot-jfp-export=prompt-123 --jfp-format=md"},
 		},
 		{
 			Name:        "jfp-update",
@@ -1643,7 +1643,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Update JFP registry cache.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-jfp-update"},
+			Examples:    []string{"herdctl --robot-jfp-update"},
 		},
 		{
 			Name:        "ms-search",
@@ -1653,7 +1653,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "query", Flag: "--robot-ms-search", Type: "string", Required: true, Description: "Search query"},
 			},
-			Examples: []string{"ntm --robot-ms-search='commit workflow'"},
+			Examples: []string{"herdctl --robot-ms-search='commit workflow'"},
 		},
 		{
 			Name:        "ms-show",
@@ -1663,7 +1663,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "id", Flag: "--robot-ms-show", Type: "string", Required: true, Description: "Skill ID"},
 			},
-			Examples: []string{"ntm --robot-ms-show=commit-and-release"},
+			Examples: []string{"herdctl --robot-ms-show=commit-and-release"},
 		},
 		{
 			Name:        "dcg-status",
@@ -1671,7 +1671,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Show DCG status and configuration.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-dcg-status"},
+			Examples:    []string{"herdctl --robot-dcg-status"},
 		},
 		{
 			Name:        "dcg-check",
@@ -1681,7 +1681,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "command", Flag: "--command", Type: "string", Required: true, Description: "Shell command to preflight"},
 			},
-			Examples: []string{"ntm --robot-dcg-check --command='rm -rf /tmp'"},
+			Examples: []string{"herdctl --robot-dcg-check --command='rm -rf /tmp'"},
 		},
 		{
 			Name:        "safety-simulate",
@@ -1693,8 +1693,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "step", Flag: "--step", Type: "string", Required: false, Description: "Command step to simulate; repeat for multi-step plans"},
 			},
 			Examples: []string{
-				"ntm --robot-safety-simulate --command='git reset --hard HEAD~1'",
-				"ntm --robot-safety-simulate --step='git status' --step='git reset --hard HEAD~1'",
+				"herdctl --robot-safety-simulate --command='git reset --hard HEAD~1'",
+				"herdctl --robot-safety-simulate --step='git status' --step='git reset --hard HEAD~1'",
 			},
 		},
 		{
@@ -1703,7 +1703,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "List pending SLB approval requests.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-slb-pending"},
+			Examples:    []string{"herdctl --robot-slb-pending"},
 		},
 		{
 			Name:        "slb-approve",
@@ -1713,7 +1713,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Parameters: []RobotParameter{
 				{Name: "id", Flag: "--robot-slb-approve", Type: "string", Required: true, Description: "Request ID"},
 			},
-			Examples: []string{"ntm --robot-slb-approve=req-123"},
+			Examples: []string{"herdctl --robot-slb-approve=req-123"},
 		},
 		{
 			Name:        "slb-deny",
@@ -1724,7 +1724,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "id", Flag: "--robot-slb-deny", Type: "string", Required: true, Description: "Request ID"},
 				{Name: "reason", Flag: "--reason", Type: "string", Required: false, Description: "Optional denial reason"},
 			},
-			Examples: []string{"ntm --robot-slb-deny=req-123 --reason='Too risky'"},
+			Examples: []string{"herdctl --robot-slb-deny=req-123 --reason='Too risky'"},
 		},
 		{
 			Name:        "ru-sync",
@@ -1735,8 +1735,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview without executing"},
 			},
 			Examples: []string{
-				"ntm --robot-ru-sync",
-				"ntm --robot-ru-sync --dry-run",
+				"herdctl --robot-ru-sync",
+				"herdctl --robot-ru-sync --dry-run",
 			},
 		},
 		{
@@ -1748,7 +1748,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "url", Flag: "--robot-giil-fetch", Type: "string", Required: true, Description: "Share URL (iCloud, Dropbox, Google Photos, Google Drive)"},
 			},
 			Examples: []string{
-				"ntm --robot-giil-fetch=https://share.icloud.com/photos/abc123",
+				"herdctl --robot-giil-fetch=https://share.icloud.com/photos/abc123",
 			},
 		},
 		{
@@ -1760,8 +1760,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "target", Flag: "--robot-env", Type: "string", Required: true, Description: "Session name or global"},
 			},
 			Examples: []string{
-				"ntm --robot-env=myproject",
-				"ntm --robot-env=global",
+				"herdctl --robot-env=myproject",
+				"herdctl --robot-env=global",
 			},
 		},
 		{
@@ -1783,9 +1783,9 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "mail-until", Flag: "--mail-until", Type: "string", Required: false, Description: "Filter to messages before a date"},
 			},
 			Examples: []string{
-				"ntm --robot-mail-check --mail-project=myproject",
-				"ntm --robot-mail-check --mail-project=myproject --mail-agent=cc_1 --urgent-only",
-				"ntm --robot-mail-check --mail-project=myproject --since=2025-01-01 --limit=20",
+				"herdctl --robot-mail-check --mail-project=myproject",
+				"herdctl --robot-mail-check --mail-project=myproject --mail-agent=cc_1 --urgent-only",
+				"herdctl --robot-mail-check --mail-project=myproject --since=2025-01-01 --limit=20",
 			},
 		},
 		{
@@ -1805,8 +1805,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "allow-secret", Flag: "--allow-secret", Type: "bool", Required: false, Description: "Allow persistence when redaction policy would otherwise block it"},
 			},
 			Examples: []string{
-				"ntm --robot-support-bundle=myproject",
-				"ntm --robot-support-bundle --all --bundle-output=/tmp/debug.zip",
+				"herdctl --robot-support-bundle=myproject",
+				"herdctl --robot-support-bundle --all --bundle-output=/tmp/debug.zip",
 			},
 		},
 		{
@@ -1819,8 +1819,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "rano-window", Flag: "--rano-window", Type: "duration", Required: false, Default: "5m", Description: "Time window for stats (e.g., 5m, 1h)"},
 			},
 			Examples: []string{
-				"ntm --robot-rano-stats",
-				"ntm --robot-rano-stats --panes=2,3 --rano-window=10m",
+				"herdctl --robot-rano-stats",
+				"herdctl --robot-rano-stats --panes=2,3 --rano-window=10m",
 			},
 		},
 		{
@@ -1829,7 +1829,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get RCH status summary including worker counts.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-rch-status"},
+			Examples:    []string{"herdctl --robot-rch-status"},
 		},
 		{
 			Name:        "proxy-status",
@@ -1837,7 +1837,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get rust_proxy daemon status, route metrics, and failover history.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-proxy-status"},
+			Examples:    []string{"herdctl --robot-proxy-status"},
 		},
 		{
 			Name:        "rch-workers",
@@ -1848,8 +1848,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "worker", Flag: "--worker", Type: "string", Required: false, Description: "Filter to a specific worker name"},
 			},
 			Examples: []string{
-				"ntm --robot-rch-workers",
-				"ntm --robot-rch-workers --worker=builder-1",
+				"herdctl --robot-rch-workers",
+				"herdctl --robot-rch-workers --worker=builder-1",
 			},
 		},
 		{
@@ -1858,7 +1858,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Show caut quota status for all providers.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-quota-status"},
+			Examples:    []string{"herdctl --robot-quota-status"},
 		},
 		{
 			Name:        "quota-check",
@@ -1869,7 +1869,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "provider", Flag: "--provider", Type: "string", Required: true, Description: "Provider to check (alias: --quota-check-provider)"},
 			},
 			Examples: []string{
-				"ntm --robot-quota-check --provider=claude",
+				"herdctl --robot-quota-check --provider=claude",
 			},
 		},
 		{
@@ -1881,8 +1881,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "provider", Flag: "--provider", Type: "string", Required: false, Description: "Filter to a specific provider (alias: --account-status-provider)"},
 			},
 			Examples: []string{
-				"ntm --robot-account-status",
-				"ntm --robot-account-status --provider=claude",
+				"herdctl --robot-account-status",
+				"herdctl --robot-account-status --provider=claude",
 			},
 		},
 		{
@@ -1894,8 +1894,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "provider", Flag: "--provider", Type: "string", Required: false, Description: "Filter to a specific provider (alias: --accounts-list-provider)"},
 			},
 			Examples: []string{
-				"ntm --robot-accounts-list",
-				"ntm --robot-accounts-list --provider=claude",
+				"herdctl --robot-accounts-list",
+				"herdctl --robot-accounts-list --provider=claude",
 			},
 		},
 		{
@@ -1907,8 +1907,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "target", Flag: "--robot-switch-account", Type: "string", Required: true, Description: "Provider or provider:account"},
 			},
 			Examples: []string{
-				"ntm --robot-switch-account=claude",
-				"ntm --robot-switch-account=claude:work",
+				"herdctl --robot-switch-account=claude",
+				"herdctl --robot-switch-account=claude:work",
 			},
 		},
 		{
@@ -1923,8 +1923,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "xf-sort", Flag: "--xf-sort", Type: "string", Required: false, Description: "Sort order: relevance or date"},
 			},
 			Examples: []string{
-				"ntm --robot-xf-search='error handling patterns'",
-				"ntm --robot-xf-search='quota failures' --xf-limit=50 --xf-sort=date",
+				"herdctl --robot-xf-search='error handling patterns'",
+				"herdctl --robot-xf-search='quota failures' --xf-limit=50 --xf-sort=date",
 			},
 		},
 		{
@@ -1933,7 +1933,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get XF installation and index health.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-xf-status"},
+			Examples:    []string{"herdctl --robot-xf-status"},
 		},
 		{
 			Name:        "alerts",
@@ -1945,7 +1945,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "alerts-type", Flag: "--alerts-type", Type: "string", Required: false, Description: "Filter by alert type"},
 				{Name: "alerts-session", Flag: "--alerts-session", Type: "string", Required: false, Description: "Filter by session"},
 			},
-			Examples: []string{"ntm --robot-alerts --alerts-severity=critical"},
+			Examples: []string{"herdctl --robot-alerts --alerts-severity=critical"},
 		},
 		{
 			Name:        "dismiss-alert",
@@ -1957,7 +1957,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "dismiss-session", Flag: "--dismiss-session", Type: "string", Required: false, Description: "Scope dismissal to session"},
 				{Name: "dismiss-all", Flag: "--dismiss-all", Type: "bool", Required: false, Description: "Dismiss all matching alerts"},
 			},
-			Examples: []string{"ntm --robot-dismiss-alert=alert-abc123", "ntm --robot-dismiss-alert --dismiss-all"},
+			Examples: []string{"herdctl --robot-dismiss-alert=alert-abc123", "herdctl --robot-dismiss-alert --dismiss-all"},
 		},
 		{
 			Name:        "palette",
@@ -1969,7 +1969,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "palette-category", Flag: "--palette-category", Type: "string", Required: false, Description: "Filter by category"},
 				{Name: "palette-search", Flag: "--palette-search", Type: "string", Required: false, Description: "Search commands"},
 			},
-			Examples: []string{"ntm --robot-palette --palette-category=quick"},
+			Examples: []string{"herdctl --robot-palette --palette-category=quick"},
 		},
 		{
 			Name:        "history",
@@ -1987,8 +1987,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "offset", Flag: "--offset", Type: "int", Required: false, Default: "0", Description: "Pagination offset for history entries"},
 			},
 			Examples: []string{
-				"ntm --robot-history=myproject --last=10",
-				"ntm --robot-history=myproject --since=1h --type=claude",
+				"herdctl --robot-history=myproject --last=10",
+				"herdctl --robot-history=myproject --since=1h --type=claude",
 			},
 		},
 		{
@@ -2009,8 +2009,8 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "causality-limit", Flag: "--causality-limit", Type: "int", Required: false, Default: "200", Description: "Max events to return"},
 			},
 			Examples: []string{
-				"ntm --robot-causality=myproject --causality-bead=bd-2mb03.4",
-				"ntm --robot-causality=myproject --causality-since=1h --causality-type=reservation_active",
+				"herdctl --robot-causality=myproject --causality-bead=bd-2mb03.4",
+				"herdctl --robot-causality=myproject --causality-since=1h --causality-type=reservation_active",
 			},
 		},
 		{
@@ -2023,7 +2023,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "replay-id", Flag: "--replay-id", Type: "string", Required: true, Description: "History entry ID to replay"},
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview without executing"},
 			},
-			Examples: []string{"ntm --robot-replay=myproject --replay-id=1735830245123-a1b2c3d4 --dry-run"},
+			Examples: []string{"herdctl --robot-replay=myproject --replay-id=1735830245123-a1b2c3d4 --dry-run"},
 		},
 		{
 			Name:        "tokens",
@@ -2037,7 +2037,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "tokens-session", Flag: "--tokens-session", Type: "string", Required: false, Description: "Filter to session"},
 				{Name: "tokens-agent", Flag: "--tokens-agent", Type: "string", Required: false, Description: "Filter to agent type"},
 			},
-			Examples: []string{"ntm --robot-tokens --tokens-days=7 --tokens-group-by=model"},
+			Examples: []string{"herdctl --robot-tokens --tokens-days=7 --tokens-group-by=model"},
 		},
 		{
 			Name:        "save",
@@ -2048,7 +2048,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "session", Flag: "--robot-save", Type: "string", Required: true, Description: "Session name"},
 				{Name: "save-output", Flag: "--save-output", Type: "string", Required: false, Description: "Output file path"},
 			},
-			Examples: []string{"ntm --robot-save=proj --save-output=backup.json"},
+			Examples: []string{"herdctl --robot-save=proj --save-output=backup.json"},
 		},
 		{
 			Name:        "restore",
@@ -2059,7 +2059,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 				{Name: "path", Flag: "--robot-restore", Type: "string", Required: true, Description: "Path to save file"},
 				{Name: "dry-run", Flag: "--dry-run", Type: "bool", Required: false, Description: "Preview without executing"},
 			},
-			Examples: []string{"ntm --robot-restore=backup.json --dry-run"},
+			Examples: []string{"herdctl --robot-restore=backup.json --dry-run"},
 		},
 		{
 			Name:        "mail",
@@ -2067,7 +2067,7 @@ func buildCommandRegistry() []RobotCommandInfo {
 			Category:    "utility",
 			Description: "Get Agent Mail state.",
 			Parameters:  []RobotParameter{},
-			Examples:    []string{"ntm --robot-mail"},
+			Examples:    []string{"herdctl --robot-mail"},
 		},
 	}
 }

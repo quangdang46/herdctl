@@ -314,7 +314,7 @@ func TestExtractFilePaths(t *testing.T) {
 	t.Parallel()
 
 	text := `Working on internal/context/monitor.go and internal/config/config.go.
-Also modified cmd/ntm/main.go.
+Also modified cmd/herdctl/main.go.
 The test file is monitor_test.go.`
 
 	files := extractFilePaths(text)
@@ -322,7 +322,7 @@ The test file is monitor_test.go.`
 	expected := map[string]bool{
 		"internal/context/monitor.go": true,
 		"internal/config/config.go":   true,
-		"cmd/ntm/main.go":             true,
+		"cmd/herdctl/main.go":             true,
 		"monitor_test.go":             true,
 	}
 

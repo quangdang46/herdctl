@@ -24,15 +24,15 @@ all: build
 
 ## Build for current platform
 build:
-	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/ntm
+	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/herdctl
 
 ## Build for all platforms
 build-all: clean
 	@mkdir -p $(DIST)
-	GOOS=darwin  GOARCH=amd64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-darwin-amd64 ./cmd/ntm
-	GOOS=darwin  GOARCH=arm64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-darwin-arm64 ./cmd/ntm
-	GOOS=linux   GOARCH=amd64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-linux-amd64 ./cmd/ntm
-	GOOS=linux   GOARCH=arm64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-linux-arm64 ./cmd/ntm
+	GOOS=darwin  GOARCH=amd64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-darwin-amd64 ./cmd/herdctl
+	GOOS=darwin  GOARCH=arm64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-darwin-arm64 ./cmd/herdctl
+	GOOS=linux   GOARCH=amd64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-linux-amd64 ./cmd/herdctl
+	GOOS=linux   GOARCH=arm64 $(GO) build $(GOFLAGS) $(LDFLAGS) -o $(DIST)/$(BINARY_NAME)-linux-arm64 ./cmd/herdctl
 	@echo "Built binaries in $(DIST)/"
 
 ## Install to /usr/local/bin

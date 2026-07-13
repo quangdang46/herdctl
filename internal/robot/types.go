@@ -242,7 +242,7 @@ type RobotResponse struct {
 	ErrorCode string `json:"error_code,omitempty"`
 
 	// Hint provides actionable guidance for resolving errors.
-	// Example: "Use 'ntm list' to see available sessions"
+	// Example: "Use 'herdctl list' to see available sessions"
 	Hint string `json:"hint,omitempty"`
 
 	// StructuredError provides detailed error information when simple error fields
@@ -766,7 +766,7 @@ func ExitCodeForResponse(resp RobotResponse) int {
 //	    return RobotError(
 //	        fmt.Errorf("session '%s' not found", session),
 //	        ErrCodeSessionNotFound,
-//	        "Use 'ntm list' to see available sessions",
+//	        "Use 'herdctl list' to see available sessions",
 //	    )
 //	}
 func RobotError(err error, code, hint string) error {
@@ -785,7 +785,7 @@ func RobotError(err error, code, hint string) error {
 //	    return PrintRobotError(
 //	        fmt.Errorf("session '%s' not found", session),
 //	        ErrCodeSessionNotFound,
-//	        "Use 'ntm list' to see available sessions",
+//	        "Use 'herdctl list' to see available sessions",
 //	    )
 //	}
 func PrintRobotError(err error, code, hint string) error {

@@ -61,7 +61,7 @@ func BuildLocalNTM(t *testing.T) string {
 		}
 		binaryPath = filepath.Join(dir, "ntm"+exeSuffix)
 
-		cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/ntm")
+		cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/herdctl")
 		cmd.Dir = repoRoot
 		cmd.Env = os.Environ()
 		out, err := cmd.CombinedOutput()

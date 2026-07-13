@@ -6,7 +6,7 @@
 // layouts that are still being stabilized. Other ensemble commands
 // (modes, run, compare, stop, suggest) work in the default build.
 //
-// To enable: go build -tags ensemble_experimental ./cmd/ntm
+// To enable: go build -tags ensemble_experimental ./cmd/herdctl
 
 package robot
 

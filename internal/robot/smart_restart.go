@@ -480,7 +480,7 @@ func smartRestartTargetingHint(opts SmartRestartOptions, output *SmartRestartOut
 	} else {
 		b.WriteString("No panes were evaluated for this session. ")
 	}
-	b.WriteString("Run 'ntm --robot-is-working=")
+	b.WriteString("Run 'herdctl --robot-is-working=")
 	b.WriteString(opts.Session)
 	b.WriteString("' to see live pane addresses and states.")
 	return b.String()
@@ -653,7 +653,7 @@ func executeRestart(session string, win, pane int, agentType string, opts SmartR
 					agentType,
 					attemptedActions,
 					"",
-				).WithRecoveryHint(fmt.Sprintf("Try ntm --robot-smart-restart=%s --panes=%d --hard-kill to use kill -9 fallback", session, pane))
+				).WithRecoveryHint(fmt.Sprintf("Try herdctl --robot-smart-restart=%s --panes=%d --hard-kill to use kill -9 fallback", session, pane))
 				return seq, structErr
 			}
 		}
@@ -679,7 +679,7 @@ func executeRestart(session string, win, pane int, agentType string, opts SmartR
 					agentType,
 					attemptedActions,
 					lastOutput,
-				).WithRecoveryHint(fmt.Sprintf("Try ntm --robot-smart-restart=%s --panes=%d --hard-kill, or manually kill the process", session, pane))
+				).WithRecoveryHint(fmt.Sprintf("Try herdctl --robot-smart-restart=%s --panes=%d --hard-kill, or manually kill the process", session, pane))
 				return seq, structErr
 			}
 			softExitFailed = true
@@ -771,7 +771,7 @@ func executeRestart(session string, win, pane int, agentType string, opts SmartR
 			agentType,
 			attemptedActions,
 			lastOutput,
-		).WithRecoveryHint("Verify the agent CLI is installed and in PATH, then check the pane with ntm status")
+		).WithRecoveryHint("Verify the agent CLI is installed and in PATH, then check the pane with herdctl status")
 		return seq, structErr
 	}
 

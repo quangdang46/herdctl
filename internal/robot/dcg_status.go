@@ -164,7 +164,7 @@ func GetDCGCheckWithOptions(opts DCGCheckOptions) (*DCGCheckOutput, error) {
 			RobotResponse: NewErrorResponse(
 				nil,
 				ErrCodeInvalidFlag,
-				"Provide a command to check: ntm --robot-dcg-check --command='rm -rf /tmp'",
+				"Provide a command to check: herdctl --robot-dcg-check --command='rm -rf /tmp'",
 			),
 			Command: command,
 			Context: opts.Context,
@@ -201,9 +201,9 @@ func GetDCGCheckWithOptions(opts DCGCheckOptions) (*DCGCheckOutput, error) {
 
 	if availability == nil || !availability.Available || !availability.Compatible {
 		err := fmt.Errorf("dcg not installed or incompatible")
-		hint := "Install dcg to enable command preflight. Run: ntm --robot-dcg-status"
+		hint := "Install dcg to enable command preflight. Run: herdctl --robot-dcg-status"
 		if availability != nil && availability.Available && !availability.Compatible {
-			hint = "Upgrade dcg to a compatible version. Run: ntm --robot-dcg-status"
+			hint = "Upgrade dcg to a compatible version. Run: herdctl --robot-dcg-status"
 		}
 
 		output := &DCGCheckOutput{

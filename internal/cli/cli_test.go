@@ -5242,7 +5242,7 @@ func TestRobotStateCommandsWorkWithCGODisabledReleaseBuild(t *testing.T) {
 		binaryPath += ".exe"
 	}
 
-	buildCmd := exec.Command("go", "build", "-trimpath", "-o", binaryPath, "./cmd/ntm")
+	buildCmd := exec.Command("go", "build", "-trimpath", "-o", binaryPath, "./cmd/herdctl")
 	buildCmd.Dir = root
 	buildCmd.Env = envWithOverrides(os.Environ(), "CGO_ENABLED=0")
 	buildOut, err := buildCmd.CombinedOutput()

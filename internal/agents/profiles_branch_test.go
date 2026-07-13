@@ -204,8 +204,8 @@ func TestMatchGlobPattern_SuffixDoubleStarExactMatch(t *testing.T) {
 func TestMatchGlobPattern_ExactFileBaseName(t *testing.T) {
 	t.Parallel()
 
-	// Exact match via filepath.Base — pattern "main.go" matches path "cmd/ntm/main.go"
-	got := matchGlobPattern("cmd/ntm/main.go", "main.go")
+	// Exact match via filepath.Base — pattern "main.go" matches path "cmd/herdctl/main.go"
+	got := matchGlobPattern("cmd/herdctl/main.go", "main.go")
 	if !got {
 		t.Error("matchGlobPattern should match filepath.Base for exact pattern")
 	}

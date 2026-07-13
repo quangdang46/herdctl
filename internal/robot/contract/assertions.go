@@ -38,7 +38,7 @@ type tester interface {
 // process exit (or sentinel mapping for in-process runs), and Err from
 // the run* function's returned error if applicable.
 type Outcome struct {
-	Command  string // canonical command text, e.g. "ntm --robot-status"
+	Command  string // canonical command text, e.g. "herdctl --robot-status"
 	Stdout   []byte
 	Stderr   []byte
 	ExitCode int

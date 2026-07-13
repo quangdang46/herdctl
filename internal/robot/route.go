@@ -111,7 +111,7 @@ func GetRoute(opts RouteOptions) (*RouteOutput, int) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 		return output, 1
 	}
@@ -272,7 +272,7 @@ func generateRouteHints(opts RouteOptions, output RouteOutput) *RouteAgentHints 
 		rec := output.Recommendation
 		hints.Summary = fmt.Sprintf("Route to %s (pane %d) with score %.1f - %s",
 			rec.AgentType, rec.PaneIndex, rec.Score, rec.State)
-		hints.SendCommand = fmt.Sprintf("ntm --robot-send=%s --panes=%d --msg='YOUR_MESSAGE'",
+		hints.SendCommand = fmt.Sprintf("herdctl --robot-send=%s --panes=%d --msg='YOUR_MESSAGE'",
 			opts.Session, rec.PaneIndex)
 	} else if len(output.Candidates) == 0 {
 		hints.Summary = "No agents available for routing"

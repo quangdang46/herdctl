@@ -112,7 +112,7 @@ func GetEnsemble(session string) (*EnsembleOutput, error) {
 				output.RobotResponse = NewErrorResponse(
 					fmt.Errorf("session '%s' not found", session),
 					ErrCodeSessionNotFound,
-					"Use 'ntm list' to see available sessions",
+					"Use 'herdctl list' to see available sessions",
 				)
 				return output, nil
 			}

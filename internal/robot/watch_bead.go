@@ -89,7 +89,7 @@ func GetWatchBead(opts WatchBeadOptions) (*WatchBeadOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 		return output, nil
 	}

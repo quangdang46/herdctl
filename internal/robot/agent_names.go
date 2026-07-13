@@ -210,7 +210,7 @@ func GetAgentNames(sessionName string, customNames []string) (*AgentNamesOutput,
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", sessionName),
 			ErrCodeSessionNotFound,
-			"Use 'ntm --robot-status' to see available sessions",
+			"Use 'herdctl --robot-status' to see available sessions",
 		)
 		return output, nil
 	}

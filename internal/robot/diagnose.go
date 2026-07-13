@@ -103,7 +103,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 		output.Success = false
 		output.Error = fmt.Sprintf("session '%s' not found", opts.Session)
 		output.ErrorCode = ErrCodeSessionNotFound
-		output.Hint = "Use 'ntm list' to see available sessions"
+		output.Hint = "Use 'herdctl list' to see available sessions"
 		return output, nil
 	}
 
@@ -128,7 +128,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 			output.Success = false
 			output.Error = fmt.Sprintf("pane %d not found in session '%s'", opts.Pane, opts.Session)
 			output.ErrorCode = ErrCodePaneNotFound
-			output.Hint = fmt.Sprintf("Use 'ntm --robot-status' to list panes in session '%s'", opts.Session)
+			output.Hint = fmt.Sprintf("Use 'herdctl --robot-status' to list panes in session '%s'", opts.Session)
 			return output, nil
 		}
 		panes = filtered
@@ -157,7 +157,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 				Action:      "investigate",
 				Reason:      fmt.Sprintf("Health check failed: %v", err),
 				AutoFixable: false,
-				FixCommand:  fmt.Sprintf("ntm inspect %s --pane=%d", opts.Session, pane.Index),
+				FixCommand:  fmt.Sprintf("herdctl inspect %s --pane=%d", opts.Session, pane.Index),
 			})
 			continue
 		}
@@ -189,7 +189,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 						Action:      "investigate",
 						Reason:      check.Reason,
 						AutoFixable: false,
-						FixCommand:  fmt.Sprintf("ntm inspect %s --pane=%d", opts.Session, pane.Index),
+						FixCommand:  fmt.Sprintf("herdctl inspect %s --pane=%d", opts.Session, pane.Index),
 					})
 				}
 			}
@@ -211,7 +211,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 					Action:      "restart",
 					Reason:      check.Reason,
 					AutoFixable: true,
-					FixCommand:  fmt.Sprintf("ntm --robot-restart-pane=%s --panes=%d", opts.Session, pane.Index),
+					FixCommand:  fmt.Sprintf("herdctl --robot-restart-pane=%s --panes=%d", opts.Session, pane.Index),
 				})
 			} else if check.StallCheck != nil && check.StallCheck.Stalled {
 				output.Summary.Unresponsive++
@@ -222,7 +222,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 					Action:      "interrupt",
 					Reason:      fmt.Sprintf("Stalled for %d seconds", check.StallCheck.IdleSeconds),
 					AutoFixable: true,
-					FixCommand:  fmt.Sprintf("ntm --robot-interrupt=%s --panes=%d", opts.Session, pane.Index),
+					FixCommand:  fmt.Sprintf("herdctl --robot-interrupt=%s --panes=%d", opts.Session, pane.Index),
 				})
 			} else {
 				// Generic unhealthy
@@ -234,7 +234,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 					Action:      "investigate",
 					Reason:      check.Reason,
 					AutoFixable: false,
-					FixCommand:  fmt.Sprintf("ntm inspect %s --pane=%d", opts.Session, pane.Index),
+					FixCommand:  fmt.Sprintf("herdctl inspect %s --pane=%d", opts.Session, pane.Index),
 				})
 			}
 
@@ -268,7 +268,7 @@ func GetDiagnose(ctx context.Context, opts DiagnoseOptions) (*DiagnoseOutput, er
 		}
 	}
 	if output.AutoFixAvail {
-		output.AutoFixCommand = fmt.Sprintf("ntm --robot-diagnose=%s --fix", opts.Session)
+		output.AutoFixCommand = fmt.Sprintf("herdctl --robot-diagnose=%s --fix", opts.Session)
 	}
 
 	return output, nil
@@ -331,7 +331,7 @@ func buildRateLimitRecommendation(paneIndex int, session string, check *HealthCh
 	if waitSeconds > 0 {
 		rec.Action = "wait"
 		rec.Reason = fmt.Sprintf("Rate limited, wait %d seconds", waitSeconds)
-		rec.FixCommand = fmt.Sprintf("sleep %d && ntm --robot-diagnose=%s --pane=%d", waitSeconds, session, paneIndex)
+		rec.FixCommand = fmt.Sprintf("sleep %d && herdctl --robot-diagnose=%s --pane=%d", waitSeconds, session, paneIndex)
 	} else {
 		rec.Action = "wait_or_switch"
 		rec.Reason = "Rate limited, consider switching accounts or waiting"
@@ -498,7 +498,7 @@ func GetDiagnoseBrief(ctx context.Context, session string) (*DiagnoseBriefOutput
 		output.Success = false
 		output.Error = fmt.Sprintf("session '%s' not found", session)
 		output.ErrorCode = ErrCodeSessionNotFound
-		output.Hint = "Use 'ntm list' to see available sessions"
+		output.Hint = "Use 'herdctl list' to see available sessions"
 		return output, nil
 	}
 

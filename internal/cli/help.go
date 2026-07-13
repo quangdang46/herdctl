@@ -152,7 +152,7 @@ func PrintStunningHelp(w io.Writer) {
 	// Shell init hint
 	hintStyle := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true)
 	cmdStyle := lipgloss.NewStyle().Foreground(t.Blue).Bold(true)
-	b.WriteString("  " + hintStyle.Render("Add to shell: ") + cmdStyle.Render("eval \"$(ntm shell zsh)\"") + "\n\n")
+	b.WriteString("  " + hintStyle.Render("Add to shell: ") + cmdStyle.Render("eval \"$(herdctl shell zsh)\"") + "\n\n")
 
 	fmt.Fprint(w, b.String())
 }
@@ -236,11 +236,11 @@ func renderExamples(width int, t theme.Theme, ic icons.IconSet) string {
 		cmd  string
 		desc string
 	}{
-		{"ntm spawn myproject --cc=2 --cod=2", "Create session with 2 Claude + 2 Codex agents"},
-		{"ntm send myproject \"fix the tests\"", "Send prompt to all agents"},
-		{"ntm palette myproject", "Open command palette (or press F6)"},
-		{"ntm view myproject", "Tile all panes and attach"},
-		{"ntm dashboard myproject", "Open interactive dashboard"},
+		{"herdctl spawn myproject --cc=2 --cod=2", "Create session with 2 Claude + 2 Codex agents"},
+		{"herdctl send myproject \"fix the tests\"", "Send prompt to all agents"},
+		{"herdctl palette myproject", "Open command palette (or press F6)"},
+		{"herdctl view myproject", "Tile all panes and attach"},
+		{"herdctl dashboard myproject", "Open interactive dashboard"},
 	}
 
 	for _, ex := range examples {
@@ -265,7 +265,7 @@ func PrintCompactHelp(w io.Writer) {
 	ic := icons.Current()
 
 	// Simple gradient title
-	title := styles.GradientText("NTM - Named Tmux Manager",
+	title := styles.GradientText("herdctl - Agent Control Plane",
 		string(t.Blue), string(t.Mauve))
 	fmt.Fprintf(w, "\n  %s\n\n", title)
 
@@ -295,11 +295,11 @@ func PrintCompactHelp(w io.Writer) {
 
 	fmt.Fprintln(w)
 	hintStyle := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true)
-	fmt.Fprintf(w, "  %s\n\n", hintStyle.Render("Run 'ntm' without arguments for full help, or 'ntm <command> --help' for details."))
+	fmt.Fprintf(w, "  %s\n\n", hintStyle.Render("Run 'herdctl' without arguments for full help, or 'herdctl <command> --help' for details."))
 
 	// Shell init hint
 	cmdHighlight := lipgloss.NewStyle().Foreground(t.Blue).Bold(true)
-	fmt.Fprintf(w, "  Shell setup: %s\n\n", cmdHighlight.Render("eval \"$(ntm shell zsh)\""))
+	fmt.Fprintf(w, "  Shell setup: %s\n\n", cmdHighlight.Render("eval \"$(herdctl shell zsh)\""))
 
 	_ = ic // Use icons in future enhancements
 }
@@ -389,7 +389,7 @@ func PrintMinimalHelp(w io.Writer) {
 		Foreground(t.Overlay).
 		Italic(true)
 
-	b.WriteString("    " + cmdStyle.Render("ntm spawn myproject --cc=2 --cod=2") + "\n")
+	b.WriteString("    " + cmdStyle.Render("herdctl spawn myproject --cc=2 --cod=2") + "\n")
 	b.WriteString("    " + descStyle.Render("→ Create session with 2 Claude + 2 Codex agents") + "\n\n")
 
 	// ═══════════════════════════════════════════════════════════════
@@ -401,9 +401,9 @@ func PrintMinimalHelp(w io.Writer) {
 	// Usage hint
 	hintStyle := lipgloss.NewStyle().Foreground(t.Overlay).Italic(true)
 	cmdHighlight := lipgloss.NewStyle().Foreground(t.Blue).Bold(true)
-	b.WriteString("  " + hintStyle.Render("For all commands: ") + cmdHighlight.Render("ntm --full") +
-		hintStyle.Render(" or ") + cmdHighlight.Render("ntm help --full") + "\n")
-	b.WriteString("  " + hintStyle.Render("Shell setup: ") + cmdHighlight.Render("eval \"$(ntm shell zsh)\"") + "\n\n")
+	b.WriteString("  " + hintStyle.Render("For all commands: ") + cmdHighlight.Render("herdctl --full") +
+		hintStyle.Render(" or ") + cmdHighlight.Render("herdctl help --full") + "\n")
+	b.WriteString("  " + hintStyle.Render("Shell setup: ") + cmdHighlight.Render("eval \"$(herdctl shell zsh)\"") + "\n\n")
 
 	fmt.Fprint(w, b.String())
 }

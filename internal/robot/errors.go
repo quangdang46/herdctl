@@ -167,7 +167,7 @@ func GetErrors(opts ErrorsOptions) (*ErrorsOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			nil,
 			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 		output.Error = "session not found: " + opts.Session
 		return output, nil

@@ -91,7 +91,7 @@ preflight() {
       missing=1
     fi
   done
-  NTM_CMD=("go" "run" "./cmd/ntm")
+  NTM_CMD=("go" "run" "./cmd/herdctl")
   if [[ $missing -ne 0 ]]; then
     exit 1
   fi

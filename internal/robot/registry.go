@@ -341,7 +341,7 @@ func buildRobotRegistry() *RobotRegistry {
 			surface.Transports = []RobotTransportInfo{
 				{
 					Type:     "cli",
-					Endpoint: fmt.Sprintf("ntm %s", command.Flag),
+					Endpoint: fmt.Sprintf("herdctl %s", command.Flag),
 				},
 			}
 		}

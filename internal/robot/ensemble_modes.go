@@ -270,7 +270,7 @@ func buildModesHints(output *EnsembleModesOutput) *AgentHints {
 
 	// Provide summary
 	if len(output.Modes) > 0 {
-		hints.Summary = "Use modes in ensembles via: ntm ensemble <preset> <question>"
+		hints.Summary = "Use modes in ensembles via: herdctl ensemble <preset> <question>"
 	}
 
 	// Suggest actions

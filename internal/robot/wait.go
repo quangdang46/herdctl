@@ -114,7 +114,7 @@ func GetWait(opts WaitOptions) (*WaitResponse, int) {
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
 				ErrCodeSessionNotFound,
-				"Use 'ntm list' to see available sessions",
+				"Use 'herdctl list' to see available sessions",
 			),
 			Session:   opts.Session,
 			Condition: opts.Condition,

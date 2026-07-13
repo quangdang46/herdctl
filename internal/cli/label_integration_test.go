@@ -237,7 +237,7 @@ func runNTM(t *testing.T, root string, args ...string) (stdout string, stderr st
 	if testing.Short() {
 		t.Skip("skipping go-run process integration in short mode")
 	}
-	cmd := exec.Command("go", append([]string{"run", "./cmd/ntm"}, args...)...)
+	cmd := exec.Command("go", append([]string{"run", "./cmd/herdctl"}, args...)...)
 	cmd.Dir = root
 	cmd.Env = os.Environ()
 	out, errOut, err := cmdOutput(cmd)

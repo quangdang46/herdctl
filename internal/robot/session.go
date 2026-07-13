@@ -189,7 +189,7 @@ func GetRestore(opts RestoreOptions) (*RestoreResult, error) {
 		return &RestoreResult{
 			Success:   false,
 			SavedName: opts.SavedName,
-			Error:     fmt.Sprintf("session '%s' already exists (use 'ntm sessions restore' with --force to overwrite)", state.Name),
+			Error:     fmt.Sprintf("session '%s' already exists (use 'herdctl sessions restore' with --force to overwrite)", state.Name),
 		}, nil
 	}
 

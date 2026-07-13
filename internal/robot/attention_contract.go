@@ -12,7 +12,7 @@
 //
 // The LLM is the driver; ntm is the nervous system. The Attention Feed
 // provides sensing and actuation surfaces, not decision-making logic.
-// Operator agents consume events to make decisions; ntm emits events
+// Operator agents consume events to make decisions; herdctl emits events
 // and executes commands.
 //
 // ## Operator Loop
@@ -435,7 +435,7 @@ var AttentionCommands = []AttentionCommand{
 			{Name: "--since", Type: "RFC3339", Required: false, Description: "Only include changes since timestamp"},
 		},
 		Returns: "StatusOutput with sessions, agents, beads, alerts",
-		Example: "ntm --robot-snapshot",
+		Example: "herdctl --robot-snapshot",
 	},
 	{
 		Name:     "--robot-events",
@@ -448,7 +448,7 @@ var AttentionCommands = []AttentionCommand{
 			{Name: "--events-session", Type: "string", Required: false, Description: "Filter by session"},
 		},
 		Returns: "EventsOutput with events array and next_cursor",
-		Example: "ntm --robot-events --since-cursor=42 --events-limit=50",
+		Example: "herdctl --robot-events --since-cursor=42 --events-limit=50",
 	},
 	{
 		Name:     "--robot-digest",
@@ -457,7 +457,7 @@ var AttentionCommands = []AttentionCommand{
 			{Name: "--profile", Type: "string", Required: false, Description: "Attention profile: operator, debug, minimal, alerts"},
 		},
 		Returns: "DigestResponse with counts, highlights, and attention items",
-		Example: "ntm --robot-digest --profile=minimal",
+		Example: "herdctl --robot-digest --profile=minimal",
 	},
 	{
 		Name:     "--robot-wait",
@@ -472,7 +472,7 @@ var AttentionCommands = []AttentionCommand{
 			{Name: "--profile", Type: "string", Required: false, Description: "Attention profile for attention-feed waits"},
 		},
 		Returns: "WaitOutput with condition, waited_seconds, and matched agents",
-		Example: "ntm --robot-wait=myproject --wait-until=idle --timeout=30s",
+		Example: "herdctl --robot-wait=myproject --wait-until=idle --timeout=30s",
 	},
 	{
 		Name:     "--robot-attention",
@@ -484,7 +484,7 @@ var AttentionCommands = []AttentionCommand{
 			{Name: "--attention-condition", Type: "string", Required: false, Description: "Condition to wait for: attention, action_required, mail_pending"},
 		},
 		Returns: "AttentionOutput with action_required items and suggested actions",
-		Example: "ntm --robot-attention --attention-cursor=42 --attention-condition=action_required",
+		Example: "herdctl --robot-attention --attention-cursor=42 --attention-condition=action_required",
 	},
 }
 
@@ -996,7 +996,7 @@ func UnsupportedConditions() []UnsupportedCondition {
 		{
 			Name:   AttentionSignalBeadOrphaned,
 			Status: CapabilityUnavailable,
-			Reason: "ntm cannot prove work is orphaned from observable state alone. " +
+			Reason: "herdctl cannot prove work is orphaned from observable state alone. " +
 				"Agent silence may indicate compaction, deep thinking, rch compilation, " +
 				"or intentional pause — not abandonment. Emitting this signal would " +
 				"produce false positives that erode operator trust.",
@@ -1014,7 +1014,7 @@ func UnsupportedConditions() []UnsupportedCondition {
 }
 
 // DefaultAttentionCapabilities returns the current machine-readable attention
-// contract status. This is intentionally conservative: when ntm cannot defend a
+// contract status. This is intentionally conservative: when herdctl cannot defend a
 // signal from real observable state, it must say so explicitly.
 func DefaultAttentionCapabilities() *AttentionCapabilities {
 	return &AttentionCapabilities{
@@ -1038,14 +1038,14 @@ func DefaultAttentionCapabilities() *AttentionCapabilities {
 		SignalAvailability: map[string]CapabilityFeature{
 			AttentionSignalBeadOrphaned: {
 				Status: CapabilityUnavailable,
-				Note:   "Unsupported: ntm cannot yet prove orphaned work from observable beads, bv, and agent state without inventing coordination conclusions.",
+				Note:   "Unsupported: herdctl cannot yet prove orphaned work from observable beads, bv, and agent state without inventing coordination conclusions.",
 			},
 		},
 		UnsupportedConditions: UnsupportedConditions(),
 		Guardrails: []OperatorLoopGuardrail{
 			{
 				Name:      "nervous_system_not_planner",
-				Rule:      "ntm emits observable state and executes commands, but it must not invent plans, hidden task graphs, or coordinator conclusions.",
+				Rule:      "herdctl emits observable state and executes commands, but it must not invent plans, hidden task graphs, or coordinator conclusions.",
 				Rationale: "The operator agent remains the decision-maker; ntm should sense and act, not pretend to think on the operator's behalf.",
 			},
 			{
@@ -1157,7 +1157,7 @@ var ExampleCursorExpired = `{
     "requested_cursor": 42,
     "earliest_cursor": 100,
     "retention_period": "1h",
-    "resync_command": "ntm --robot-snapshot"
+    "resync_command": "herdctl --robot-snapshot"
   }
 }`
 

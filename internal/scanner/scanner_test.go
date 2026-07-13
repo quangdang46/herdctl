@@ -376,7 +376,7 @@ func TestMatchAssignmentPattern(t *testing.T) {
 		{
 			name:    "prefix mismatch",
 			pattern: "internal/**",
-			file:    "cmd/ntm/main.go",
+			file:    "cmd/herdctl/main.go",
 			want:    false,
 		},
 	}

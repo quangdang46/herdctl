@@ -134,7 +134,7 @@ main() {
         NTM_BIN="/tmp/ntm-main-bin-${TEST_PREFIX}"
         log_section "Build"
         log_info "Building ntm binary: ${NTM_BIN}"
-        if ! log_exec go build -o "$NTM_BIN" ./cmd/ntm; then
+        if ! log_exec go build -o "$NTM_BIN" ./cmd/herdctl; then
             log_error "Failed to build ntm binary; aborting test run"
             log_summary
             return 1

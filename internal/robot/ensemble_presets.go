@@ -142,7 +142,7 @@ func buildPresetsHints(output *EnsemblePresetsOutput) *AgentHints {
 	hints := &AgentHints{}
 
 	if output.Count > 0 {
-		hints.Summary = "Use presets: ntm ensemble <preset-name> <question>"
+		hints.Summary = "Use presets: herdctl ensemble <preset-name> <question>"
 		hints.SuggestedActions = append(hints.SuggestedActions, RobotAction{
 			Action:   "spawn_ensemble",
 			Target:   "project-diagnosis",

@@ -123,7 +123,7 @@ func GetEnsembleSuggest(question string) (*EnsembleSuggestOutput, error) {
 			if suggestion.Tags == nil {
 				suggestion.Tags = []string{}
 			}
-			suggestion.SpawnCmd = "ntm ensemble " + preset.Name + " \"" + escapeQuotes(question) + "\""
+			suggestion.SpawnCmd = "herdctl ensemble " + preset.Name + " \"" + escapeQuotes(question) + "\""
 		}
 
 		output.Suggestions = append(output.Suggestions, suggestion)

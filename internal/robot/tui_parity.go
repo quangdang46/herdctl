@@ -617,7 +617,7 @@ func GetInspectPane(opts InspectPaneOptions) (*InspectPaneOutput, error) {
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
 				ErrCodeSessionNotFound,
-				"Use 'ntm list' to see available sessions",
+				"Use 'herdctl list' to see available sessions",
 			),
 			Session: opts.Session,
 		}, nil
@@ -2052,7 +2052,7 @@ func GetInspectSession(opts InspectSessionOptions) (*InspectSessionOutput, error
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found in runtime projection", strings.TrimSpace(opts.Session)),
 			ErrCodeSessionNotFound,
-			"Use ntm --robot-snapshot or ntm --robot-status to list projected sessions",
+			"Use herdctl --robot-snapshot or herdctl --robot-status to list projected sessions",
 		)
 		return output, nil
 	}
@@ -2127,7 +2127,7 @@ func GetInspectAgent(opts InspectAgentOptions) (*InspectAgentOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("agent '%s' not found in runtime projection", strings.TrimSpace(opts.AgentID)),
 			ErrCodeInvalidFlag,
-			"Use ntm --robot-inspect-session=SESSION to list stable agent ids for drill-down",
+			"Use herdctl --robot-inspect-session=SESSION to list stable agent ids for drill-down",
 		)
 		return output, nil
 	}
@@ -2145,7 +2145,7 @@ func GetInspectAgent(opts InspectAgentOptions) (*InspectAgentOutput, error) {
 	if output.Detail.CurrentBead != "" {
 		notes = append(notes, fmt.Sprintf("Current bead: %s", output.Detail.CurrentBead))
 	}
-	notes = append(notes, fmt.Sprintf("Session drill-down: ntm --robot-inspect-session=%s", output.Detail.Session))
+	notes = append(notes, fmt.Sprintf("Session drill-down: herdctl --robot-inspect-session=%s", output.Detail.Session))
 
 	output.AgentHints = &AgentHints{
 		Summary:  fmt.Sprintf("Agent %s: %s %s", output.Detail.ID, output.Detail.Type, output.Detail.State),
@@ -2195,7 +2195,7 @@ func GetInspectWork(opts InspectWorkOptions) (*InspectWorkOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("work item '%s' not found in runtime projection", strings.TrimSpace(opts.BeadID)),
 			ErrCodeInvalidFlag,
-			"Use ntm --robot-snapshot to list projected bead ids for drill-down",
+			"Use herdctl --robot-snapshot to list projected bead ids for drill-down",
 		)
 		return output, nil
 	}
@@ -2269,7 +2269,7 @@ func GetInspectCoordination(opts InspectCoordinationOptions) (*InspectCoordinati
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("coordination state for '%s' not found in runtime projection", strings.TrimSpace(opts.AgentName)),
 			ErrCodeInvalidFlag,
-			"Use ntm --robot-inspect-agent=SESSION:PANE to discover Agent Mail identity for coordination drill-down",
+			"Use herdctl --robot-inspect-agent=SESSION:PANE to discover Agent Mail identity for coordination drill-down",
 		)
 		return output, nil
 	}
@@ -2363,7 +2363,7 @@ func GetInspectQuota(opts InspectQuotaOptions) (*InspectQuotaOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("quota '%s' not found in runtime projection", canonicalInspectQuotaID(provider, account)),
 			ErrCodeInvalidFlag,
-			"Use ntm --robot-snapshot to list projected provider/account quota identities",
+			"Use herdctl --robot-snapshot to list projected provider/account quota identities",
 		)
 		return output, nil
 	}
@@ -2433,7 +2433,7 @@ func GetInspectIncident(opts InspectIncidentOptions) (*InspectIncidentOutput, er
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("incident '%s' not found", strings.TrimSpace(opts.IncidentID)),
 			ErrCodeInvalidFlag,
-			"Use ntm --robot-snapshot or ntm --robot-attention to list active incident ids",
+			"Use herdctl --robot-snapshot or herdctl --robot-attention to list active incident ids",
 		)
 		return output, nil
 	}
@@ -2551,7 +2551,7 @@ func GetMetrics(opts MetricsOptions) (*MetricsOutput, error) {
 				RobotResponse: NewErrorResponse(
 					fmt.Errorf("session '%s' not found", opts.Session),
 					ErrCodeSessionNotFound,
-					"Use 'ntm list' to see available sessions",
+					"Use 'herdctl list' to see available sessions",
 				),
 				Session: opts.Session,
 				Period:  opts.Period,
@@ -4069,7 +4069,7 @@ func GetBeadShow(opts BeadShowOptions) (*BeadShowOutput, error) {
 			Reason:   "Bead is available to work on",
 			Priority: 1,
 		})
-		notes = append(notes, fmt.Sprintf("Claim with: ntm --robot-bead-claim=%s", opts.BeadID))
+		notes = append(notes, fmt.Sprintf("Claim with: herdctl --robot-bead-claim=%s", opts.BeadID))
 	case "in_progress":
 		notes = append(notes, fmt.Sprintf("Close when done: br close %s", opts.BeadID))
 		if output.Assignee != "" {

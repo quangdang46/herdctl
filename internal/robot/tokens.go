@@ -544,9 +544,9 @@ func generateTokenHints(output TokensOutput) *TokensAgentHints {
 
 	// Suggested commands
 	hints.SuggestedCommands = []string{
-		"ntm --robot-tokens --group-by=model",
-		"ntm --robot-tokens --group-by=day --days=7",
-		"ntm analytics --format=json",
+		"herdctl --robot-tokens --group-by=model",
+		"herdctl --robot-tokens --group-by=day --days=7",
+		"herdctl analytics --format=json",
 	}
 
 	// Warnings

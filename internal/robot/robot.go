@@ -1992,7 +1992,7 @@ Use --all to include the user pane (index depends on tmux pane-base-index).
 // RenderHelp returns AI agent help documentation.
 func RenderHelp() string {
 	var builder strings.Builder
-	builder.WriteString(`ntm (Named Tmux Manager) AI Agent Interface
+	builder.WriteString(`herdctl (Named Tmux Manager) AI Agent Interface
 =============================================
 Robot mode provides a JSON API for AI agents to orchestrate coding sessions.
 Dual backend: set NTM_BACKEND=herdr (or tmux, default) so session/pane ops route
@@ -2081,7 +2081,7 @@ Rollout Guardrails:
 - Unsupported conditions stay explicit until ntm can prove them from observable state; do not treat bead_orphaned as implemented.
 
 Unsupported Conditions:
-  bead_orphaned   Not supported — ntm cannot prove abandonment from observable state.
+  bead_orphaned   Not supported — herdctl cannot prove abandonment from observable state.
                   Use --robot-capabilities for full rationale.
 
 Common Workflows:
@@ -2352,7 +2352,7 @@ func populateSnapshotFeedMetadata(output *SnapshotOutput, feed *AttentionFeed) {
 		LatestCursor:    feedStats.NewestCursor,
 		EventCount:      feedStats.Count,
 		RetentionPeriod: feedStats.RetentionPeriod.String(),
-		ResyncCommand:   "ntm --robot-snapshot",
+		ResyncCommand:     "herdctl --robot-snapshot",
 	}
 
 	if feedStats.Count == 0 {
@@ -3526,13 +3526,13 @@ func GetPlan() (*PlanOutput, error) {
 		plan.Recommendation = "Create your first coding session"
 		plan.Actions = append(plan.Actions, PlanAction{
 			Priority:    1,
-			Command:     "ntm spawn myproject --cc=2",
+			Command:     "herdctl spawn myproject --cc=2",
 			Description: "Create session with 2 Claude Code agents",
 			Args:        []string{"spawn", "myproject", "--cc=2"},
 		})
 		plan.Actions = append(plan.Actions, PlanAction{
 			Priority:    2,
-			Command:     "ntm tutorial",
+			Command:     "herdctl tutorial",
 			Description: "Learn NTM with an interactive tutorial",
 			Args:        []string{"tutorial"},
 		})
@@ -3544,7 +3544,7 @@ func GetPlan() (*PlanOutput, error) {
 			if !sess.Attached {
 				plan.Actions = append(plan.Actions, PlanAction{
 					Priority:    1,
-					Command:     fmt.Sprintf("ntm attach %s", sess.Name),
+					Command:     fmt.Sprintf("herdctl attach %s", sess.Name),
 					Description: fmt.Sprintf("Attach to session '%s' (%d windows)", sess.Name, sess.Windows),
 					Args:        []string{"attach", sess.Name},
 				})
@@ -3553,13 +3553,13 @@ func GetPlan() (*PlanOutput, error) {
 
 		plan.Actions = append(plan.Actions, PlanAction{
 			Priority:    2,
-			Command:     "ntm palette",
+			Command:     "herdctl palette",
 			Description: "Open command palette for quick actions",
 			Args:        []string{"palette"},
 		})
 		plan.Actions = append(plan.Actions, PlanAction{
 			Priority:    3,
-			Command:     "ntm dashboard",
+			Command:     "herdctl dashboard",
 			Description: "Open visual session dashboard",
 			Args:        []string{"dashboard"},
 		})
@@ -3631,7 +3631,7 @@ func getBeadRecommendations(limit int) ([]BeadAction, []string) {
 			Priority:  rec.SuggestedPriority,
 			Impact:    rec.ImpactScore,
 			Reasoning: rec.Reasoning,
-			Command:   fmt.Sprintf("br update %s --status in_progress", rec.IssueID),
+			Command:     fmt.Sprintf("br update %s --status in_progress", rec.IssueID),
 			IsReady:   isReady,
 		}
 
@@ -3943,7 +3943,7 @@ func GetTail(opts TailOptions) (*TailOutput, error) {
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", opts.Session),
 				ErrCodeSessionNotFound,
-				"Use 'ntm list' to see available sessions",
+				"Use 'herdctl list' to see available sessions",
 			),
 			Session:    opts.Session,
 			CapturedAt: time.Now().UTC(),
@@ -3961,7 +3961,7 @@ func GetTail(opts TailOptions) (*TailOutput, error) {
 		hint := "Check tmux is running and session is accessible"
 		if tmux.ClassifyCommandError(err).Kind == tmux.CommandErrorSessionNotFound {
 			errorCode = ErrCodeSessionNotFound
-			hint = "Use 'ntm list' to see available sessions"
+			hint = "Use 'herdctl list' to see available sessions"
 		}
 		return &TailOutput{
 			RobotResponse: NewErrorResponse(
@@ -6794,7 +6794,7 @@ func GetSend(opts SendOptions) (*SendOutput, error) {
 
 	if !backendSessionExists(opts.Session) {
 		return finalizeTerminalSendActuation(trace, opts, &SendOutput{
-			RobotResponse:  NewErrorResponse(fmt.Errorf("session '%s' not found", opts.Session), ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions"),
+			RobotResponse:  NewErrorResponse(fmt.Errorf("session '%s' not found", opts.Session), ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions"),
 			Session:        opts.Session,
 			SentAt:         time.Now().UTC(),
 			Blocked:        false,
@@ -10004,7 +10004,7 @@ func GetContext(session string, lines int) (*ContextOutput, error) {
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session '%s' not found", session),
 				ErrCodeSessionNotFound,
-				"Use 'ntm list' to see available sessions",
+				"Use 'herdctl list' to see available sessions",
 			),
 			Session:    session,
 			CapturedAt: time.Now().UTC(),
@@ -10261,7 +10261,7 @@ func GetActivity(opts ActivityOptions) (*ActivityOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 		return output, nil
 	}
@@ -10652,7 +10652,7 @@ func GetDiff(opts DiffOptions) (*DiffOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session '%s' not found", opts.Session),
 			ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 		return output, nil
 	}

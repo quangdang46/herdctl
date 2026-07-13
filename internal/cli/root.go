@@ -105,10 +105,10 @@ func classifyRobotExecuteError(err error) (string, string) {
 		"accepts ",
 	} {
 		if strings.Contains(message, fragment) {
-			return robot.ErrCodeInvalidFlag, "Use 'ntm --robot-help' or 'ntm --robot-capabilities' to inspect valid flags"
+			return robot.ErrCodeInvalidFlag, "Use 'herdctl --robot-help' or 'herdctl --robot-capabilities' to inspect valid flags"
 		}
 	}
-	return robot.ErrCodeInternalError, "Retry the command or inspect ntm diagnostics"
+	return robot.ErrCodeInternalError, "Retry the command or inspect herdctl diagnostics"
 }
 
 // ExitCode maps an Execute error onto the public robot process contract.
@@ -129,20 +129,20 @@ type VersionInput struct {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "ntm",
-	Short: "Named Tmux Manager - orchestrate AI coding agents in tmux sessions",
-	Long: `NTM (Named Tmux Manager) helps you create and manage tmux sessions
-with multiple AI coding agents (Claude, Codex, Gemini) in separate panes.
+	Use:     "herdctl",
+	Aliases: []string{"ntm"},
+	Short:   "Agent control plane - orchestrate AI coding agents on tmux or herdr panes",
+	Long: `herdctl orchestrates AI coding agents on tmux or herdr panes. See FEATURES.md for backend parity.
 
 Quick Start:
-  ntm spawn myproject --cc=2 --cod=2    # Create session with 4 agents
-  ntm attach myproject                   # Attach to session
-  ntm palette                            # Open command palette (TUI)
-  ntm send myproject --all "fix bugs"   # Broadcast prompt to all agents
+  herdctl spawn myproject --cc=2 --cod=2    # Create session with 4 agents
+  herdctl attach myproject                   # Attach to session
+  herdctl palette                            # Open command palette (TUI)
+  herdctl send myproject --all "fix bugs"   # Broadcast prompt to all agents
 
 Shell Integration:
-  Add to your .zshrc:  eval "$(ntm shell zsh)"
-  Add to your .bashrc: eval "$(ntm shell bash)"`,
+  Add to your .zshrc:  eval "$(herdctl shell zsh)"
+  Add to your .bashrc: eval "$(herdctl shell bash)"`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -197,7 +197,7 @@ Shell Integration:
 				// here — it is skipped with its own warning inside LoadMerged.
 				// Warn loudly so the user sees the real cause instead of
 				// silently reverting to built-in defaults (issue #162).
-				fmt.Fprintf(os.Stderr, "ntm: warning: config load failed (%v); using built-in defaults\n", err)
+				fmt.Fprintf(os.Stderr, "herdctl: warning: config load failed (%v); using built-in defaults\n", err)
 				cfg = config.Default()
 			}
 			activeTheme := theme.Current()
@@ -389,7 +389,7 @@ Shell Integration:
 		if robotEvents {
 			session, err := resolveOptionalRobotSessionFilter(robotEventsSession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-events")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-events")
 				return
 			}
 			opts := robot.EventsOptions{
@@ -440,7 +440,7 @@ Shell Integration:
 		if robotAttention {
 			session, err := resolveOptionalRobotSessionFilter(robotAttentionSession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-attention")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-attention")
 				return
 			}
 			timeout, err := time.ParseDuration(robotAttentionTimeout)
@@ -474,7 +474,7 @@ Shell Integration:
 		if robotDigest {
 			session, err := resolveOptionalRobotSessionFilter(robotAttentionSession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-digest")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-digest")
 				return
 			}
 			sinceCursor := robotAttentionSinceCursor
@@ -576,7 +576,7 @@ Shell Integration:
 		if robotContext != "" {
 			session, _, err := resolveRobotSessionProjectScope(robotContext)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-context")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-context")
 				return
 			}
 			// Use --lines flag for scrollback (default 20, or as specified)
@@ -637,7 +637,7 @@ Shell Integration:
 		if robotEnsemble != "" {
 			session, err := resolveRobotOfflineCapableSession(robotEnsemble)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-ensemble")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-ensemble")
 				return
 			}
 			if err := robot.PrintEnsemble(session); err != nil {
@@ -654,7 +654,7 @@ Shell Integration:
 		if robotEnsembleStop != "" {
 			session, err := resolveRobotOfflineCapableSession(robotEnsembleStop)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-ensemble-stop")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-ensemble-stop")
 				return
 			}
 			opts := robot.EnsembleStopOptions{
@@ -669,7 +669,7 @@ Shell Integration:
 		if robotOverlay {
 			session, err := resolveOptionalRobotLiveSession(robotOverlaySession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-overlay")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-overlay")
 				return
 			}
 			opts := robot.OverlayOptions{
@@ -910,7 +910,7 @@ Shell Integration:
 		if robotTokens {
 			session, err := resolveOptionalRobotSessionFilter(resolveRobotTokensSession(cmd))
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-tokens")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-tokens")
 				return
 			}
 			opts := robot.TokensOptions{
@@ -928,7 +928,7 @@ Shell Integration:
 		if robotHistory != "" {
 			session, err := resolveRobotSessionFilter(robotHistory)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-history")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-history")
 				return
 			}
 			pagination, err := resolveRobotPagination(cmd)
@@ -954,7 +954,7 @@ Shell Integration:
 		if robotCausality != "" {
 			session, err := resolveRobotOfflineCapableSession(robotCausality)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-causality")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-causality")
 				return
 			}
 			projectDir := strings.TrimSpace(robotCausalityProject)
@@ -988,7 +988,7 @@ Shell Integration:
 		if robotActivity != "" {
 			session, err := resolveRobotLiveSession(robotActivity)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-activity")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-activity")
 				return
 			}
 			paneFilter, err := robot.ParsePaneSelectorsArg(robotPanes)
@@ -1014,7 +1014,7 @@ Shell Integration:
 		if robotWait != "" {
 			session, err := resolveRobotLiveSession(robotWait)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-wait")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-wait")
 				return
 			}
 			// Parse timeout and poll interval
@@ -1061,7 +1061,7 @@ Shell Integration:
 		if robotRoute != "" {
 			session, err := resolveRobotLiveSession(robotRoute)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-route")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-route")
 				return
 			}
 			// Parse exclude panes
@@ -1134,7 +1134,7 @@ Shell Integration:
 		if robotTail != "" {
 			session, err := resolveRobotLiveSession(robotTail)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-tail")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-tail")
 				return
 			}
 			paneFilter, err := robot.ParsePaneSelectorsArg(robotPanes)
@@ -1150,7 +1150,7 @@ Shell Integration:
 		if robotWatchBead != "" {
 			session, err := resolveRobotLiveSession(robotWatchBead)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-watch-bead")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-watch-bead")
 				return
 			}
 			panes, err := robot.ParsePanesArg(robotPanes)
@@ -1188,7 +1188,7 @@ Shell Integration:
 		if robotErrors != "" {
 			session, err := resolveRobotLiveSession(robotErrors)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-errors")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-errors")
 				return
 			}
 			// Parse pane filter
@@ -1220,7 +1220,7 @@ Shell Integration:
 		if robotIsWorking != "" {
 			session, err := resolveRobotLiveSession(robotIsWorking)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-is-working")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-is-working")
 				return
 			}
 			// Parse pane filter
@@ -1252,7 +1252,7 @@ Shell Integration:
 		if robotAgentHealth != "" {
 			session, err := resolveRobotLiveSession(robotAgentHealth)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-agent-health")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-agent-health")
 				return
 			}
 			// Parse pane filter
@@ -1276,7 +1276,7 @@ Shell Integration:
 		if robotSmartRestart != "" {
 			session, err := resolveRobotLiveSession(robotSmartRestart)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-smart-restart")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-smart-restart")
 				return
 			}
 			// Parse pane filter
@@ -1304,7 +1304,7 @@ Shell Integration:
 		if robotMonitor != "" {
 			session, err := resolveRobotLiveSession(robotMonitor)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-monitor")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-monitor")
 				return
 			}
 			// Parse pane filter
@@ -1360,7 +1360,7 @@ Shell Integration:
 		if robotSupportBundle != "" || cmd.Flags().Changed("robot-support-bundle") {
 			session, err := resolveOptionalRobotLiveSession(robotSupportBundle)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-support-bundle")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-support-bundle")
 				return
 			}
 			opts := robot.SupportBundleOptions{
@@ -1395,7 +1395,7 @@ Shell Integration:
 			}
 			session, err := resolveRobotLiveSession(robotSend)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-send")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-send")
 				return
 			}
 			// Load message from --msg or --msg-file
@@ -1503,7 +1503,7 @@ Shell Integration:
 		if robotHealth != "" {
 			session, err := resolveRobotLiveSession(robotHealth)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-health")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-health")
 				return
 			}
 			if err := robot.PrintSessionHealth(session); err != nil {
@@ -1514,7 +1514,7 @@ Shell Integration:
 		if robotHealthOAuth != "" {
 			session, err := resolveRobotLiveSession(robotHealthOAuth)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-health-oauth")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-health-oauth")
 				return
 			}
 			// PrintHealthOAuth emits the JSON envelope and returns the process
@@ -1525,7 +1525,7 @@ Shell Integration:
 		if robotHealthRestartStuck != "" {
 			session, err := resolveRobotLiveSession(robotHealthRestartStuck)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-health-restart-stuck")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-health-restart-stuck")
 				return
 			}
 			threshold, err := robot.ParseStuckThreshold(robotStuckThreshold)
@@ -1546,7 +1546,7 @@ Shell Integration:
 		if robotLogs != "" {
 			session, err := resolveRobotLiveSession(robotLogs)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-logs")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-logs")
 				return
 			}
 			var panes []int
@@ -1571,7 +1571,7 @@ Shell Integration:
 		if robotDiagnose != "" {
 			session, err := resolveRobotLiveSession(robotDiagnose)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-diagnose")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-diagnose")
 				return
 			}
 			if robotDiagnoseBrief {
@@ -1607,7 +1607,7 @@ Shell Integration:
 		if robotAck != "" {
 			session, err := resolveRobotLiveSession(robotAck)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-ack")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-ack")
 				return
 			}
 			// Load message from --msg or --msg-file (reuse logic from robot-send)
@@ -1659,7 +1659,7 @@ Shell Integration:
 		if robotAssign != "" {
 			session, err := resolveRobotLiveSession(robotAssign)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-assign")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-assign")
 				return
 			}
 			var beads []string
@@ -1679,7 +1679,7 @@ Shell Integration:
 		if robotBulkAssign != "" {
 			session, err := resolveRobotLiveSession(robotBulkAssign)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-bulk-assign")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-bulk-assign")
 				return
 			}
 			skipSelectors, err := robot.ParsePaneSelectorsArg(robotBulkAssignSkip)
@@ -1770,7 +1770,7 @@ Shell Integration:
 			}
 			resp, err := buildControllerResponse(opts)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-controller-spawn")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-controller-spawn")
 				return
 			}
 			if err := output.PrintJSON(resp); err != nil {
@@ -1781,7 +1781,7 @@ Shell Integration:
 		if robotInterrupt != "" {
 			session, err := resolveRobotLiveSession(robotInterrupt)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-interrupt")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-interrupt")
 				return
 			}
 			// Parse pane filter (reuse --panes flag)
@@ -1816,7 +1816,7 @@ Shell Integration:
 		if robotRestartPane != "" {
 			session, err := resolveRobotLiveSession(robotRestartPane)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-restart-pane")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-restart-pane")
 				return
 			}
 			// Parse pane filter (reuse --panes flag)
@@ -1841,7 +1841,7 @@ Shell Integration:
 		if robotProbe != "" {
 			session, err := resolveRobotLiveSession(robotProbe)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-probe")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-probe")
 				return
 			}
 			panes, err := robot.ParsePanesArg(robotPanes)
@@ -1872,7 +1872,7 @@ Shell Integration:
 		if robotMarkdown {
 			session, err := resolveOptionalRobotSessionFilter(robotMarkdownSession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-markdown")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-markdown")
 				return
 			}
 			opts := robot.DefaultMarkdownOptions()
@@ -1905,7 +1905,7 @@ Shell Integration:
 		if robotSave != "" {
 			session, err := resolveRobotLiveSession(robotSave)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-save")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-save")
 				return
 			}
 			opts := robot.SaveOptions{
@@ -1932,7 +1932,7 @@ Shell Integration:
 		if robotFiles != "" {
 			session, err := resolveOptionalRobotSessionFilter(robotFiles)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-files")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-files")
 				return
 			}
 			opts := robot.FilesOptions{
@@ -1948,7 +1948,7 @@ Shell Integration:
 		if robotInspectPane != "" {
 			session, err := resolveRobotLiveSession(robotInspectPane)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-inspect-pane")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-inspect-pane")
 				return
 			}
 			opts := robot.InspectPaneOptions{
@@ -1965,7 +1965,7 @@ Shell Integration:
 		if robotInspectSession != "" {
 			session, err := resolveRobotLiveSession(robotInspectSession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-inspect-session")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-inspect-session")
 				return
 			}
 			opts := robot.InspectSessionOptions{
@@ -2024,7 +2024,7 @@ Shell Integration:
 		if robotContextInject != "" {
 			session, projectDir, err := resolveRobotSessionProjectScope(robotContextInject)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-context-inject")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-context-inject")
 				return
 			}
 			files := defaultContextFiles()
@@ -2087,7 +2087,7 @@ Shell Integration:
 		if robotMetrics != "" {
 			session, err := resolveRobotLiveSession(robotMetrics)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-metrics")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-metrics")
 				return
 			}
 			opts := robot.MetricsOptions{
@@ -2102,7 +2102,7 @@ Shell Integration:
 		if robotReplay != "" {
 			session, err := resolveRobotLiveSession(robotReplay)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-replay")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-replay")
 				return
 			}
 			opts := robot.ReplayOptions{
@@ -2118,7 +2118,7 @@ Shell Integration:
 		if robotPaletteInfo {
 			paletteSession, err := resolveOptionalRobotSessionFilter(resolveRobotPaletteSession(cmd))
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-palette")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-palette")
 				return
 			}
 			opts := robot.PaletteOptions{
@@ -2134,7 +2134,7 @@ Shell Integration:
 		if robotDismissAlert != "" {
 			dismissSession, err := resolveOptionalRobotSessionFilter(robotDismissSession)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-dismiss-alert")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-dismiss-alert")
 				return
 			}
 			dismissAlertID := robotDismissAlert
@@ -2156,7 +2156,7 @@ Shell Integration:
 		if robotDiff != "" {
 			session, err := resolveRobotLiveSession(robotDiff)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-diff")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-diff")
 				return
 			}
 			since, err := parseRobotSinceWindow(resolveRobotDiffSince(cmd), time.Minute, "since")
@@ -2178,7 +2178,7 @@ Shell Integration:
 		if robotAlerts {
 			session, err := resolveOptionalRobotSessionFilter(resolveRobotAlertsSession(cmd))
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-alerts")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-alerts")
 				return
 			}
 			opts := robot.TUIAlertsOptions{
@@ -2263,7 +2263,7 @@ Shell Integration:
 		if robotSummary != "" {
 			session, err := resolveRobotLiveSession(robotSummary)
 			if err != nil {
-				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'ntm list' to see available sessions", "robot-summary")
+				failRobotCommand(err, robot.ErrCodeSessionNotFound, "Use 'herdctl list' to see available sessions", "robot-summary")
 				return
 			}
 			since, err := parseRobotSinceWindow(resolveRobotSummarySince(cmd), time.Minute, "since")
@@ -3284,18 +3284,18 @@ func init() {
 
 	// Robot flags for AI agents - state inspection commands
 	rootCmd.Flags().BoolVar(&robotHelp, "robot-help", false, "Show comprehensive human-readable AI agent integration guide with examples")
-	rootCmd.Flags().BoolVar(&robotStatus, "robot-status", false, "Get sessions, panes, agent states (tmux or NTM_BACKEND=herdr). Start here. Example: ntm --robot-status")
-	rootCmd.Flags().BoolVar(&robotVersion, "robot-version", false, "Get ntm version, commit, build info (JSON). Example: ntm --robot-version")
+	rootCmd.Flags().BoolVar(&robotStatus, "robot-status", false, "Get sessions, panes, agent states (tmux or NTM_BACKEND=herdr). Start here. Example: herdctl --robot-status")
+	rootCmd.Flags().BoolVar(&robotVersion, "robot-version", false, "Get herdctl version, commit, build info (JSON). Example: herdctl --robot-version")
 	rootCmd.Flags().BoolVar(&robotCapabilities, "robot-capabilities", false, "Get all available robot commands with parameters and descriptions (JSON). Machine-discoverable API")
 	rootCmd.Flags().StringVar(&robotCapabilitiesCommand, "capability-command", "", "Filter --robot-capabilities to one exact command name or flag")
 	rootCmd.Flags().StringVar(&robotCapabilitiesCategory, "capability-category", "", "Filter --robot-capabilities to one exact category")
 	rootCmd.Flags().StringVar(&robotCapabilitiesSearch, "capability-search", "", "Search --robot-capabilities metadata for a case-insensitive query")
 	rootCmd.Flags().BoolVar(&robotCapabilitiesCompact, "capability-compact", false, "Return a token-efficient --robot-capabilities command catalog")
-	rootCmd.Flags().StringVar(&robotDocs, "robot-docs", "", "Get documentation for a topic (JSON). Topics: quickstart, commands, examples, exit-codes. Example: ntm --robot-docs=quickstart")
-	rootCmd.Flags().BoolVar(&robotPlan, "robot-plan", false, "Get bv execution plan with parallelizable tracks (JSON). Example: ntm --robot-plan")
-	rootCmd.Flags().BoolVar(&robotSnapshot, "robot-snapshot", false, "Unified state: sessions + beads + alerts + mail. Use --since for delta. Example: ntm --robot-snapshot")
+	rootCmd.Flags().StringVar(&robotDocs, "robot-docs", "", "Get documentation for a topic (JSON). Topics: quickstart, commands, examples, exit-codes. Example: herdctl --robot-docs=quickstart")
+	rootCmd.Flags().BoolVar(&robotPlan, "robot-plan", false, "Get bv execution plan with parallelizable tracks (JSON). Example: herdctl --robot-plan")
+	rootCmd.Flags().BoolVar(&robotSnapshot, "robot-snapshot", false, "Unified state: sessions + beads + alerts + mail. Use --since for delta. Example: herdctl --robot-snapshot")
 	rootCmd.Flags().StringVar(&robotSince, "since", "", "Shared time filter for commands that support --since. Snapshot uses RFC3339; history/diff/summary accept duration or RFC3339 timestamps; tokens accepts ISO8601 or YYYY-MM-DD; robot-mail-check accepts YYYY-MM-DD. Examples: --since=2025-12-15T10:00:00Z, --since=1h, --since=2025-12-15")
-	rootCmd.Flags().BoolVar(&robotEvents, "robot-events", false, "Stream attention events since cursor. Use for raw replay/feed. Example: ntm --robot-events --since-cursor=42 --events-limit=50")
+	rootCmd.Flags().BoolVar(&robotEvents, "robot-events", false, "Stream attention events since cursor. Use for raw replay/feed. Example: herdctl --robot-events --since-cursor=42 --events-limit=50")
 	rootCmd.Flags().Int64Var(&robotEventsSinceCursor, "since-cursor", 0, "Cursor position to replay from. Optional with --robot-events. Example: --since-cursor=42")
 	rootCmd.Flags().IntVar(&robotEventsLimit, "events-limit", 100, "Max events to return. Optional with --robot-events. Example: --events-limit=50")
 	rootCmd.Flags().StringVar(&robotEventsIncident, "events-incident", "", "Durable incident ID for bounded historical replay. Optional with --robot-events. Example: --events-incident=inc-20260322-abc")
@@ -3306,35 +3306,35 @@ func init() {
 	rootCmd.Flags().StringVar(&robotEventsSession, "events-session", "", "Filter by session name. Optional with --robot-events. Example: --events-session=myproject")
 	rootCmd.Flags().StringVar(&robotEventsActionability, "events-actionability", "", "Filter by actionability level. Optional with --robot-events. Values: action_required, interesting, background")
 	rootCmd.Flags().StringVar(&robotProfile, "profile", "", "Attention-feed filter profile. Applies to --robot-events, --robot-attention, --robot-digest, --robot-wait. Values: operator, debug, minimal, alerts")
-	rootCmd.Flags().BoolVar(&robotAttention, "robot-attention", false, "The one obvious tending primitive: wait for attention, then return digest. Example: ntm --robot-attention --attention-cursor=42")
-	rootCmd.Flags().BoolVar(&robotDigest, "robot-digest", false, "Non-blocking attention digest. Returns counts and top items without waiting. Example: ntm --robot-digest --profile=minimal")
+	rootCmd.Flags().BoolVar(&robotAttention, "robot-attention", false, "The one obvious tending primitive: wait for attention, then return digest. Example: herdctl --robot-attention --attention-cursor=42")
+	rootCmd.Flags().BoolVar(&robotDigest, "robot-digest", false, "Non-blocking attention digest. Returns counts and top items without waiting. Example: herdctl --robot-digest --profile=minimal")
 	rootCmd.Flags().Int64Var(&robotAttentionSinceCursor, "attention-cursor", 0, "Cursor position to wait/digest from. Optional with --robot-attention. Example: --attention-cursor=42")
 	rootCmd.Flags().StringVar(&robotAttentionSession, "attention-session", "", "Filter to specific session. Optional with --robot-attention. Example: --attention-session=myproject")
 	rootCmd.Flags().StringVar(&robotAttentionTimeout, "attention-timeout", "5m", "Maximum wait time. Optional with --robot-attention. Example: --attention-timeout=10m")
 	rootCmd.Flags().StringVar(&robotAttentionPoll, "attention-poll", "1s", "Polling interval. Optional with --robot-attention. Example: --attention-poll=500ms")
 	rootCmd.Flags().StringVar(&robotAttentionCondition, "attention-condition", "attention", "Which condition to wait for. Optional with --robot-attention. Values: attention, action_required, mail_pending")
-	rootCmd.Flags().StringVar(&robotTail, "robot-tail", "", "Capture recent pane output. Required: SESSION. Example: ntm --robot-tail=myproject --lines=50")
+	rootCmd.Flags().StringVar(&robotTail, "robot-tail", "", "Capture recent pane output. Required: SESSION. Example: herdctl --robot-tail=myproject --lines=50")
 	rootCmd.Flags().StringVar(&robotWatchBead, "robot-watch-bead", "", "Capture bead mentions across panes plus current bead status (JSON snapshot). Required: SESSION")
 	rootCmd.Flags().StringVar(&robotWatchBeadID, "bead", "", "Bead ID for --robot-watch-bead. Example: --bead=bd-abc123")
-	rootCmd.Flags().StringVar(&robotErrors, "robot-errors", "", "Filter pane output to show only errors. Required: SESSION. Example: ntm --robot-errors=myproject --lines=100")
+	rootCmd.Flags().StringVar(&robotErrors, "robot-errors", "", "Filter pane output to show only errors. Required: SESSION. Example: herdctl --robot-errors=myproject --lines=100")
 	rootCmd.Flags().StringVar(&robotErrorsSince, "errors-since", "", "Filter to errors from last duration. Optional with --robot-errors. Example: --errors-since=5m")
 	rootCmd.Flags().IntVar(&robotLines, "lines", 20, "Lines to capture per pane. Optional with --robot-tail, --robot-errors, --robot-watch-bead, --robot-is-working, --robot-agent-health, --robot-smart-restart, and --robot-monitor. Example: --lines=100")
 	rootCmd.Flags().StringVar(&robotPanes, "panes", "", "Filter with comma-separated N, W.P, or %N pane selectors. Optional with --robot-tail, --robot-watch-bead, --robot-errors, --robot-send, --robot-ack, --robot-interrupt, --robot-wait, --robot-is-working, --robot-agent-health, --robot-smart-restart, --robot-restart-pane, and --robot-monitor. Example: --panes=1,2.0,%7")
-	rootCmd.Flags().StringVar(&robotIsWorking, "robot-is-working", "", "Check if agents are working. Returns work state with recommendations. Required: SESSION. Example: ntm --robot-is-working=myproject --panes=2,3")
+	rootCmd.Flags().StringVar(&robotIsWorking, "robot-is-working", "", "Check if agents are working. Returns work state with recommendations. Required: SESSION. Example: herdctl --robot-is-working=myproject --panes=2,3")
 	rootCmd.Flags().BoolVar(&robotIsWorkingVerbose, "is-working-verbose", false, "Include raw sample output in --robot-is-working response. Example: --is-working-verbose")
-	rootCmd.Flags().BoolVar(&robotSemantic, "semantic", false, "Add an optional ground-truth semantic_progress field to --robot-is-working (token-attributed git commits / bead claims). Advisory only; never flips is_working. Off by default (no git/br calls). Example: ntm --robot-is-working=myproject --semantic")
+	rootCmd.Flags().BoolVar(&robotSemantic, "semantic", false, "Add an optional ground-truth semantic_progress field to --robot-is-working (token-attributed git commits / bead claims). Advisory only; never flips is_working. Off by default (no git/br calls). Example: herdctl --robot-is-working=myproject --semantic")
 	rootCmd.Flags().StringVar(&robotSemanticWindow, "semantic-window", "", "Look-back window for --semantic (Go duration, e.g. 30m, 2h). Defaults to [robot.semantic].window_minutes or 30m. Example: --semantic --semantic-window=1h")
-	rootCmd.Flags().StringVar(&robotAgentHealth, "robot-agent-health", "", "Comprehensive agent health check combining local state and provider usage. Required: SESSION. Example: ntm --robot-agent-health=myproject --panes=2,3")
+	rootCmd.Flags().StringVar(&robotAgentHealth, "robot-agent-health", "", "Comprehensive agent health check combining local state and provider usage. Required: SESSION. Example: herdctl --robot-agent-health=myproject --panes=2,3")
 	rootCmd.Flags().BoolVar(&robotAgentHealthNoCaut, "no-caut", false, "Skip caut provider query for faster local-only health check. Optional with --robot-agent-health")
 	rootCmd.Flags().BoolVar(&robotAgentHealthVerbose, "agent-health-verbose", false, "Include raw sample output in --robot-agent-health response. Example: --agent-health-verbose")
-	rootCmd.Flags().StringVar(&robotSmartRestart, "robot-smart-restart", "", "SAFE restart: checks --robot-is-working first, refuses to interrupt working agents. Required: SESSION. Example: ntm --robot-smart-restart=myproject --panes=2,3")
+	rootCmd.Flags().StringVar(&robotSmartRestart, "robot-smart-restart", "", "SAFE restart: checks --robot-is-working first, refuses to interrupt working agents. Required: SESSION. Example: herdctl --robot-smart-restart=myproject --panes=2,3")
 	rootCmd.Flags().BoolVar(&robotSmartRestartForce, "force", false, "DANGEROUS: Force execution for commands that support it. With --robot-smart-restart, restart even if an agent appears to be working. With --robot-interrupt, send Ctrl+C even if an agent already looks ready. Use with extreme caution!")
 	rootCmd.Flags().BoolVar(&robotSmartRestartDryRun, "smart-restart-dry-run", false, "Show what would happen without performing restart. Optional with --robot-smart-restart")
 	rootCmd.Flags().StringVar(&robotSmartRestartPrompt, "prompt", "", "Send this prompt to the agent after restart. Optional with --robot-smart-restart")
 	rootCmd.Flags().BoolVar(&robotSmartRestartVerbose, "smart-restart-verbose", false, "Include extra debugging info in --robot-smart-restart response")
 	rootCmd.Flags().BoolVar(&robotSmartRestartHardKill, "hard-kill", false, "Use kill -9 fallback if the agent ignores the normal exit sequence. Optional with --robot-smart-restart")
 	rootCmd.Flags().BoolVar(&robotSmartRestartHardKillOnly, "hard-kill-only", false, "Skip the normal exit sequence and go straight to kill -9. Optional with --robot-smart-restart")
-	rootCmd.Flags().StringVar(&robotMonitor, "robot-monitor", "", "Start proactive monitoring for usage limits. Emits JSONL warnings. Required: SESSION. Example: ntm --robot-monitor=myproject --interval=30s")
+	rootCmd.Flags().StringVar(&robotMonitor, "robot-monitor", "", "Start proactive monitoring for usage limits. Emits JSONL warnings. Required: SESSION. Example: herdctl --robot-monitor=myproject --interval=30s")
 	rootCmd.Flags().StringVar(&robotMonitorInterval, "interval", "", "Polling interval for --robot-monitor and status polling for --robot-watch-bead. Example: --interval=30s")
 	rootCmd.Flags().StringVar(&robotMonitorWarn, "warn-threshold", "", "Context % for WARNING level. Optional with --robot-monitor. Example: --warn-threshold=25 (default 25)")
 	rootCmd.Flags().StringVar(&robotMonitorCrit, "crit-threshold", "", "Context % for CRITICAL level. Optional with --robot-monitor. Example: --crit-threshold=15 (default 15)")
@@ -3344,7 +3344,7 @@ func init() {
 	rootCmd.Flags().StringVar(&robotMonitorOutput, "output", "", "Output file path for JSONL. Optional with --robot-monitor. Example: --output=/tmp/monitor.jsonl")
 
 	// Robot-support-bundle flags for diagnostic bundle generation
-	rootCmd.Flags().StringVar(&robotSupportBundle, "robot-support-bundle", "", "Generate support bundle with diagnostic info. Optional: SESSION. Example: ntm --robot-support-bundle=myproject")
+	rootCmd.Flags().StringVar(&robotSupportBundle, "robot-support-bundle", "", "Generate support bundle with diagnostic info. Optional: SESSION. Example: herdctl --robot-support-bundle=myproject")
 	rootCmd.Flags().StringVar(&robotSupportBundleOutput, "bundle-output", "", "Output file path for bundle. Optional with --robot-support-bundle. Example: --bundle-output=/tmp/debug.zip")
 	rootCmd.Flags().StringVar(&robotSupportBundleFormat, "bundle-format", "zip", "Archive format: zip or tar.gz. Optional with --robot-support-bundle")
 	rootCmd.Flags().StringVar(&robotSupportBundleSince, "bundle-since", "", "Include content from duration ago. Optional with --robot-support-bundle. Example: --bundle-since=1h")
@@ -3353,14 +3353,14 @@ func init() {
 	rootCmd.Flags().StringVar(&robotSupportBundleRedact, "bundle-redact", "redact", "Redaction mode: off, warn, redact, block. Optional with --robot-support-bundle")
 
 	rootCmd.Flags().BoolVar(&robotGraph, "robot-graph", false, "Get bv dependency graph insights: PageRank, critical path, cycles (JSON)")
-	rootCmd.Flags().BoolVar(&robotTriage, "robot-triage", false, "Get bv triage analysis with recommendations, quick wins, blockers (JSON). Example: ntm --robot-triage --triage-limit=20")
+	rootCmd.Flags().BoolVar(&robotTriage, "robot-triage", false, "Get bv triage analysis with recommendations, quick wins, blockers (JSON). Example: herdctl --robot-triage --triage-limit=20")
 	rootCmd.Flags().IntVar(&robotTriageLimit, "triage-limit", 10, "Max recommendations per category. Optional with --robot-triage. Example: --triage-limit=20")
 	rootCmd.Flags().BoolVar(&robotDashboard, "robot-dashboard", false, "Get dashboard summary as markdown (or JSON with --json). Token-efficient overview")
-	rootCmd.Flags().StringVar(&robotContext, "robot-context", "", "Get context window usage for all agents in a session. Required: SESSION. Example: ntm --robot-context=myproject")
+	rootCmd.Flags().StringVar(&robotContext, "robot-context", "", "Get context window usage for all agents in a session. Required: SESSION. Example: herdctl --robot-context=myproject")
 	rootCmd.Flags().BoolVar(&robotEnsembleModesList, "robot-ensemble-modes", false, "List reasoning modes (JSON). Optional: --tier, --category, --limit, --offset")
-	rootCmd.Flags().BoolVar(&robotEnsemblePresetsList, "robot-ensemble-presets", false, "List ensemble presets (JSON). Example: ntm --robot-ensemble-presets")
-	rootCmd.Flags().StringVar(&robotEnsemble, "robot-ensemble", "", "Get ensemble state for a session. Required: SESSION. Example: ntm --robot-ensemble=myproject")
-	rootCmd.Flags().StringVar(&robotEnsembleSpawn, "robot-ensemble-spawn", "", "Spawn a reasoning ensemble. Required: SESSION. Example: ntm --robot-ensemble-spawn=myproject --preset=project-diagnosis --question='...'")
+	rootCmd.Flags().BoolVar(&robotEnsemblePresetsList, "robot-ensemble-presets", false, "List ensemble presets (JSON). Example: herdctl --robot-ensemble-presets")
+	rootCmd.Flags().StringVar(&robotEnsemble, "robot-ensemble", "", "Get ensemble state for a session. Required: SESSION. Example: herdctl --robot-ensemble=myproject")
+	rootCmd.Flags().StringVar(&robotEnsembleSpawn, "robot-ensemble-spawn", "", "Spawn a reasoning ensemble. Required: SESSION. Example: herdctl --robot-ensemble-spawn=myproject --preset=project-diagnosis --question='...'")
 	rootCmd.Flags().StringVar(&robotEnsemblePreset, "preset", "", "Ensemble preset name. Required with --robot-ensemble-spawn unless --modes is set")
 	rootCmd.Flags().StringVar(&robotEnsembleModes, "modes", "", "Explicit mode IDs or codes (comma-separated). Used with --robot-ensemble-spawn")
 	rootCmd.Flags().StringVar(&robotEnsembleQuestion, "question", "", "Question for ensemble spawn. Required with --robot-ensemble-spawn")
@@ -3371,14 +3371,14 @@ func init() {
 	rootCmd.Flags().IntVar(&robotEnsembleBudgetPerMode, "budget-per-agent", 0, "Override per-agent token cap for ensemble spawn")
 	rootCmd.Flags().BoolVar(&robotEnsembleNoCache, "no-cache", false, "Bypass context cache for ensemble spawn")
 	rootCmd.Flags().StringVar(&robotEnsembleProject, "project", "", "Project directory override for robot commands (e.g., ensemble spawn, JFP install)")
-	rootCmd.Flags().StringVar(&robotEnsembleSuggest, "robot-ensemble-suggest", "", "Suggest best ensemble preset for a question. Example: ntm --robot-ensemble-suggest=\"What security issues exist?\"")
+	rootCmd.Flags().StringVar(&robotEnsembleSuggest, "robot-ensemble-suggest", "", "Suggest best ensemble preset for a question. Example: herdctl --robot-ensemble-suggest=\"What security issues exist?\"")
 	rootCmd.Flags().BoolVar(&robotEnsembleSuggestIDOnly, "suggest-id-only", false, "Output only preset name with --robot-ensemble-suggest")
-	rootCmd.Flags().StringVar(&robotEnsembleStop, "robot-ensemble-stop", "", "Stop an ensemble and save partial state. Required: SESSION. Example: ntm --robot-ensemble-stop=myproject")
+	rootCmd.Flags().StringVar(&robotEnsembleStop, "robot-ensemble-stop", "", "Stop an ensemble and save partial state. Required: SESSION. Example: herdctl --robot-ensemble-stop=myproject")
 	rootCmd.Flags().BoolVar(&robotEnsembleStopForce, "stop-force", false, "Force kill without graceful shutdown. Optional with --robot-ensemble-stop")
 	rootCmd.Flags().BoolVar(&robotEnsembleStopNoCollect, "stop-no-collect", false, "Skip partial output collection. Optional with --robot-ensemble-stop")
 
 	// Overlay flags for agent-initiated human handoff (br-a6cmp)
-	rootCmd.Flags().BoolVar(&robotOverlay, "robot-overlay", false, "Open dashboard overlay for human handoff (JSON). Requires tmux. Example: ntm --robot-overlay")
+	rootCmd.Flags().BoolVar(&robotOverlay, "robot-overlay", false, "Open dashboard overlay for human handoff (JSON). Requires tmux. Example: herdctl --robot-overlay")
 	rootCmd.Flags().StringVar(&robotOverlaySession, "overlay-session", "", "Session for overlay. Optional with --robot-overlay, defaults to current session. Example: --overlay-session=myproject")
 	rootCmd.Flags().Int64Var(&robotOverlayCursor, "overlay-cursor", 0, "Pre-focus attention panel on this cursor. Optional with --robot-overlay. Example: --overlay-cursor=42")
 	rootCmd.Flags().BoolVar(&robotOverlayNoWait, "overlay-no-wait", false, "Return immediately without blocking. Optional with --robot-overlay")
@@ -3389,10 +3389,10 @@ func init() {
 	rootCmd.Flags().StringVar(&robotVerbosity, "robot-verbosity", "", "Robot verbosity profile for JSON/TOON: terse, default, or debug. Env: NTM_ROBOT_VERBOSITY")
 
 	// BV Analysis robot flags for advanced analysis modes
-	rootCmd.Flags().StringVar(&robotForecast, "robot-forecast", "", "Get ETA predictions. Use 'all' or specific ID. Example: ntm --robot-forecast=br-123")
+	rootCmd.Flags().StringVar(&robotForecast, "robot-forecast", "", "Get ETA predictions. Use 'all' or specific ID. Example: herdctl --robot-forecast=br-123")
 	rootCmd.Flags().BoolVar(&robotSuggest, "robot-suggest", false, "Get hygiene suggestions: duplicates, missing deps, label suggestions (JSON)")
-	rootCmd.Flags().StringVar(&robotImpact, "robot-impact", "", "Get file impact analysis. Required: FILE_PATH. Example: ntm --robot-impact=src/main.go")
-	rootCmd.Flags().StringVar(&robotSearch, "robot-search", "", "Semantic vector search. Required: QUERY. Example: ntm --robot-search='authentication bug'")
+	rootCmd.Flags().StringVar(&robotImpact, "robot-impact", "", "Get file impact analysis. Required: FILE_PATH. Example: herdctl --robot-impact=src/main.go")
+	rootCmd.Flags().StringVar(&robotSearch, "robot-search", "", "Semantic vector search. Required: QUERY. Example: herdctl --robot-search='authentication bug'")
 
 	// BV Label robot flags for label-based analysis
 	rootCmd.Flags().BoolVar(&robotLabelAttention, "robot-label-attention", false, "Get attention-ranked labels by impact and urgency (JSON)")
@@ -3401,16 +3401,16 @@ func init() {
 	rootCmd.Flags().BoolVar(&robotLabelHealth, "robot-label-health", false, "Get per-label health analysis: velocity, staleness, blocked count (JSON)")
 
 	// BV File robot flags for file-based analysis
-	rootCmd.Flags().StringVar(&robotFileBeads, "robot-file-beads", "", "Get beads that touched a file path. Required: FILE_PATH. Example: ntm --robot-file-beads=src/main.go")
+	rootCmd.Flags().StringVar(&robotFileBeads, "robot-file-beads", "", "Get beads that touched a file path. Required: FILE_PATH. Example: herdctl --robot-file-beads=src/main.go")
 	rootCmd.Flags().IntVar(&robotFileBeadsLimit, "file-beads-limit", 20, "Max beads to return per file. Optional with --robot-file-beads")
 	rootCmd.Flags().BoolVar(&robotFileHotspots, "robot-file-hotspots", false, "Get files touched by most beads (quality hotspots) (JSON)")
 	rootCmd.Flags().IntVar(&robotHotspotsLimit, "hotspots-limit", 10, "Max hotspots to return. Optional with --robot-file-hotspots")
-	rootCmd.Flags().StringVar(&robotFileRelations, "robot-file-relations", "", "Get files that co-change with given file. Required: FILE_PATH. Example: ntm --robot-file-relations=src/api.go")
+	rootCmd.Flags().StringVar(&robotFileRelations, "robot-file-relations", "", "Get files that co-change with given file. Required: FILE_PATH. Example: herdctl --robot-file-relations=src/api.go")
 	rootCmd.Flags().IntVar(&robotRelationsLimit, "relations-limit", 10, "Max related files to return. Optional with --robot-file-relations")
 	rootCmd.Flags().Float64Var(&robotRelationsThreshold, "relations-threshold", 0.5, "Correlation threshold (0.0-1.0). Optional with --robot-file-relations")
 
 	// Robot-send flags for batch messaging
-	rootCmd.Flags().StringVar(&robotSend, "robot-send", "", "Send message to panes atomically. Required: SESSION, --msg or --msg-file. Example: ntm --robot-send=proj --msg='Fix auth'")
+	rootCmd.Flags().StringVar(&robotSend, "robot-send", "", "Send message to panes atomically. Required: SESSION, --msg or --msg-file. Example: herdctl --robot-send=proj --msg='Fix auth'")
 	rootCmd.Flags().StringVar(&robotSendMsg, "msg", "", "Shared message payload. Required with --robot-send unless --msg-file is set. Optional with --robot-ack (echo detection) and --robot-interrupt (post-interrupt retask)")
 	rootCmd.Flags().StringVar(&robotSendMsgFile, "msg-file", "", "Read message content from file (use with --robot-send)")
 	rootCmd.Flags().BoolVar(&robotSendEnter, "enter", true, "Send Enter after pasting message (default: true). Use --enter=false to paste without submitting")
@@ -3421,12 +3421,12 @@ func init() {
 	rootCmd.Flags().IntVar(&robotSendDelay, "delay-ms", 0, "Delay between sends (ms). Optional with --robot-send. Example: --delay-ms=500 for 0.5s between panes")
 
 	// Robot-assign flags for work distribution
-	rootCmd.Flags().StringVar(&robotAssign, "robot-assign", "", "Get work distribution recommendations. Required: SESSION. Example: ntm --robot-assign=proj --strategy=speed")
+	rootCmd.Flags().StringVar(&robotAssign, "robot-assign", "", "Get work distribution recommendations. Required: SESSION. Example: herdctl --robot-assign=proj --strategy=speed")
 	rootCmd.Flags().StringVar(&robotAssignBeads, "beads", "", "Specific bead IDs to assign (comma-separated). Optional with --robot-assign. Example: --beads=ntm-abc,ntm-xyz")
 	rootCmd.Flags().StringVar(&robotAssignStrategy, "strategy", "balanced", "Strategy override for commands that support it. --robot-assign: balanced, speed, quality, dependency. --robot-route: least-loaded, first-available, round-robin, round-robin-available, random, sticky, explicit. --robot-spawn with --spawn-assign-work: top-n, diverse, dependency-aware, skill-matched.")
 
 	// Robot-bulk-assign flags for batch work distribution
-	rootCmd.Flags().StringVar(&robotBulkAssign, "robot-bulk-assign", "", "Bulk assign beads to all idle agents. Required: SESSION. Example: ntm --robot-bulk-assign=proj --from-bv")
+	rootCmd.Flags().StringVar(&robotBulkAssign, "robot-bulk-assign", "", "Bulk assign beads to all idle agents. Required: SESSION. Example: herdctl --robot-bulk-assign=proj --from-bv")
 	rootCmd.Flags().BoolVar(&robotBulkAssignFromBV, "from-bv", false, "Use bv triage for bead selection. Use with --robot-bulk-assign")
 	rootCmd.Flags().StringVar(&robotBulkAssignAlloc, "allocation", "", "Explicit pane->bead allocation JSON. Alternative to --from-bv. Example: --allocation='{\"2\":\"bd-abc\"}'")
 	rootCmd.Flags().StringVar(&robotBulkAssignStrategy, "bulk-strategy", "impact", "Bulk assignment strategy: impact (default), ready, stale, balanced. Use with --from-bv")
@@ -3436,20 +3436,20 @@ func init() {
 	rootCmd.Flags().StringVar(&robotReservationPaths, "reservation-paths", "", "Comma-separated project-relative file globs to reserve before bulk/spawn work assignment")
 
 	// Robot-health flag for session/project health summary
-	rootCmd.Flags().StringVar(&robotHealth, "robot-health", "", "Get session or project health (JSON). SESSION for per-agent health, empty for project health. Example: ntm --robot-health=myproject")
-	rootCmd.Flags().StringVar(&robotHealthOAuth, "robot-health-oauth", "", "Get per-agent OAuth and rate-limit status (JSON). Required: SESSION. Example: ntm --robot-health-oauth=myproject")
+	rootCmd.Flags().StringVar(&robotHealth, "robot-health", "", "Get session or project health (JSON). SESSION for per-agent health, empty for project health. Example: herdctl --robot-health=myproject")
+	rootCmd.Flags().StringVar(&robotHealthOAuth, "robot-health-oauth", "", "Get per-agent OAuth and rate-limit status (JSON). Required: SESSION. Example: herdctl --robot-health-oauth=myproject")
 
 	// Robot-health-restart-stuck flags for auto-restarting stuck agents
-	rootCmd.Flags().StringVar(&robotHealthRestartStuck, "robot-health-restart-stuck", "", "Detect and restart stuck agents (no output for N minutes). Required: SESSION. Example: ntm --robot-health-restart-stuck=myproject")
+	rootCmd.Flags().StringVar(&robotHealthRestartStuck, "robot-health-restart-stuck", "", "Detect and restart stuck agents (no output for N minutes). Required: SESSION. Example: herdctl --robot-health-restart-stuck=myproject")
 	rootCmd.Flags().StringVar(&robotStuckThreshold, "stuck-threshold", "", "Duration before considering agent stuck (default 5m). Use with --robot-health-restart-stuck. Example: --stuck-threshold=10m")
 
 	// Robot-logs flags for aggregated agent logs
-	rootCmd.Flags().StringVar(&robotLogs, "robot-logs", "", "Get aggregated logs from all agent panes (JSON). Required: SESSION. Example: ntm --robot-logs=myproject")
+	rootCmd.Flags().StringVar(&robotLogs, "robot-logs", "", "Get aggregated logs from all agent panes (JSON). Required: SESSION. Example: herdctl --robot-logs=myproject")
 	rootCmd.Flags().StringVar(&robotLogsPanes, "logs-panes", "", "Filter to specific pane indices (comma-separated). Use with --robot-logs. Example: --logs-panes=1,2,3")
 	rootCmd.Flags().IntVar(&robotLogsLimit, "logs-limit", 100, "Max lines per pane. Use with --robot-logs. Example: --logs-limit=50")
 
 	// Robot-diagnose flags for comprehensive health diagnosis
-	rootCmd.Flags().StringVar(&robotDiagnose, "robot-diagnose", "", "Comprehensive health check with fix recommendations. Required: SESSION. Example: ntm --robot-diagnose=myproject")
+	rootCmd.Flags().StringVar(&robotDiagnose, "robot-diagnose", "", "Comprehensive health check with fix recommendations. Required: SESSION. Example: herdctl --robot-diagnose=myproject")
 	rootCmd.Flags().BoolVar(&robotDiagnoseFix, "diagnose-fix", false, "Attempt auto-fix for fixable issues. Use with --robot-diagnose. Example: --robot-diagnose=proj --diagnose-fix")
 	rootCmd.Flags().BoolVar(&robotDiagnoseBrief, "diagnose-brief", false, "Minimal output (summary only). Use with --robot-diagnose")
 	rootCmd.Flags().IntVar(&robotDiagnosePane, "diagnose-pane", -1, "Diagnose specific pane only. Use with --robot-diagnose. Example: --diagnose-pane=2")
@@ -3472,13 +3472,13 @@ func init() {
 	rootCmd.Flags().BoolVar(&robotSetup, "robot-setup", false, "Alias for --robot-acfs-status")
 
 	// Robot-ack flags for send confirmation tracking
-	rootCmd.Flags().StringVar(&robotAck, "robot-ack", "", "Watch for agent responses after send. Required: SESSION. Example: ntm --robot-ack=proj --timeout=30s")
+	rootCmd.Flags().StringVar(&robotAck, "robot-ack", "", "Watch for agent responses after send. Required: SESSION. Example: herdctl --robot-ack=proj --timeout=30s")
 	rootCmd.Flags().StringVar(&robotAckTimeout, "ack-timeout", "30s", "Max wait time for responses (e.g., 30s, 5000ms, 1m). Works with --robot-ack, --track")
 	rootCmd.Flags().IntVar(&robotAckPoll, "ack-poll", 500, "Poll interval in ms. Optional with --robot-ack. Lower = faster detection, higher CPU")
-	rootCmd.Flags().BoolVar(&robotAckTrack, "track", false, "Combined send+ack: send --msg and wait for response. Use with --robot-send. Example: ntm --robot-send=proj --msg='hello' --track")
+	rootCmd.Flags().BoolVar(&robotAckTrack, "track", false, "Combined send+ack: send --msg and wait for response. Use with --robot-send. Example: herdctl --robot-send=proj --msg='hello' --track")
 
 	// Robot-spawn flags for structured session creation
-	rootCmd.Flags().StringVar(&robotSpawn, "robot-spawn", "", "Create session with agents. Required: SESSION name. Example: ntm --robot-spawn=myproject --spawn-cc=2")
+	rootCmd.Flags().StringVar(&robotSpawn, "robot-spawn", "", "Create session with agents. Required: SESSION name. Example: herdctl --robot-spawn=myproject --spawn-cc=2")
 	rootCmd.Flags().IntVar(&robotSpawnCC, "spawn-cc", 0, "Claude Code agents to spawn. Use with --robot-spawn. Example: --spawn-cc=2")
 	rootCmd.Flags().IntVar(&robotSpawnCod, "spawn-cod", 0, "Codex CLI agents to spawn. Use with --robot-spawn. Example: --spawn-cod=1")
 	rootCmd.Flags().IntVar(&robotSpawnGmi, "spawn-gmi", 0, "Gemini CLI agents to spawn. Use with --robot-spawn. Example: --spawn-gmi=1")
@@ -3496,16 +3496,16 @@ func init() {
 	rootCmd.Flags().StringVar(&robotSpawnLabel, "spawn-label", "", "Goal label for multi-session support. Use with --robot-spawn. Creates session PROJECT--LABEL. Example: --spawn-label=frontend")
 
 	// Robot-agent-names flag for querying agent name mappings
-	rootCmd.Flags().StringVar(&robotAgentNames, "robot-agent-names", "", "Get agent name mappings for a session (JSON). Names are generated using NATO phonetic alphabet. Example: ntm --robot-agent-names=myproject")
+	rootCmd.Flags().StringVar(&robotAgentNames, "robot-agent-names", "", "Get agent name mappings for a session (JSON). Names are generated using NATO phonetic alphabet. Example: herdctl --robot-agent-names=myproject")
 
 	// Robot-controller-spawn flags for launching controller agent
-	rootCmd.Flags().StringVar(&robotControllerSpawn, "robot-controller-spawn", "", "Launch controller agent in session. Required: SESSION. Example: ntm --robot-controller-spawn=proj")
+	rootCmd.Flags().StringVar(&robotControllerSpawn, "robot-controller-spawn", "", "Launch controller agent in session. Required: SESSION. Example: herdctl --robot-controller-spawn=proj")
 	rootCmd.Flags().StringVar(&robotControllerAgentType, "controller-agent-type", "cc", "Agent type for controller: cc, cod, gmi, agy, cursor, windsurf|ws, aider, or ollama. Use with --robot-controller-spawn")
 	rootCmd.Flags().StringVar(&robotControllerPrompt, "controller-prompt", "", "Custom prompt file. Use with --robot-controller-spawn")
 	rootCmd.Flags().BoolVar(&robotControllerNoPrompt, "controller-no-prompt", false, "Skip initial prompt. Use with --robot-controller-spawn")
 
 	// Robot-interrupt flags for priority course correction
-	rootCmd.Flags().StringVar(&robotInterrupt, "robot-interrupt", "", "Send Ctrl+C to stop agents, optionally send a new task. Required: SESSION. Example: ntm --robot-interrupt=proj --msg='Stop and fix bug'")
+	rootCmd.Flags().StringVar(&robotInterrupt, "robot-interrupt", "", "Send Ctrl+C to stop agents, optionally send a new task. Required: SESSION. Example: herdctl --robot-interrupt=proj --msg='Stop and fix bug'")
 	rootCmd.Flags().StringVar(&robotInterruptMsg, "interrupt-msg", "", "New task to send after Ctrl+C. Optional with --robot-interrupt. Agents receive this after stopping")
 	rootCmd.Flags().BoolVar(&robotInterruptAll, "interrupt-all", false, "Interrupt all panes including user. Default: agents only. Use with --robot-interrupt")
 	rootCmd.Flags().BoolVar(&robotInterruptForce, "interrupt-force", false, "Send Ctrl+C even if agent shows idle/ready. Use for stuck agents")
@@ -3513,10 +3513,10 @@ func init() {
 	rootCmd.Flags().StringVar(&robotInterruptTimeout, "interrupt-timeout", "10s", "Max wait for ready state after interrupt (e.g., 10s, 5000ms). Ignored with --interrupt-no-wait")
 
 	// Robot-restart-pane flag
-	rootCmd.Flags().StringVar(&robotRestartPane, "robot-restart-pane", "", "Restart pane processes with tmux respawn-pane -k. Required: SESSION. Optional filters: --panes, --type, --all, --dry-run, --restart-bead, --restart-prompt. Example: ntm --robot-restart-pane=proj --type=claude")
+	rootCmd.Flags().StringVar(&robotRestartPane, "robot-restart-pane", "", "Restart pane processes with tmux respawn-pane -k. Required: SESSION. Optional filters: --panes, --type, --all, --dry-run, --restart-bead, --restart-prompt. Example: herdctl --robot-restart-pane=proj --type=claude")
 	rootCmd.Flags().StringVar(&robotRestartPaneBead, "restart-bead", "", "Assign bead to agent after restart. Fetches info via br show --json, sends prompt. Use with --robot-restart-pane. Example: --restart-bead=bd-abc12")
 	rootCmd.Flags().StringVar(&robotRestartPanePrompt, "restart-prompt", "", "Custom prompt to send after restart. Overrides --restart-bead template. Use with --robot-restart-pane")
-	rootCmd.Flags().StringVar(&robotProbe, "robot-probe", "", "Probe pane responsiveness. Required: SESSION. Example: ntm --robot-probe=proj --panes=1,2")
+	rootCmd.Flags().StringVar(&robotProbe, "robot-probe", "", "Probe pane responsiveness. Required: SESSION. Example: herdctl --robot-probe=proj --panes=1,2")
 	rootCmd.Flags().StringVar(&robotProbeMethod, "probe-method", "", "Probe method: keystroke_echo, interrupt_test (used with --robot-probe)")
 	rootCmd.Flags().IntVar(&robotProbeTimeout, "probe-timeout", 0, "Probe timeout in ms (100-60000, used with --robot-probe)")
 	rootCmd.Flags().BoolVar(&robotProbeAggressive, "probe-aggressive", false, "Fallback to interrupt_test if keystroke_echo fails (used with --robot-probe)")
@@ -3539,19 +3539,19 @@ func init() {
 	rootCmd.Flags().IntVar(&robotMarkdownMaxAlerts, "md-max-alerts", 0, "Max alerts to show (0=default). Optional with --robot-markdown")
 
 	// Robot-save flags for session state persistence
-	rootCmd.Flags().StringVar(&robotSave, "robot-save", "", "Save session state for later restore. Required: SESSION. Example: ntm --robot-save=proj --save-output=backup.json")
+	rootCmd.Flags().StringVar(&robotSave, "robot-save", "", "Save session state for later restore. Required: SESSION. Example: herdctl --robot-save=proj --save-output=backup.json")
 	rootCmd.Flags().StringVar(&robotSaveOutput, "save-output", "", "Output file path. Optional with --robot-save. Default: ntm-save-{session}-{timestamp}.json")
 
 	// Robot-restore flags for session state restoration
-	rootCmd.Flags().StringVar(&robotRestore, "robot-restore", "", "Restore session from saved state. Required: path to save file. Example: ntm --robot-restore=backup.json")
+	rootCmd.Flags().StringVar(&robotRestore, "robot-restore", "", "Restore session from saved state. Required: path to save file. Example: herdctl --robot-restore=backup.json")
 	rootCmd.Flags().BoolVar(&robotRestoreDry, "restore-dry-run", false, "Preview mode: show what would happen without executing. Use with --robot-restore")
 	rootCmd.Flags().BoolVar(&robotDryRun, "dry-run", false, "Preview mode: show what would happen without executing. Use with --robot-send, --robot-interrupt, --robot-spawn, --robot-restore, --robot-restart-pane, --robot-smart-restart, --robot-pipeline-run, and --robot-replay")
 
 	// Robot-cass flags for CASS (Cross-Agent Semantic Search) integration
 	rootCmd.Flags().BoolVar(&robotCassStatus, "robot-cass-status", false, "Get CASS health: index status, message counts, freshness (JSON)")
-	rootCmd.Flags().StringVar(&robotCassSearch, "robot-cass-search", "", "Search past agent conversations. Required: QUERY. Example: ntm --robot-cass-search='authentication error'")
+	rootCmd.Flags().StringVar(&robotCassSearch, "robot-cass-search", "", "Search past agent conversations. Required: QUERY. Example: herdctl --robot-cass-search='authentication error'")
 	rootCmd.Flags().BoolVar(&robotCassInsights, "robot-cass-insights", false, "Get CASS aggregated insights: topics, patterns, agent activity (JSON)")
-	rootCmd.Flags().StringVar(&robotCassContext, "robot-cass-context", "", "Get relevant past context for a task. Example: ntm --robot-cass-context='how to implement auth'")
+	rootCmd.Flags().StringVar(&robotCassContext, "robot-cass-context", "", "Get relevant past context for a task. Example: herdctl --robot-cass-context='how to implement auth'")
 
 	// CASS filters - work with --robot-cass-search and --robot-cass-context
 	rootCmd.Flags().StringVar(&cassAgent, "cass-agent", "", "Filter CASS by agent: claude, codex, antigravity, gemini, cursor, etc. Example: --cass-agent=claude")
@@ -3562,11 +3562,11 @@ func init() {
 	// Robot-jfp flags for JeffreysPrompts (jfp) integration
 	rootCmd.Flags().BoolVar(&robotJFPStatus, "robot-jfp-status", false, "Get JFP health: installation status, registry connectivity (JSON)")
 	rootCmd.Flags().BoolVar(&robotJFPList, "robot-jfp-list", false, "List all prompts from JeffreysPrompts registry (JSON)")
-	rootCmd.Flags().StringVar(&robotJFPSearch, "robot-jfp-search", "", "Search prompts. Required: QUERY. Example: ntm --robot-jfp-search='debugging'")
-	rootCmd.Flags().StringVar(&robotJFPShow, "robot-jfp-show", "", "Show prompt details. Required: ID. Example: ntm --robot-jfp-show='prompt-123'")
-	rootCmd.Flags().StringVar(&robotJFPSuggest, "robot-jfp-suggest", "", "Get prompt suggestions for a task. Required: TASK. Example: ntm --robot-jfp-suggest='build a REST API'")
-	rootCmd.Flags().StringVar(&robotJFPInstall, "robot-jfp-install", "", "Install JFP prompt(s). Required: ID(s). Example: ntm --robot-jfp-install='prompt-123'")
-	rootCmd.Flags().StringVar(&robotJFPExport, "robot-jfp-export", "", "Export JFP prompt(s). Required: ID(s). Example: ntm --robot-jfp-export='prompt-123'")
+	rootCmd.Flags().StringVar(&robotJFPSearch, "robot-jfp-search", "", "Search prompts. Required: QUERY. Example: herdctl --robot-jfp-search='debugging'")
+	rootCmd.Flags().StringVar(&robotJFPShow, "robot-jfp-show", "", "Show prompt details. Required: ID. Example: herdctl --robot-jfp-show='prompt-123'")
+	rootCmd.Flags().StringVar(&robotJFPSuggest, "robot-jfp-suggest", "", "Get prompt suggestions for a task. Required: TASK. Example: herdctl --robot-jfp-suggest='build a REST API'")
+	rootCmd.Flags().StringVar(&robotJFPInstall, "robot-jfp-install", "", "Install JFP prompt(s). Required: ID(s). Example: herdctl --robot-jfp-install='prompt-123'")
+	rootCmd.Flags().StringVar(&robotJFPExport, "robot-jfp-export", "", "Export JFP prompt(s). Required: ID(s). Example: herdctl --robot-jfp-export='prompt-123'")
 	rootCmd.Flags().BoolVar(&robotJFPUpdate, "robot-jfp-update", false, "Update JFP registry cache (JSON)")
 	rootCmd.Flags().BoolVar(&robotJFPInstalled, "robot-jfp-installed", false, "List installed Claude Code skills (JSON)")
 	rootCmd.Flags().BoolVar(&robotJFPCategories, "robot-jfp-categories", false, "List all prompt categories with counts (JSON)")
@@ -3580,11 +3580,11 @@ func init() {
 	rootCmd.Flags().StringVar(&jfpFormat, "jfp-format", "", "Export format for JFP export (skill or md)")
 
 	// MS (Meta Skill) robot flags
-	rootCmd.Flags().StringVar(&robotMSSearch, "robot-ms-search", "", "Search Meta Skill catalog. Required: QUERY. Example: ntm --robot-ms-search='commit workflow'")
-	rootCmd.Flags().StringVar(&robotMSShow, "robot-ms-show", "", "Show Meta Skill details. Required: ID. Example: ntm --robot-ms-show='commit-and-release'")
+	rootCmd.Flags().StringVar(&robotMSSearch, "robot-ms-search", "", "Search Meta Skill catalog. Required: QUERY. Example: herdctl --robot-ms-search='commit workflow'")
+	rootCmd.Flags().StringVar(&robotMSShow, "robot-ms-show", "", "Show Meta Skill details. Required: ID. Example: herdctl --robot-ms-show='commit-and-release'")
 
 	// XF (X Find) robot flags for archive search
-	rootCmd.Flags().StringVar(&robotXFSearch, "robot-xf-search", "", "Search X/Twitter archive via xf. Required: QUERY. Example: ntm --robot-xf-search='error handling patterns'")
+	rootCmd.Flags().StringVar(&robotXFSearch, "robot-xf-search", "", "Search X/Twitter archive via xf. Required: QUERY. Example: herdctl --robot-xf-search='error handling patterns'")
 	rootCmd.Flags().BoolVar(&robotXFStatus, "robot-xf-status", false, "Get XF health: installation status, index validity (JSON)")
 	rootCmd.Flags().IntVar(&xfLimit, "xf-limit", 20, "Max XF search results. Optional with --robot-xf-search. Example: --xf-limit=50")
 	rootCmd.Flags().StringVar(&xfMode, "xf-mode", "", "XF search mode: semantic, keyword, fuzzy. Optional with --robot-xf-search")
@@ -3595,7 +3595,7 @@ func init() {
 
 	// Session profile robot flags (bd-29kr)
 	rootCmd.Flags().BoolVar(&robotProfileList, "robot-profile-list", false, "List saved session profiles (JSON)")
-	rootCmd.Flags().StringVar(&robotProfileShow, "robot-profile-show", "", "Show a saved session profile by name (JSON). Example: ntm --robot-profile-show=myproject")
+	rootCmd.Flags().StringVar(&robotProfileShow, "robot-profile-show", "", "Show a saved session profile by name (JSON). Example: herdctl --robot-profile-show=myproject")
 
 	// Robot-tokens flags for token usage analysis
 	rootCmd.Flags().BoolVar(&robotTokens, "robot-tokens", false, "Get token usage statistics (JSON). Group by agent, model, or time period")
@@ -3606,7 +3606,7 @@ func init() {
 	rootCmd.Flags().StringVar(&robotTokensAgent, "tokens-agent", "", "Filter to agent type. Optional with --robot-tokens. Example: --tokens-agent=claude")
 
 	// Robot-history flags for command history tracking
-	rootCmd.Flags().StringVar(&robotHistory, "robot-history", "", "Get command history for a session (JSON). Required: SESSION. Example: ntm --robot-history=myproject")
+	rootCmd.Flags().StringVar(&robotHistory, "robot-history", "", "Get command history for a session (JSON). Required: SESSION. Example: herdctl --robot-history=myproject")
 	rootCmd.Flags().StringVar(&robotHistoryPane, "history-pane", "", "Filter by pane ID. Optional with --robot-history. Example: --history-pane=0.1")
 	rootCmd.Flags().StringVar(&robotHistoryType, "history-type", "", "Filter by agent type. Optional with --robot-history. Example: --history-type=claude")
 	rootCmd.Flags().IntVar(&robotHistoryLast, "history-last", 0, "Show last N entries. Optional with --robot-history. Example: --history-last=10")
@@ -3614,7 +3614,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&robotHistoryStats, "history-stats", false, "Show statistics instead of entries. Optional with --robot-history")
 
 	// Robot-causality flags for unified causality timelines across coordination sources
-	rootCmd.Flags().StringVar(&robotCausality, "robot-causality", "", "Get unified causality timeline for a session (JSON). Required: SESSION. Example: ntm --robot-causality=myproject")
+	rootCmd.Flags().StringVar(&robotCausality, "robot-causality", "", "Get unified causality timeline for a session (JSON). Required: SESSION. Example: herdctl --robot-causality=myproject")
 	rootCmd.Flags().StringVar(&robotCausalityProject, "causality-project", "", "Project path override for Agent Mail and pipeline state lookup. Optional with --robot-causality")
 	rootCmd.Flags().StringVar(&robotCausalityAgent, "causality-agent", "", "Agent Mail identity used to fetch inbox messages. Optional with --robot-causality")
 	rootCmd.Flags().StringVar(&robotCausalityBead, "causality-bead", "", "Filter events by bead/thread ID (e.g. bd-2mb03.4). Optional with --robot-causality")
@@ -3626,11 +3626,11 @@ func init() {
 	rootCmd.Flags().IntVar(&robotCausalityLimit, "causality-limit", 200, "Max causality events to return (default 200). Optional with --robot-causality")
 
 	// Robot-activity flags for agent activity detection
-	rootCmd.Flags().StringVar(&robotActivity, "robot-activity", "", "Get agent activity state (idle/busy/error). Required: SESSION. Example: ntm --robot-activity=myproject")
+	rootCmd.Flags().StringVar(&robotActivity, "robot-activity", "", "Get agent activity state (idle/busy/error). Required: SESSION. Example: herdctl --robot-activity=myproject")
 	rootCmd.Flags().StringVar(&robotActivityType, "activity-type", "", "Filter by agent type: claude, codex, antigravity, gemini. Optional with --robot-activity. Example: --activity-type=claude")
 
 	// Robot-wait flags for waiting on agent states
-	rootCmd.Flags().StringVar(&robotWait, "robot-wait", "", "Wait for agents to reach state. Required: SESSION. Example: ntm --robot-wait=myproject --wait-until=idle")
+	rootCmd.Flags().StringVar(&robotWait, "robot-wait", "", "Wait for agents to reach state. Required: SESSION. Example: herdctl --robot-wait=myproject --wait-until=idle")
 	rootCmd.Flags().StringVar(&robotWaitUntil, "wait-until", "idle", "Wait condition: idle, complete, generating, healthy, stalled, rate_limited, attention, action_required, mail_pending, mail_ack_required, context_hot, reservation_conflict, file_conflict, session_changed, pane_changed. Optional with --robot-wait. Use --attention-cursor and --profile for attention-feed waits.")
 	rootCmd.Flags().StringVar(&robotWaitUntil, "condition", "idle", "Alias for --wait-until. Same condition set, including attention-feed waits.")
 	rootCmd.Flags().StringVar(&robotWaitTimeout, "wait-timeout", "5m", "Maximum wait time. Optional with --robot-wait. Example: --wait-timeout=2m")
@@ -3644,16 +3644,16 @@ func init() {
 	rootCmd.Flags().BoolVar(&robotWaitTransition, "transition", false, "Alias for --wait-transition")
 
 	// Robot-route flags for routing recommendations
-	rootCmd.Flags().StringVar(&robotRoute, "robot-route", "", "Get routing recommendation. Required: SESSION. Example: ntm --robot-route=myproject --strategy=least-loaded")
+	rootCmd.Flags().StringVar(&robotRoute, "robot-route", "", "Get routing recommendation. Required: SESSION. Example: herdctl --robot-route=myproject --strategy=least-loaded")
 	rootCmd.Flags().StringVar(&robotRouteStrategy, "route-strategy", "least-loaded", "Routing strategy: least-loaded, first-available, round-robin, round-robin-available, random, sticky, explicit. Optional with --robot-route")
 	rootCmd.Flags().StringVar(&robotRouteType, "route-type", "", "Deprecated alias for --type. Filter by agent type with --robot-route. Example: --type=claude")
 	rootCmd.Flags().StringVar(&robotRouteExclude, "route-exclude", "", "Exclude pane indices (comma-separated). Optional with --robot-route. Example: --route-exclude=0,3")
 
 	// Robot-pipeline flags for workflow execution
-	rootCmd.Flags().StringVar(&robotPipelineRun, "robot-pipeline-run", "", "Run a workflow. Required: WORKFLOW_FILE, --session. Example: ntm --robot-pipeline-run=workflow.yaml --session=proj")
-	rootCmd.Flags().StringVar(&robotPipelineStatus, "robot-pipeline", "", "Get pipeline status. Required: RUN_ID. Example: ntm --robot-pipeline=run-20241230-123456-abcd")
-	rootCmd.Flags().BoolVar(&robotPipelineList, "robot-pipeline-list", false, "List all tracked pipelines. Example: ntm --robot-pipeline-list")
-	rootCmd.Flags().StringVar(&robotPipelineCancel, "robot-pipeline-cancel", "", "Cancel a running pipeline. Required: RUN_ID. Example: ntm --robot-pipeline-cancel=run-20241230-123456-abcd")
+	rootCmd.Flags().StringVar(&robotPipelineRun, "robot-pipeline-run", "", "Run a workflow. Required: WORKFLOW_FILE, --session. Example: herdctl --robot-pipeline-run=workflow.yaml --session=proj")
+	rootCmd.Flags().StringVar(&robotPipelineStatus, "robot-pipeline", "", "Get pipeline status. Required: RUN_ID. Example: herdctl --robot-pipeline=run-20241230-123456-abcd")
+	rootCmd.Flags().BoolVar(&robotPipelineList, "robot-pipeline-list", false, "List all tracked pipelines. Example: herdctl --robot-pipeline-list")
+	rootCmd.Flags().StringVar(&robotPipelineCancel, "robot-pipeline-cancel", "", "Cancel a running pipeline. Required: RUN_ID. Example: herdctl --robot-pipeline-cancel=run-20241230-123456-abcd")
 	rootCmd.Flags().StringVar(&robotPipelineSession, "pipeline-session", "", "Deprecated alias for --session. Tmux session for pipeline execution with --robot-pipeline-run. Example: --session=myproject")
 	rootCmd.Flags().StringVar(&robotPipelineVars, "pipeline-vars", "", "JSON variables for pipeline. Optional with --robot-pipeline-run. Example: --pipeline-vars='{\"env\":\"prod\"}'")
 	rootCmd.Flags().BoolVar(&robotPipelineDryRun, "pipeline-dry-run", false, "Validate workflow without executing. Optional with --robot-pipeline-run")
@@ -3662,50 +3662,50 @@ func init() {
 	rootCmd.Flags().StringVar(&robotPipelineFromState, "pipeline-from-state", "", "Prior run ID whose persisted outputs should be reused for steps skipped by --pipeline-start-from. Requires --pipeline-start-from.")
 
 	// TUI Parity robot flags - expose TUI dashboard functionality to AI agents
-	rootCmd.Flags().StringVar(&robotFiles, "robot-files", "", "Get file changes with agent attribution. Optional SESSION filter. Example: ntm --robot-files=myproject --files-window=15m")
+	rootCmd.Flags().StringVar(&robotFiles, "robot-files", "", "Get file changes with agent attribution. Optional SESSION filter. Example: herdctl --robot-files=myproject --files-window=15m")
 	rootCmd.Flags().StringVar(&robotFilesWindow, "files-window", "15m", "Time window: 5m, 15m, 1h, all. Optional with --robot-files. Example: --files-window=1h")
 	rootCmd.Flags().IntVar(&robotFilesLimit, "files-limit", 100, "Max changes to return. Optional with --robot-files. Example: --files-limit=50")
 
-	rootCmd.Flags().StringVar(&robotInspectPane, "robot-inspect-pane", "", "Detailed pane inspection. Required: SESSION. Example: ntm --robot-inspect-pane=myproject --inspect-index=1")
+	rootCmd.Flags().StringVar(&robotInspectPane, "robot-inspect-pane", "", "Detailed pane inspection. Required: SESSION. Example: herdctl --robot-inspect-pane=myproject --inspect-index=1")
 	rootCmd.Flags().IntVar(&robotInspectIndex, "inspect-index", 0, "Pane index to inspect. Optional with --robot-inspect-pane. Example: --inspect-index=2")
 	rootCmd.Flags().IntVar(&robotInspectLines, "inspect-lines", 100, "Lines to capture. Optional with --robot-inspect-pane. Example: --inspect-lines=200")
 	rootCmd.Flags().BoolVar(&robotInspectCode, "inspect-code", false, "Parse code blocks from output. Optional with --robot-inspect-pane")
-	rootCmd.Flags().StringVar(&robotInspectSession, "robot-inspect-session", "", "Projection-backed session drill-down. Required: SESSION. Example: ntm --robot-inspect-session=myproject")
-	rootCmd.Flags().StringVar(&robotInspectAgent, "robot-inspect-agent", "", "Projection-backed agent drill-down. Required: SESSION:PANE runtime agent id. Example: ntm --robot-inspect-agent=myproject:%1")
-	rootCmd.Flags().StringVar(&robotInspectWork, "robot-inspect-work", "", "Projection-backed work drill-down. Required: BEAD_ID. Example: ntm --robot-inspect-work=bd-j9jo3.6.6")
-	rootCmd.Flags().StringVar(&robotInspectCoord, "robot-inspect-coordination", "", "Projection-backed coordination drill-down. Required: AGENT_NAME. Example: ntm --robot-inspect-coordination=BlueLake")
-	rootCmd.Flags().StringVar(&robotInspectQuota, "robot-inspect-quota", "", "Projection-backed quota drill-down. Required: PROVIDER/ACCOUNT. Canonical aliases like claude/default are accepted. Example: ntm --robot-inspect-quota=claude/default")
-	rootCmd.Flags().StringVar(&robotInspectIncident, "robot-inspect-incident", "", "Store-backed incident drill-down. Required: INCIDENT_ID. Example: ntm --robot-inspect-incident=inc_20260323_abc123")
+	rootCmd.Flags().StringVar(&robotInspectSession, "robot-inspect-session", "", "Projection-backed session drill-down. Required: SESSION. Example: herdctl --robot-inspect-session=myproject")
+	rootCmd.Flags().StringVar(&robotInspectAgent, "robot-inspect-agent", "", "Projection-backed agent drill-down. Required: SESSION:PANE runtime agent id. Example: herdctl --robot-inspect-agent=myproject:%1")
+	rootCmd.Flags().StringVar(&robotInspectWork, "robot-inspect-work", "", "Projection-backed work drill-down. Required: BEAD_ID. Example: herdctl --robot-inspect-work=bd-j9jo3.6.6")
+	rootCmd.Flags().StringVar(&robotInspectCoord, "robot-inspect-coordination", "", "Projection-backed coordination drill-down. Required: AGENT_NAME. Example: herdctl --robot-inspect-coordination=BlueLake")
+	rootCmd.Flags().StringVar(&robotInspectQuota, "robot-inspect-quota", "", "Projection-backed quota drill-down. Required: PROVIDER/ACCOUNT. Canonical aliases like claude/default are accepted. Example: herdctl --robot-inspect-quota=claude/default")
+	rootCmd.Flags().StringVar(&robotInspectIncident, "robot-inspect-incident", "", "Store-backed incident drill-down. Required: INCIDENT_ID. Example: herdctl --robot-inspect-incident=inc_20260323_abc123")
 
-	rootCmd.Flags().StringVar(&robotMetrics, "robot-metrics", "", "Session metrics export. Optional SESSION. Example: ntm --robot-metrics=myproject --metrics-period=24h")
+	rootCmd.Flags().StringVar(&robotMetrics, "robot-metrics", "", "Session metrics export. Optional SESSION. Example: herdctl --robot-metrics=myproject --metrics-period=24h")
 	rootCmd.Flags().StringVar(&robotMetricsPeriod, "metrics-period", "24h", "Period: 1h, 24h, 7d, all. Optional with --robot-metrics. Example: --metrics-period=7d")
 
-	rootCmd.Flags().StringVar(&robotReplay, "robot-replay", "", "Replay command from history. Required: SESSION. Use with --replay-id. Example: ntm --robot-replay=myproject --replay-id=1735830245123-a1b2c3d4")
+	rootCmd.Flags().StringVar(&robotReplay, "robot-replay", "", "Replay command from history. Required: SESSION. Use with --replay-id. Example: herdctl --robot-replay=myproject --replay-id=1735830245123-a1b2c3d4")
 	rootCmd.Flags().StringVar(&robotReplayID, "replay-id", "", "History entry ID to replay. Required with --robot-replay. Get IDs from --robot-history")
 	rootCmd.Flags().BoolVar(&robotReplayDryRun, "replay-dry-run", false, "Preview replay without executing. Optional with --robot-replay")
 
-	rootCmd.Flags().BoolVar(&robotPaletteInfo, "robot-palette", false, "Query palette commands. Example: ntm --robot-palette --palette-category=quick")
+	rootCmd.Flags().BoolVar(&robotPaletteInfo, "robot-palette", false, "Query palette commands. Example: herdctl --robot-palette --palette-category=quick")
 	rootCmd.Flags().StringVar(&robotPaletteSession, "palette-session", "", "Filter recents to session. Optional with --robot-palette")
 	rootCmd.Flags().StringVar(&robotPaletteCategory, "palette-category", "", "Filter by category. Optional with --robot-palette. Example: --palette-category=code_quality")
 	rootCmd.Flags().StringVar(&robotPaletteSearch, "palette-search", "", "Search commands. Optional with --robot-palette. Example: --palette-search=test")
 
-	rootCmd.Flags().StringVar(&robotDismissAlert, "robot-dismiss-alert", "", "Dismiss an alert by ID. Example: ntm --robot-dismiss-alert=alert-abc123")
+	rootCmd.Flags().StringVar(&robotDismissAlert, "robot-dismiss-alert", "", "Dismiss an alert by ID. Example: herdctl --robot-dismiss-alert=alert-abc123")
 	rootCmd.Flags().Lookup("robot-dismiss-alert").NoOptDefVal = "__present__"
 	rootCmd.Flags().StringVar(&robotDismissSession, "dismiss-session", "", "Scope dismissal to session. Optional with --robot-dismiss-alert")
 	rootCmd.Flags().BoolVar(&robotDismissAll, "dismiss-all", false, "Dismiss all matching alerts. Use with --robot-dismiss-alert")
 
 	// Robot-diff flags for comparing agent activity (synthesis)
-	rootCmd.Flags().StringVar(&robotDiff, "robot-diff", "", "Compare agent activity and file changes. Required: SESSION. Example: ntm --robot-diff=myproject --since=10m")
+	rootCmd.Flags().StringVar(&robotDiff, "robot-diff", "", "Compare agent activity and file changes. Required: SESSION. Example: herdctl --robot-diff=myproject --since=10m")
 	rootCmd.Flags().StringVar(&robotDiffSince, "diff-since", "15m", "Deprecated alias for --since. Duration or RFC3339 timestamp to look back from. Optional with --robot-diff. Default: 15m")
 
 	// Robot-alerts flags for alert listing (TUI parity)
-	rootCmd.Flags().BoolVar(&robotAlerts, "robot-alerts", false, "List active alerts with filtering. TUI parity for Alerts panel. Example: ntm --robot-alerts --alerts-severity=critical")
+	rootCmd.Flags().BoolVar(&robotAlerts, "robot-alerts", false, "List active alerts with filtering. TUI parity for Alerts panel. Example: herdctl --robot-alerts --alerts-severity=critical")
 	rootCmd.Flags().StringVar(&robotAlertsSeverity, "alerts-severity", "", "Filter by severity: info, warning, error, critical. Optional with --robot-alerts")
 	rootCmd.Flags().StringVar(&robotAlertsType, "alerts-type", "", "Filter by alert type. Optional with --robot-alerts")
 	rootCmd.Flags().StringVar(&robotAlertsSession, "alerts-session", "", "Filter by session. Optional with --robot-alerts")
 
 	// Robot-beads-list flags for bead listing (TUI parity)
-	rootCmd.Flags().BoolVar(&robotBeadsList, "robot-beads-list", false, "List beads with filtering. TUI parity for Beads panel. Example: ntm --robot-beads-list --beads-status=open")
+	rootCmd.Flags().BoolVar(&robotBeadsList, "robot-beads-list", false, "List beads with filtering. TUI parity for Beads panel. Example: herdctl --robot-beads-list --beads-status=open")
 	rootCmd.Flags().StringVar(&robotBeadsStatus, "beads-status", "", "Filter by status: open, in_progress, closed, blocked. Optional with --robot-beads-list")
 	rootCmd.Flags().StringVar(&robotBeadsPriority, "beads-priority", "", "Filter by priority: 0-4 or P0-P4. Optional with --robot-beads-list")
 	rootCmd.Flags().StringVar(&robotBeadsAssignee, "beads-assignee", "", "Filter by assignee. Optional with --robot-beads-list")
@@ -3713,10 +3713,10 @@ func init() {
 	rootCmd.Flags().IntVar(&robotBeadsLimit, "beads-limit", 20, "Max beads to return (default 20). Optional with --robot-beads-list")
 
 	// Robot-bead flags for programmatic bead management
-	rootCmd.Flags().StringVar(&robotBeadClaim, "robot-bead-claim", "", "Claim a bead by ID. Example: ntm --robot-bead-claim=ntm-abc123")
-	rootCmd.Flags().BoolVar(&robotBeadCreate, "robot-bead-create", false, "Create a new bead. Requires --bead-title. Example: ntm --robot-bead-create --bead-title='Fix bug'")
-	rootCmd.Flags().StringVar(&robotBeadShow, "robot-bead-show", "", "Show bead details. Example: ntm --robot-bead-show=ntm-abc123")
-	rootCmd.Flags().StringVar(&robotBeadClose, "robot-bead-close", "", "Close a bead by ID. Example: ntm --robot-bead-close=ntm-abc123")
+	rootCmd.Flags().StringVar(&robotBeadClaim, "robot-bead-claim", "", "Claim a bead by ID. Example: herdctl --robot-bead-claim=ntm-abc123")
+	rootCmd.Flags().BoolVar(&robotBeadCreate, "robot-bead-create", false, "Create a new bead. Requires --bead-title. Example: herdctl --robot-bead-create --bead-title='Fix bug'")
+	rootCmd.Flags().StringVar(&robotBeadShow, "robot-bead-show", "", "Show bead details. Example: herdctl --robot-bead-show=ntm-abc123")
+	rootCmd.Flags().StringVar(&robotBeadClose, "robot-bead-close", "", "Close a bead by ID. Example: herdctl --robot-bead-close=ntm-abc123")
 	rootCmd.Flags().StringVar(&beadTitle, "bead-title", "", "Title for new bead. Required with --robot-bead-create")
 	rootCmd.Flags().StringVar(&beadType, "bead-type", "task", "Type: task, bug, feature, epic, chore. Optional with --robot-bead-create")
 	rootCmd.Flags().IntVar(&beadPriority, "bead-priority", 2, "Priority 0-4 (0=critical, 4=backlog). Optional with --robot-bead-create")
@@ -3727,7 +3727,7 @@ func init() {
 	rootCmd.Flags().StringVar(&beadCloseReason, "bead-close-reason", "", "Reason for closing. Optional with --robot-bead-close")
 
 	// Robot-summary flags for session activity summary
-	rootCmd.Flags().StringVar(&robotSummary, "robot-summary", "", "Get session activity summary with agent metrics. Required: SESSION. Example: ntm --robot-summary=myproject --since=30m")
+	rootCmd.Flags().StringVar(&robotSummary, "robot-summary", "", "Get session activity summary with agent metrics. Required: SESSION. Example: herdctl --robot-summary=myproject --since=30m")
 	rootCmd.Flags().StringVar(&robotSummarySince, "summary-since", "30m", "Deprecated alias for --since. Duration or RFC3339 timestamp to look back from. Optional with --robot-summary. Default: 30m")
 
 	// Help verbosity flags
@@ -3735,19 +3735,19 @@ func init() {
 	rootCmd.Flags().BoolVar(&helpFull, "full", false, "Show full help with all commands (default behavior)")
 
 	// Robot-switch-account flags for CAAM account switching
-	rootCmd.Flags().StringVar(&robotSwitchAccount, "robot-switch-account", "", "Switch CAAM account for provider. Format: provider or provider:account. Example: ntm --robot-switch-account=claude")
+	rootCmd.Flags().StringVar(&robotSwitchAccount, "robot-switch-account", "", "Switch CAAM account for provider. Format: provider or provider:account. Example: herdctl --robot-switch-account=claude")
 
 	// Robot-account-status and robot-accounts-list flags for CAAM
-	rootCmd.Flags().BoolVar(&robotAccountStatus, "robot-account-status", false, "Show CAAM account status per provider. JSON output. Example: ntm --robot-account-status")
+	rootCmd.Flags().BoolVar(&robotAccountStatus, "robot-account-status", false, "Show CAAM account status per provider. JSON output. Example: herdctl --robot-account-status")
 	rootCmd.Flags().StringVar(&robotAccountStatusProvider, "account-status-provider", "", "Filter to specific provider. Optional with --robot-account-status. Example: --account-status-provider=claude")
-	rootCmd.Flags().BoolVar(&robotAccountsList, "robot-accounts-list", false, "List all CAAM accounts. JSON output. Example: ntm --robot-accounts-list")
+	rootCmd.Flags().BoolVar(&robotAccountsList, "robot-accounts-list", false, "List all CAAM accounts. JSON output. Example: herdctl --robot-accounts-list")
 	rootCmd.Flags().StringVar(&robotAccountsListProvider, "accounts-list-provider", "", "Filter to specific provider. Optional with --robot-accounts-list. Example: --accounts-list-provider=claude")
 
 	// Robot-env flag for environment info (bd-18gwh)
-	rootCmd.Flags().StringVar(&robotEnv, "robot-env", "", "Environment info for agent operation. Pass session name or 'global'. JSON output. Example: ntm --robot-env=myproject")
+	rootCmd.Flags().StringVar(&robotEnv, "robot-env", "", "Environment info for agent operation. Pass session name or 'global'. JSON output. Example: herdctl --robot-env=myproject")
 
 	// Robot-dcg-status flag for DCG
-	rootCmd.Flags().BoolVar(&robotDCGStatus, "robot-dcg-status", false, "Show DCG status and configuration. JSON output. Example: ntm --robot-dcg-status")
+	rootCmd.Flags().BoolVar(&robotDCGStatus, "robot-dcg-status", false, "Show DCG status and configuration. JSON output. Example: herdctl --robot-dcg-status")
 	rootCmd.Flags().BoolVar(&robotDCGCheck, "robot-dcg-check", false, "Preflight a shell command via dcg (no execution). JSON output. Requires --command.")
 	rootCmd.Flags().BoolVar(&robotDCGCheck, "robot-guard", false, "DEPRECATED: use --robot-dcg-check")
 	rootCmd.Flags().StringVar(&robotDCGCmd, "command", "", "Command to preflight with --robot-dcg-check / --robot-guard (no execution). Example: --command='rm -rf /tmp'")
@@ -3758,34 +3758,34 @@ func init() {
 	rootCmd.Flags().StringArrayVar(&robotSafetySteps, "step", nil, "Command step for --robot-safety-simulate; repeat for multi-step plans")
 
 	// Robot-slb flags for SLB approvals
-	rootCmd.Flags().BoolVar(&robotSLBPending, "robot-slb-pending", false, "List pending SLB approval requests. JSON output. Example: ntm --robot-slb-pending")
-	rootCmd.Flags().StringVar(&robotSLBApprove, "robot-slb-approve", "", "Approve SLB request by ID. JSON output. Example: ntm --robot-slb-approve=req-123")
-	rootCmd.Flags().StringVar(&robotSLBDeny, "robot-slb-deny", "", "Deny SLB request by ID. JSON output. Example: ntm --robot-slb-deny=req-123 --reason='Too risky'")
+	rootCmd.Flags().BoolVar(&robotSLBPending, "robot-slb-pending", false, "List pending SLB approval requests. JSON output. Example: herdctl --robot-slb-pending")
+	rootCmd.Flags().StringVar(&robotSLBApprove, "robot-slb-approve", "", "Approve SLB request by ID. JSON output. Example: herdctl --robot-slb-approve=req-123")
+	rootCmd.Flags().StringVar(&robotSLBDeny, "robot-slb-deny", "", "Deny SLB request by ID. JSON output. Example: herdctl --robot-slb-deny=req-123 --reason='Too risky'")
 	rootCmd.Flags().StringVar(&slbReason, "reason", "", "Reason for SLB denial. Optional with --robot-slb-deny")
 
 	// Robot-ru-sync flag for RU
-	rootCmd.Flags().BoolVar(&robotRUSync, "robot-ru-sync", false, "Run ru sync with JSON output. Optional with --dry-run. Example: ntm --robot-ru-sync")
+	rootCmd.Flags().BoolVar(&robotRUSync, "robot-ru-sync", false, "Run ru sync with JSON output. Optional with --dry-run. Example: herdctl --robot-ru-sync")
 
 	// Robot-giil-fetch flag for GIIL
-	rootCmd.Flags().StringVar(&robotGiilFetch, "robot-giil-fetch", "", "Download image from share URL via giil (JSON). Required: URL. Example: ntm --robot-giil-fetch=https://share.icloud.com/photos/abc123")
+	rootCmd.Flags().StringVar(&robotGiilFetch, "robot-giil-fetch", "", "Download image from share URL via giil (JSON). Required: URL. Example: herdctl --robot-giil-fetch=https://share.icloud.com/photos/abc123")
 
 	// Robot-quota-status and robot-quota-check flags for caut
-	rootCmd.Flags().BoolVar(&robotQuotaStatus, "robot-quota-status", false, "Show caut quota status for all providers. JSON output. Example: ntm --robot-quota-status")
-	rootCmd.Flags().BoolVar(&robotQuotaCheck, "robot-quota-check", false, "Check quota for specific provider. JSON output. Example: ntm --robot-quota-check --provider=claude")
+	rootCmd.Flags().BoolVar(&robotQuotaStatus, "robot-quota-status", false, "Show caut quota status for all providers. JSON output. Example: herdctl --robot-quota-status")
+	rootCmd.Flags().BoolVar(&robotQuotaCheck, "robot-quota-check", false, "Check quota for specific provider. JSON output. Example: herdctl --robot-quota-check --provider=claude")
 	rootCmd.Flags().StringVar(&robotQuotaCheckProvider, "quota-check-provider", "", "Provider for quota check. Required with --robot-quota-check. Example: --quota-check-provider=claude")
 
 	// Robot-rano-stats flag for per-agent network stats
-	rootCmd.Flags().BoolVar(&robotRanoStats, "robot-rano-stats", false, "Get per-agent network stats via rano. JSON output. Example: ntm --robot-rano-stats")
+	rootCmd.Flags().BoolVar(&robotRanoStats, "robot-rano-stats", false, "Get per-agent network stats via rano. JSON output. Example: herdctl --robot-rano-stats")
 	rootCmd.Flags().StringVar(&robotRanoWindow, "rano-window", "5m", "Time window for --robot-rano-stats (e.g., 5m, 1h)")
 
 	// Robot-rch-status and robot-rch-workers flags for RCH
-	rootCmd.Flags().BoolVar(&robotRCHStatus, "robot-rch-status", false, "Get RCH status summary (JSON). Example: ntm --robot-rch-status")
-	rootCmd.Flags().BoolVar(&robotProxyStatus, "robot-proxy-status", false, "Get rust_proxy daemon + route status (JSON). Example: ntm --robot-proxy-status")
-	rootCmd.Flags().BoolVar(&robotRCHWorkers, "robot-rch-workers", false, "List RCH workers (JSON). Example: ntm --robot-rch-workers")
+	rootCmd.Flags().BoolVar(&robotRCHStatus, "robot-rch-status", false, "Get RCH status summary (JSON). Example: herdctl --robot-rch-status")
+	rootCmd.Flags().BoolVar(&robotProxyStatus, "robot-proxy-status", false, "Get rust_proxy daemon + route status (JSON). Example: herdctl --robot-proxy-status")
+	rootCmd.Flags().BoolVar(&robotRCHWorkers, "robot-rch-workers", false, "List RCH workers (JSON). Example: herdctl --robot-rch-workers")
 	rootCmd.Flags().StringVar(&robotRCHWorker, "worker", "", "Filter to a specific RCH worker by name. Optional with --robot-rch-workers")
 
 	// Robot-context-inject flags for context file injection (bd-972v)
-	rootCmd.Flags().StringVar(&robotContextInject, "robot-context-inject", "", "Inject project context files (AGENTS.md, README.md) into agent panes. Required: SESSION. Example: ntm --robot-context-inject=myproject")
+	rootCmd.Flags().StringVar(&robotContextInject, "robot-context-inject", "", "Inject project context files (AGENTS.md, README.md) into agent panes. Required: SESSION. Example: herdctl --robot-context-inject=myproject")
 	rootCmd.Flags().StringVar(&robotContextInjectFiles, "inject-files", "", "Comma-separated files to inject. Optional with --robot-context-inject. Example: --inject-files=AGENTS.md,README.md")
 	rootCmd.Flags().IntVar(&robotContextInjectMax, "inject-max-bytes", 0, "Max content size in bytes (0=unlimited). Optional with --robot-context-inject")
 	rootCmd.Flags().BoolVar(&robotContextInjectAll, "inject-all", false, "Include user pane. Optional with --robot-context-inject")
@@ -3793,7 +3793,7 @@ func init() {
 	rootCmd.Flags().BoolVar(&robotContextInjectDry, "inject-dry-run", false, "Preview without sending. Optional with --robot-context-inject")
 
 	// Robot-mail-check flags for Agent Mail inbox integration (bd-adgv)
-	rootCmd.Flags().BoolVar(&robotMailCheck, "robot-mail-check", false, "Check agent inboxes via Agent Mail. Requires --mail-project. JSON output. Example: ntm --robot-mail-check --mail-project=myproject")
+	rootCmd.Flags().BoolVar(&robotMailCheck, "robot-mail-check", false, "Check agent inboxes via Agent Mail. Requires --mail-project. JSON output. Example: herdctl --robot-mail-check --mail-project=myproject")
 	rootCmd.Flags().StringVar(&mailProject, "mail-project", "", "Project for mail check. Required with --robot-mail-check. Example: --mail-project=myproject")
 	rootCmd.Flags().StringVar(&mailAgent, "mail-agent", "", "Filter to specific agent inbox. Optional with --robot-mail-check; omit to aggregate project agents. Example: --mail-agent=cc_1")
 	rootCmd.Flags().StringVar(&mailThread, "thread", "", "Filter to specific thread. Optional with --robot-mail-check. Example: --thread=TKT-api-design")
@@ -4478,12 +4478,12 @@ func init() {
 			{
 				Name:        "version",
 				Description: "Show version info",
-				Command:     "ntm version",
+				Command:     "herdctl version",
 			},
 			{
 				Name:        "version-short",
 				Description: "Show only the version number",
-				Command:     "ntm version --short",
+				Command:     "herdctl version --short",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -4516,7 +4516,7 @@ func runVersion(short bool) error {
 		fmt.Println(resp.Version)
 		return nil
 	}
-	fmt.Printf("ntm version %s\n", resp.Version)
+	fmt.Printf("herdctl version %s\n", resp.Version)
 	fmt.Printf("  commit:    %s\n", resp.Commit)
 	fmt.Printf("  built:     %s\n", resp.BuiltAt)
 	fmt.Printf("  builder:   %s\n", resp.BuiltBy)
@@ -4663,12 +4663,12 @@ func newConfigCmd() *cobra.Command {
 	setCmd.AddCommand(&cobra.Command{
 		Use:   "projects-base <path>",
 		Short: "Set the base directory for projects",
-		Long: `Set the base directory where ntm creates project folders.
+		Long: `Set the base directory where herdctl creates project folders.
 
 Examples:
-  ntm config set projects-base ~/projects
-  ntm config set projects-base /data/projects
-  ntm config set projects-base ~/Developer`,
+  herdctl config set projects-base ~/projects
+  herdctl config set projects-base /data/projects
+  herdctl config set projects-base ~/Developer`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := args[0]
@@ -4887,9 +4887,9 @@ Examples:
 		Long: `Retrieves a configuration value by its dotted path.
 
 Examples:
-  ntm config get projects_base
-  ntm config get alerts.enabled
-  ntm config get context_rotation.warning_threshold`,
+  herdctl config get projects_base
+  herdctl config get alerts.enabled
+  herdctl config get context_rotation.warning_threshold`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			effectiveCfg := loadSelectedConfigOrDefault()
@@ -5276,7 +5276,7 @@ func canSkipConfigLoading(cmdName string) bool {
 
 	// Check robot flags that don't need config
 	// These flags are processed in the root command's Run function
-	if cmdName == "ntm" || cmdName == "" {
+	if cmdName == "herdctl" || cmdName == "ntm" || cmdName == "" {
 		if robotHelp || robotVersion || robotCapabilities {
 			return true
 		}
@@ -5294,7 +5294,7 @@ func needsConfigLoading(cmdName string) bool {
 	}
 
 	// Check robot flags that need config
-	if cmdName == "ntm" || cmdName == "" {
+	if cmdName == "herdctl" || cmdName == "ntm" || cmdName == "" {
 		// robot-recipes needs config but not full startup
 		if robotRecipes {
 			return true
