@@ -1,4 +1,4 @@
-# NTM - Named Tmux Manager
+# herdctl — NTM Control Plane (tmux / Herdr)
 
 <div align="center">
   <img src="herdctl_illustration.webp" alt="herdctl — Agent Swarm Control Plane">
@@ -9,37 +9,46 @@
 ![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue.svg)
 ![Go Version](https://img.shields.io/badge/go-1.26.3+-00ADD8.svg)
 ![License](https://img.shields.io/badge/License-MIT%2BOpenAI%2FAnthropic%20Rider-blue.svg)
-![Release](https://img.shields.io/github/v/release/Dicklesworthstone/ntm?include_prereleases)
+
+**Dual backend:** `tmux` (default) or [`herdr`](https://herdr.dev) via `NTM_BACKEND=herdr`
 
 </div>
 
-NTM turns `tmux` into a local control plane for multi-agent software development.
-It combines session orchestration, graph-aware work triage, safety policy and approvals,
-Agent Mail coordination, durable state capture, machine-readable robot surfaces, and a
-local REST/WebSocket API in one Go binary.
-
-<div align="center">
+Here's a brief overview, starting with a real example:
 
 ```bash
-curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install.sh?$(date +%s)" | bash -s -- --easy-mode
+export NTM_BACKEND=herdr        # switch to herdr (default = tmux)
+herdctl spawn api --cc=2 --cod=1
+herdctl list
+herdctl status api
+herdr                            # native herdr TUI
+herdctl send api --all "refactor the auth layer."
 ```
 
-</div>
+herdctl is a **dual-backend** control plane for multi-agent AI coding sessions.
+It orchestrates Claude Code, Codex, Antigravity, Gemini, Cursor, and other coding
+agents on either `tmux` (the original NTM backend) or [`herdr`](https://herdr.dev)
+(herdr backend with richer TUI, sidebar agent status, and persistent panes).
+
+The NTM orchestration semantics — spawn, send, work triage, Agent Mail, safety
+policy, checkpoints, pipelines — are **shared across both backends**. Only the
+substrate (session/pane/layout/attach) changes. See [`FEATURES.md`](FEATURES.md)
+for current herdr backend parity.
 
 ## TL;DR
 
 ### The Problem
 
 Running several coding agents in parallel is easy to start and annoying to sustain.
-Plain `tmux` gives you panes, but it does not give you durable coordination, work
-selection, safety policy, approvals, history, replayable automation surfaces, or a
-shared control model that both humans and agents can use.
+A plain terminal multiplexer gives you panes, but it does not give you durable
+coordination, work selection, safety policy, approvals, history, replayable
+automation surfaces, or a shared control model that both humans and agents can use.
 
 ### The Solution
 
-NTM gives you a single local system for:
+herdctl gives you a single local system for:
 
-- spawning labeled multi-agent sessions in `tmux`
+- spawning labeled multi-agent sessions
 - sending work, interrupts, and follow-ups across panes
 - triaging what to do next with `br` and `bv`
 - coordinating agents with Agent Mail, file reservations, and assignments
@@ -73,8 +82,7 @@ NTM is a pure Go project, but the runtime experience is intentionally integratio
 ### First Session
 
 ```bash
-# Install
-curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install.sh?$(date +%s)" | bash -s -- --easy-mode
+# Build from source (ntm binary — dual-backend)
 
 # Enable shell integration
 eval "$(ntm shell zsh)"
@@ -501,7 +509,7 @@ not bolt-on scripts.
                             |
                             v
               +------------------------------+
-              | tmux sessions and panes      |
+              | tmux / herdr workspaces and panes      |
               | Claude / Codex / Antigravity |
               | labeled multi-agent work     |
               +------------------------------+
@@ -533,7 +541,7 @@ docker run --rm -it ntm
 ```bash
 git clone https://github.com/Dicklesworthstone/ntm.git
 cd ntm
-go install ./cmd/ntm
+go build -o /tmp/herdctl ./cmd/ntm && sudo cp /tmp/herdctl /usr/local/bin/ntm
 ```
 
 ## Troubleshooting
