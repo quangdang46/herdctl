@@ -2,6 +2,8 @@
 
 Source of truth for migrating NTM features from tmux → Herdr backend.
 
+**Implementation tracking:** Epic `bd-gl28u` (and children) is the complete work graph to drive the **herdr** column to **zero ✗**. After all `bd-gl28u*` beads close, run the GATE bead (`bd-gl28u.7`) to recount this file. Rows may be ✓ (works on `NTM_BACKEND=herdr`) or — (N/A with documented Herdr-native substitute); bare ✗ is not allowed at epic close.
+
 **Legend:** ✓ = works · ~ = partial · ✗ = not yet · — = N/A (Herdr-native or tmux-agnostic)
 
 ---
