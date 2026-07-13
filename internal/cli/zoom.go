@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
 	"github.com/Dicklesworthstone/ntm/internal/output"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -117,7 +118,10 @@ Examples:
 }
 
 func runZoom(w io.Writer, session string, paneIdx int, paneSelector string) error {
-	if err := tmux.EnsureInstalled(); err != nil {
+	if err := muxEnsureInstalled(); err != nil {
+		return err
+	}
+	if err := muxRequireHerdrServer(); err != nil {
 		return err
 	}
 
@@ -135,7 +139,7 @@ func runZoom(w io.Writer, session string, paneIdx int, paneSelector string) erro
 	res.ExplainIfInferred(os.Stderr)
 	session = res.Session
 
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		if IsJSONOutput() {
 			return output.PrintJSON(output.NewError(fmt.Sprintf("session '%s' not found", session)))
 		}
@@ -162,7 +166,7 @@ func runZoom(w io.Writer, session string, paneIdx int, paneSelector string) erro
 		if !interactive {
 			return fmt.Errorf("non-interactive environment: pane index is required for zoom")
 		}
-		panes, err := tmux.GetPanes(session)
+		panes, err := muxGetPanes(session)
 		if err != nil {
 			return err
 		}
@@ -179,6 +183,25 @@ func runZoom(w io.Writer, session string, paneIdx int, paneSelector string) erro
 			return nil // User cancelled
 		}
 		paneIdx = selected
+	}
+
+	// Herdr backend: kernel.Run("sessions.zoom") is tmux-backed and
+	// tmux.AttachOrSwitch has no herdr equivalent. Route through muxZoomPane
+	// (herdr.ZoomPane) directly and skip the tmux attach step.
+	if backend.IsHerdr() {
+		if err := muxZoomPane(session, paneIdx); err != nil {
+			if IsJSONOutput() {
+				return output.PrintJSON(output.NewError(err.Error()))
+			}
+			return err
+		}
+		if IsJSONOutput() {
+			return output.PrintJSON(output.NewSuccess(
+				fmt.Sprintf("zoomed pane %d in '%s'", paneIdx, session)))
+		}
+		fmt.Printf("%s✓%s Zoomed pane %d in '%s'\n",
+			colorize(t.Success), colorize(t.Text), paneIdx, session)
+		return nil
 	}
 
 	result, err := kernel.Run(context.Background(), "sessions.zoom", SessionZoomInput{
