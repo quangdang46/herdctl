@@ -176,9 +176,9 @@ func buildSLBCommand(action, resource string) string {
 		return ""
 	}
 	if resource == "" {
-		return "ntm approval: " + action
+		return "herdctl: " + action
 	}
-	return "ntm approval: " + action + " " + resource
+	return "herdctl: " + action + " " + resource
 }
 
 func parseSLBRequestID(raw json.RawMessage) string {

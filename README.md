@@ -60,12 +60,12 @@ herdctl gives you a single local system for:
 
 | Area | What NTM provides | Typical commands |
 | --- | --- | --- |
-| Session orchestration | Spawn, label, inspect, zoom, dashboard, palette | `ntm spawn`, `ntm dashboard`, `ntm palette` |
-| Work intelligence | Graph-aware triage, next-step selection, impact analysis, assignment | `ntm work triage`, `ntm work next`, `ntm assign` |
-| Coordination | Human overseer mail, inbox views, file reservations, worktrees | `ntm mail`, `ntm locks`, `ntm worktrees` |
-| Safety | Destructive-command protection, policy editing, approval workflows | `ntm safety`, `ntm policy`, `ntm approve`, `ntm guards` |
-| Durable operations | Checkpoints, timelines, audit logs, saved sessions, pipelines | `ntm checkpoint`, `ntm timeline`, `ntm audit`, `ntm pipeline` |
-| Automation surfaces | Robot JSON, REST API, SSE/WebSocket streams, OpenAPI | `ntm --robot-snapshot`, `ntm serve`, `ntm openapi generate` |
+| Session orchestration | Spawn, label, inspect, zoom, dashboard, palette | `herdctl spawn`, `herdctl dashboard`, `herdctl palette` |
+| Work intelligence | Graph-aware triage, next-step selection, impact analysis, assignment | `herdctl work triage`, `herdctl work next`, `herdctl assign` |
+| Coordination | Human overseer mail, inbox views, file reservations, worktrees | `herdctl mail`, `herdctl locks`, `herdctl worktrees` |
+| Safety | Destructive-command protection, policy editing, approval workflows | `herdctl safety`, `herdctl policy`, `herdctl approve`, `herdctl guards` |
+| Durable operations | Checkpoints, timelines, audit logs, saved sessions, pipelines | `herdctl checkpoint`, `herdctl timeline`, `herdctl audit`, `herdctl pipeline` |
+| Automation surfaces | Robot JSON, REST API, SSE/WebSocket streams, OpenAPI | `herdctl --robot-snapshot`, `herdctl serve`, `herdctl openapi generate` |
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ NTM is a pure Go project, but the runtime experience is intentionally integratio
 - Optional backend: `herdr` via `NTM_BACKEND=herdr` (Herdctl dual-backend; see Herdr UX below)
 - Required for agent spawning: whichever CLIs you want to run, typically Claude Code, Codex, and Antigravity CLI (Gemini CLI is supported as legacy)
 - Optional but powerful: `br`, `bv`, Agent Mail, `cass`, `dcg`, `pt`
-- Sanity check everything with `ntm deps -v`
+- Sanity check everything with `herdctl deps -v`
 
 ### First Session
 
@@ -132,8 +132,8 @@ ntm plugins list               # file-based plugins still work
 ntm tutorial                   # interactive tutorial (backend-agnostic)
 ```
 
-Not applicable on herdr (intentional substitutes, not missing work): `ntm dashboard`,
-`ntm palette` (interactive), `ntm overlay`, and `ntm bind` (tmux keybinds only).
+Not applicable on herdr (intentional substitutes, not missing work): `herdctl dashboard`,
+`herdctl palette` (interactive), `herdctl overlay`, and `herdctl bind` (tmux keybinds only).
 See `FEATURES.md` §10.
 
 ## Core Workflows
@@ -254,7 +254,7 @@ If Agent Mail, CASS, or CM are unavailable, `queue-dry --ideate` keeps running a
 marks those sources as degraded in `warnings`. Treat degraded Agent Mail reservation
 visibility as a coordination stop sign for mutating creation; fix coordination or use
 the non-mutating preview. Never edit `.beads/*.jsonl` directly, and use
-`ntm work queue-dry --help` for the current flag surface.
+`herdctl work queue-dry --help` for the current flag surface.
 
 ### 4. Coordination, Reservations, and Human Oversight
 
@@ -350,7 +350,7 @@ ntm resume payments
 NTM has two automation layers:
 
 - `--robot-*` for local, machine-readable CLI interactions
-- `ntm serve` for REST, SSE, WebSocket, and OpenAPI-backed integrations
+- `herdctl serve` for REST, SSE, WebSocket, and OpenAPI-backed integrations
 
 ### Canonical Robot Surfaces
 
@@ -413,7 +413,7 @@ ntm openapi generate --stdout
 | `recipes`, `workflows`, `template`, `session-templates`, `pipeline`, `ensemble` | Reusable orchestration assets |
 | `serve`, `openapi`, `config`, `deps`, `upgrade`, `tutorial` | Integration, configuration, and operations |
 
-`ntm --help` remains the canonical full command reference.
+`herdctl --help` remains the canonical full command reference.
 
 ## Configuration and Project Assets
 
@@ -557,7 +557,7 @@ ntm deps -v
 ### Agent panes start empty or an agent CLI fails immediately
 
 NTM can only launch tools that are installed and discoverable in `PATH`.
-Use `ntm deps -v` to check what it sees.
+Use `herdctl deps -v` to check what it sees.
 
 ### `claude`, `codex`, `agy`, or `gemini` not detected over SSH / tmux / non-login shells
 
@@ -565,7 +565,7 @@ NTM discovers agent CLIs via the `PATH` of the **runtime environment it is launc
 not the `PATH` of your interactive login shell. Tools installed under npm-global or
 `~/.local/bin` are often added to `PATH` by your `~/.bashrc` / `~/.zshrc` / `~/.profile`,
 which a non-interactive or non-login shell (a bare SSH command, a detached tmux server, a
-systemd unit, a CI runner) does not source. In that case `ntm deps -v` reports the agents as
+systemd unit, a CI runner) does not source. In that case `herdctl deps -v` reports the agents as
 missing even though they work fine in your normal terminal.
 
 First, confirm what *NTM's* environment actually resolves, under the same shell/SSH/tmux
@@ -591,11 +591,11 @@ exec ntm "$@"
 ```
 
 Make it executable (`chmod +x ~/bin/ntm-wrapper`) and invoke that instead of `ntm`. Re-run
-`ntm deps -v` through the wrapper to confirm all three CLIs are now detected.
+`herdctl deps -v` through the wrapper to confirm all three CLIs are now detected.
 
 ### A work command has nothing useful to say
 
-`ntm work ...` depends on running inside a repo with Beads/BV data available.
+`herdctl work ...` depends on running inside a repo with Beads/BV data available.
 If you are outside the project root, change directories or bootstrap the repo first.
 
 ### Mail, locks, or overseer commands say the server is unavailable
@@ -628,7 +628,7 @@ CASS, and safety extras become available as those tools are configured.
 ### Is robot mode the preferred automation surface?
 
 For local scripting and agent workflows, yes. For long-lived integrations, dashboards, and
-service-style consumers, use `ntm serve` and the OpenAPI-backed REST/WebSocket surfaces.
+service-style consumers, use `herdctl serve` and the OpenAPI-backed REST/WebSocket surfaces.
 
 ### Can multiple swarms work on the same project?
 
@@ -645,7 +645,7 @@ of the normal product model.
 - Linux and macOS are the primary environments.
 - Some advanced workflows depend on external tools such as Agent Mail, `br`, `bv`, `cass`, or worktree helpers.
 - The system is local-first. It is not a hosted SaaS control plane.
-- On herdr, NTM Bubbletea dashboard/palette/overlay and `ntm bind` are N/A; use herdr TUI + CLI substitutes.
+- On herdr, NTM Bubbletea dashboard/palette/overlay and `herdctl bind` are N/A; use herdr TUI + CLI substitutes.
 
 ## Development
 

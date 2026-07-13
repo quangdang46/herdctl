@@ -267,8 +267,8 @@ NTM provides a JSON API for AI agents via `--robot-*` flags. When working on or 
   - Session-scoped: `=SESSION` syntax (`--robot-send=myproject`)
   - Modifiers: unprefixed global flags (`--limit`, `--since`, `--type`)
 - **Deprecation**: Old prefixed flags (e.g., `--cass-limit`) remain for backward compatibility but canonical unprefixed forms are preferred
-- **Quick reference**: `ntm --robot-help`
-- **Machine-readable schema**: `ntm --robot-capabilities`
+- **Quick reference**: `herdctl --robot-help`
+- **Machine-readable schema**: `herdctl --robot-capabilities`
 
 ### Robot Command Exit Codes
 
@@ -305,24 +305,24 @@ Robot command outputs follow consistent semantics for absent, null, and empty fi
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--robot-status` | Get sessions, panes, agent states | `ntm --robot-status` |
-| `--robot-context` | Context window usage estimates per agent | `ntm --robot-context=proj` |
-| `--robot-snapshot` | Unified state: sessions + beads + alerts + mail | `ntm --robot-snapshot --since=2025-01-01T00:00:00Z` |
-| `--robot-tail=SESSION` | Capture recent pane output | `ntm --robot-tail=proj --lines=50 --panes=1,2` |
-| `--robot-plan` | Get bv execution plan with parallelizable tracks | `ntm --robot-plan` |
-| `--robot-graph` | Get dependency graph insights | `ntm --robot-graph` |
-| `--robot-dashboard` | Dashboard summary as markdown | `ntm --robot-dashboard` |
-| `--robot-terse` | Single-line state (minimal tokens) | `ntm --robot-terse` |
-| `--robot-markdown` | System state as markdown tables | `ntm --robot-markdown --md-sections=sessions,beads` |
+| `--robot-status` | Get sessions, panes, agent states | `herdctl --robot-status` |
+| `--robot-context` | Context window usage estimates per agent | `herdctl --robot-context=proj` |
+| `--robot-snapshot` | Unified state: sessions + beads + alerts + mail | `herdctl --robot-snapshot --since=2025-01-01T00:00:00Z` |
+| `--robot-tail=SESSION` | Capture recent pane output | `herdctl --robot-tail=proj --lines=50 --panes=1,2` |
+| `--robot-plan` | Get bv execution plan with parallelizable tracks | `herdctl --robot-plan` |
+| `--robot-graph` | Get dependency graph insights | `herdctl --robot-graph` |
+| `--robot-dashboard` | Dashboard summary as markdown | `herdctl --robot-dashboard` |
+| `--robot-terse` | Single-line state (minimal tokens) | `herdctl --robot-terse` |
+| `--robot-markdown` | System state as markdown tables | `herdctl --robot-markdown --md-sections=sessions,beads` |
 
 **Agent Control Commands:**
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--robot-send=SESSION` | Send message to panes | `ntm --robot-send=proj --msg='Fix auth' --type=claude` |
-| `--robot-ack=SESSION` | Watch for agent responses | `ntm --robot-ack=proj --ack-timeout=30s` |
-| `--robot-spawn=SESSION` | Create session with agents | `ntm --robot-spawn=proj --spawn-cc=2 --spawn-wait` |
-| `--robot-interrupt=SESSION` | Send Ctrl+C, optionally new task | `ntm --robot-interrupt=proj --interrupt-msg='Stop'` |
+| `--robot-send=SESSION` | Send message to panes | `herdctl --robot-send=proj --msg='Fix auth' --type=claude` |
+| `--robot-ack=SESSION` | Watch for agent responses | `herdctl --robot-ack=proj --ack-timeout=30s` |
+| `--robot-spawn=SESSION` | Create session with agents | `herdctl --robot-spawn=proj --spawn-cc=2 --spawn-wait` |
+| `--robot-interrupt=SESSION` | Send Ctrl+C, optionally new task | `herdctl --robot-interrupt=proj --interrupt-msg='Stop'` |
 
 **Supporting Flags:**
 
@@ -340,9 +340,9 @@ Robot command outputs follow consistent semantics for absent, null, and empty fi
 
 | Flag | Description | Example |
 |------|-------------|---------|
-| `--robot-cass-search=QUERY` | Search past conversations | `ntm --robot-cass-search='auth error' --cass-since=7d` |
-| `--robot-cass-status` | Get CASS health/stats | `ntm --robot-cass-status` |
-| `--robot-cass-context=QUERY` | Get relevant past context | `ntm --robot-cass-context='how to implement auth'` |
+| `--robot-cass-search=QUERY` | Search past conversations | `herdctl --robot-cass-search='auth error' --cass-since=7d` |
+| `--robot-cass-status` | Get CASS health/stats | `herdctl --robot-cass-status` |
+| `--robot-cass-context=QUERY` | Get relevant past context | `herdctl --robot-cass-context='how to implement auth'` |
 | `--cass-agent` | Filter by agent type | `--cass-agent=claude` |
 | `--cass-since` | Filter by recency | `--cass-since=7d` |
 

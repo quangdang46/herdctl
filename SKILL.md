@@ -15,13 +15,13 @@ description: >-
 > **Read the repo first.** If the target repository has `AGENTS.md` or `README.md`, read those before applying this skill. Repo-local instructions override generic NTM advice.
 
 > **Interactive vs automation:**
-> - `ntm dashboard`, `ntm palette`, and other TUI surfaces are for humans.
+> - `herdctl dashboard`, `herdctl palette`, and other TUI surfaces are for humans.
 > - For machine-readable automation, prefer `--robot-*`.
-> - Non-interactive CLI commands such as `ntm send`, `ntm work triage`, `ntm locks list`, `ntm pipeline status`, and `ntm serve` are fine when they are the clearest tool.
+> - Non-interactive CLI commands such as `herdctl send`, `herdctl work triage`, `herdctl locks list`, `herdctl pipeline status`, and `herdctl serve` are fine when they are the clearest tool.
 
 > **Coordination and isolation:**
 > - Agent Mail reservations are the default coordination primitive.
-> - `--worktrees` and `ntm worktrees ...` are supported isolation tools when the repo policy allows them.
+> - `--worktrees` and `herdctl worktrees ...` are supported isolation tools when the repo policy allows them.
 > - If a repo `AGENTS.md` prefers reservations-only or has worktree-specific rules, follow that repo.
 
 ## Quick Start
@@ -119,7 +119,7 @@ ntm assign myproject --auto --strategy=dependency
 ntm assign myproject --beads=br-123,br-124 --agent=codex
 ```
 
-Use `ntm work ...` when you want NTM to wrap `bv` and present work in operator-friendly form.
+Use `herdctl work ...` when you want NTM to wrap `bv` and present work in operator-friendly form.
 Use raw `bv --robot-*` when you specifically want the graph engine's native robot output.
 
 ## Coordination and Recovery
@@ -146,7 +146,7 @@ ntm changes conflicts myproject
 ntm resume myproject
 ```
 
-Treat `ntm checkpoint save` as a routine cadence, not just a pre-disaster snapshot. Good points to checkpoint: once prompts are confirmed received after a spawn or restore, after an investigation isolates a root cause, before risky edits, after significant uncommitted work but before verification, after a green verification, and before a merge/cleanup/handoff. Cheap checkpoints make any later `ntm checkpoint restore` land on a known-good state.
+Treat `herdctl checkpoint save` as a routine cadence, not just a pre-disaster snapshot. Good points to checkpoint: once prompts are confirmed received after a spawn or restore, after an investigation isolates a root cause, before risky edits, after significant uncommitted work but before verification, after a green verification, and before a merge/cleanup/handoff. Cheap checkpoints make any later `herdctl checkpoint restore` land on a known-good state.
 
 Note that Agent Mail may run as an external MCP or service-manager process **outside** the tmux session. If Agent Mail and tmux appear to fail together, don't assume tmux took Agent Mail down — check the service manager, process/cgroup ancestry, and OOM/memory signals at the service boundary before relaunching workers.
 
@@ -238,11 +238,11 @@ ntm pipeline resume run-20241230-123456-abcd
 ntm pipeline cleanup --older=7d
 ```
 
-Use `ntm serve` for long-lived local integrations. Use `--robot-*` for single-shot agent control.
+Use `herdctl serve` for long-lived local integrations. Use `--robot-*` for single-shot agent control.
 
 ## Project Resolution
 
-`ntm spawn` needs a project directory that NTM can resolve.
+`herdctl spawn` needs a project directory that NTM can resolve.
 
 ```bash
 ntm config get projects_base
