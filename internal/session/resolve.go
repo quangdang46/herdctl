@@ -26,7 +26,7 @@ type ResolveExplicitSessionNameError struct {
 func (e *ResolveExplicitSessionNameError) Error() string {
 	switch e.Kind {
 	case ResolveExplicitSessionNameErrorNoSessions:
-		return fmt.Sprintf("session %q not found (no tmux sessions running)", e.Input)
+		return fmt.Sprintf("session %q not found (no sessions running)", e.Input)
 	case ResolveExplicitSessionNameErrorAmbiguous:
 		return fmt.Sprintf(
 			"session %q matches multiple sessions: %s (please be more specific)",

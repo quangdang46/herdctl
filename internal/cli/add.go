@@ -38,6 +38,9 @@ type AddOptions struct {
 	CassContextQuery string
 	NoCassContext    bool
 	Prompt           string
+	// Tags applied to every added agent pane title / registry PaneMeta.
+	// Enables send --tag filtering (OR logic). Format in title: [tag1,tag2].
+	Tags []string
 }
 
 // opencodeCommandOrDefault returns the configured [agents] oc launch command,
@@ -95,6 +98,7 @@ func newAddCmd() *cobra.Command {
 	var contextDays int
 	var prompt string
 	var label string
+	var tags []string
 
 	cmd := &cobra.Command{
 		Use:   "add <session-name>",
@@ -196,6 +200,7 @@ func newAddCmd() *cobra.Command {
 				CassContextQuery: contextQuery,
 				NoCassContext:    noCassContext,
 				Prompt:           prompt,
+				Tags:             tags,
 			}
 
 			return runAdd(opts)
@@ -215,6 +220,9 @@ func newAddCmd() *cobra.Command {
 
 	// Goal label for multi-session support (bd-1933u)
 	cmd.Flags().StringVarP(&label, "label", "l", "", "Goal label for multi-session support (e.g., --label frontend targets session PROJECT--frontend)")
+
+	// Tags for agent organization (stored in pane title + herdr registry)
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "tags for added agents (comma-separated or repeatable; enables send --tag filter)")
 
 	// CASS context flags
 	cmd.Flags().StringVar(&contextQuery, "cass-context", "", "Explicit context query for CASS")
@@ -471,8 +479,9 @@ func runAdd(opts AddOptions) error {
 		num := maxIndices[agentTypeStr]
 
 		// Title uses mux helper so herdr/tmux naming stay consistent.
+		// Append --tag brackets so send --tag can filter (herdr registry + tmux title).
 		titleVariant := agent.Model
-		title := muxFormatPaneName(session, agentTypeStr, num, titleVariant)
+		title := muxAppendTags(muxFormatPaneName(session, agentTypeStr, num, titleVariant), opts.Tags)
 
 		// Generate command
 		agentCmd, envVars, err := resolveAddAgentCommandTemplate(agent.Type, opts.PluginMap, ollamaHost)
@@ -573,9 +582,9 @@ func runAdd(opts AddOptions) error {
 			}
 		}
 
-		// Persona name goes into the title when present (matches spawn).
+		// Persona name goes into the title when present (matches spawn; keep --tag).
 		if personaName != "" {
-			title = muxFormatPaneName(session, agentTypeStr, num, personaName)
+			title = muxAppendTags(muxFormatPaneName(session, agentTypeStr, num, personaName), opts.Tags)
 		}
 
 		finalCmd, err := config.GenerateAgentCommand(agentCmd, config.AgentTemplateVars{

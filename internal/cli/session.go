@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -1837,14 +1838,34 @@ func runStatusWatch(w io.Writer, session string, opts statusOptions) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Handle Ctrl+C / SIGTERM: restore cursor and exit loop cleanly.
+	// Handle Ctrl+C / SIGTERM: restore cursor, print stop line, exit loop.
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
+
+	var stopOnce sync.Once
+	printStopped := func() {
+		stopOnce.Do(func() {
+			// Show cursor even when stdout is redirected (e2e captures a file).
+			fmt.Print("\033[?25h")
+			fmt.Fprintln(w, "\nWatch mode stopped.")
+			// File-redirected stdout is fully buffered; flush so SIGINT e2e sees
+			// the stop line before the process exits or is escalated to SIGKILL.
+			if f, ok := w.(*os.File); ok {
+				_ = f.Sync()
+			}
+		})
+	}
+
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-sigChan
-		fmt.Print("\033[?25h") // Show cursor
-		cancel()
+		select {
+		case <-sigChan:
+			printStopped()
+			cancel()
+		case <-done:
+		}
 	}()
 
 	// Hide cursor for cleaner display
@@ -1855,18 +1876,35 @@ func runStatusWatch(w io.Writer, session string, opts statusOptions) error {
 	ticker := time.NewTicker(opts.interval)
 	defer ticker.Stop()
 
+	// runStatusOnce can block on mux/herdr RPCs for several seconds. Run it in
+	// a goroutine so SIGINT/SIGTERM exits the watch immediately; process exit
+	// reaps any in-flight tick (CLI short-lived process).
+	runOnce := func() error {
+		errCh := make(chan error, 1)
+		go func() {
+			errCh <- runStatusOnce(w, session, opts)
+		}()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errCh:
+			return err
+		}
+	}
+
 	firstRun := true
 	for {
 		if !firstRun {
 			select {
 			case <-ctx.Done():
-				fmt.Fprintln(w, "\nWatch mode stopped.")
+				printStopped()
 				return nil
 			case <-ticker.C:
 			}
 		} else {
 			select {
 			case <-ctx.Done():
+				printStopped()
 				return nil
 			default:
 			}
@@ -1877,17 +1915,15 @@ func runStatusWatch(w io.Writer, session string, opts statusOptions) error {
 		}
 
 		// Fresh mux observation every tick (herdr agent_status + panes).
-		// runStatusOnce may take several seconds (mux/herdr RPCs); check cancel
-		// after it returns so Ctrl-C during a tick still exits cleanly.
-		if err := runStatusOnce(w, session, opts); err != nil {
+		if err := runOnce(); err != nil {
 			if ctx.Err() != nil {
-				fmt.Fprintln(w, "\nWatch mode stopped.")
+				printStopped()
 				return nil
 			}
 			fmt.Fprintf(w, "Error: %v\n", err)
 		}
 		if ctx.Err() != nil {
-			fmt.Fprintln(w, "\nWatch mode stopped.")
+			printStopped()
 			return nil
 		}
 

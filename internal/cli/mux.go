@@ -242,6 +242,23 @@ func muxFormatPaneName(session, agentType string, index int, variant string) str
 	return tmux.FormatPaneName(session, agentType, index, variant)
 }
 
+// muxFormatTags formats tags as [tag1,tag2] for pane titles.
+// Pure string helper — herdr and tmux share the same title convention.
+func muxFormatTags(tags []string) string {
+	if backend.IsHerdr() {
+		return herdr.FormatTags(tags)
+	}
+	return tmux.FormatTags(tags)
+}
+
+// muxAppendTags appends FormatTags(tags) to a base title when tags are non-empty.
+func muxAppendTags(title string, tags []string) string {
+	if len(tags) == 0 {
+		return title
+	}
+	return title + muxFormatTags(tags)
+}
+
 func muxBackendLabel() string {
 	return backend.Current().String()
 }

@@ -15,12 +15,21 @@ import (
 // herdrLaunchAgent starts one agent pane through `herdr agent start` instead of
 // split+send-keys. Prefer this on NTM_BACKEND=herdr because long shell payloads
 // (hooks/env) are fragile over pane send-text.
+//
+// title may include NTM tag brackets (session__cc_1[frontend,ui]). Tags are
+// parsed from title and stored on PaneMeta so send --tag can filter via
+// muxGetPanes registry merge.
 func herdrLaunchAgent(session, cwd string, agent FlatAgent, argv []string, title string) (tmux.Pane, error) {
 	if !backend.IsHerdr() {
 		return tmux.Pane{}, fmt.Errorf("herdrLaunchAgent called without herdr backend")
 	}
 	if len(argv) == 0 {
 		return tmux.Pane{}, fmt.Errorf("herdrLaunchAgent: empty argv")
+	}
+	// Prefer tags from the NTM title so spawn/add --tag and SetPaneTitle stay aligned.
+	var tags []string
+	if title != "" {
+		_, _, _, tags = herdr.ParseAgentFromTitle(title)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -30,6 +39,7 @@ func herdrLaunchAgent(session, cwd string, agent FlatAgent, argv []string, title
 		AgentType: herdr.AgentType(agent.Type),
 		Index:     agent.Index,
 		Variant:   agent.Model,
+		Tags:      tags,
 		Cwd:       cwd,
 		Argv:      argv,
 		Focus:     false,
@@ -39,15 +49,22 @@ func herdrLaunchAgent(session, cwd string, agent FlatAgent, argv []string, title
 		return tmux.Pane{}, err
 	}
 	if title != "" {
+		// Re-apply title so registry Tags/Title match the NTM convention even if
+		// StartAgent's synthesized title differed (e.g. persona variant).
 		_ = herdr.SetPaneTitle(p.ID, title)
+	}
+	outTags := tags
+	if len(p.Tags) > 0 {
+		outTags = append([]string{}, p.Tags...)
 	}
 	return tmux.Pane{
 		ID:       p.ID,
 		Index:    p.Index,
 		NTMIndex: p.NTMIndex,
-		Title:    firstNonEmptyTitle(p.Title, title),
+		Title:    firstNonEmptyTitle(title, p.Title),
 		Type:     tmux.AgentType(p.Type),
 		Variant:  p.Variant,
+		Tags:     outTags,
 		Command:  p.Command,
 		Active:   p.Active,
 	}, nil

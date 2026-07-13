@@ -126,3 +126,42 @@ func TestCollectReadyAgentPanes_SkipsUserAndUnknown(t *testing.T) {
 		}
 	}
 }
+
+func TestMuxAppendTags(t *testing.T) {
+	base := muxFormatPaneName("proj", "cc", 1, "opus")
+	if got := muxAppendTags(base, nil); got != base {
+		t.Fatalf("nil tags: got %q want %q", got, base)
+	}
+	if got := muxAppendTags(base, []string{}); got != base {
+		t.Fatalf("empty tags: got %q want %q", got, base)
+	}
+	got := muxAppendTags(base, []string{"frontend", "ui"})
+	want := base + "[frontend,ui]"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestSendTagFilterUsesPaneTags(t *testing.T) {
+	// Mirrors herdr muxGetPanes → tmux.Pane.Tags merge path used by send --tag.
+	panes := []tmux.Pane{
+		{ID: "w1:p1", Type: tmux.AgentClaude, Title: "proj__cc_1[frontend]", Tags: []string{"frontend"}},
+		{ID: "w1:p2", Type: tmux.AgentCodex, Title: "proj__cod_1[backend]", Tags: []string{"backend"}},
+		{ID: "w1:p3", Type: tmux.AgentGemini, Title: "proj__gmi_1", Tags: nil},
+	}
+	opts := SendOptions{Tags: []string{"frontend"}}
+	filtered := filterPanesForBatch(panes, opts)
+	if len(filtered) != 1 || filtered[0].ID != "w1:p1" {
+		t.Fatalf("frontend filter: got %#v", filtered)
+	}
+	opts = SendOptions{Tags: []string{"backend", "frontend"}}
+	filtered = filterPanesForBatch(panes, opts)
+	if len(filtered) != 2 {
+		t.Fatalf("OR tags: got %d panes, want 2", len(filtered))
+	}
+	opts = SendOptions{Tags: []string{"missing"}}
+	filtered = filterPanesForBatch(panes, opts)
+	if len(filtered) != 0 {
+		t.Fatalf("no match: got %#v", filtered)
+	}
+}

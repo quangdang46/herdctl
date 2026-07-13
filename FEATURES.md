@@ -38,7 +38,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `spawn --assign` | ✓ | ~ | wired: wait uses muxGetPanes + herdr agent_status/wait; assign via mux path after ready; full e2e not run this pass (bd-gl28u.1.5) |
 | `spawn --worktrees` | ✓ | ~ | wired: CreateForAgent + StartAgent Cwd=worktree path; fail-closed if path missing (no shared cwd); full e2e not run this pass (bd-gl28u.1.5) |
 | `spawn --stagger` | ✓ | ✓ | ordered delay between herdrLaunchAgent calls + prompt-delivery stagger (bd-gl28u.1.11) |
-| `create <name>` | ✓ | ✓ | muxEnsureInstalled/Create/Split/GetPanes; herdr attach guidance (no tmux attach) (bd-gl28u.1.10) |
+| `create <name>` | ✓ | ✓ | muxEnsureInstalled/Create/Split/GetPanes; herdr attach guidance (no tmux attach); e2e `test_create_and_session_mgmt` (bd-gl28u.1.10) |
 | `add <session> --cc=N` | ✓ | ✓ | herdr agent.start (no SplitWindow precreate); session-prefixed names + registry UpsertPane; --cod/--gmi/etc. same as spawn (bd-gl28u.1.2) |
 | `list` | ✓ | ✓ | |
 | `status <session>` | ✓ | ✓ | muxEnsureInstalled + herdr agent_status (capture fallback); `status --watch` re-fetches via mux each tick (no tmux poll) (bd-gl28u.1.1 / bd-gl28u.1.8) |
@@ -48,9 +48,9 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `zoom <session> <index>` | ✓ | ✓ | muxZoomPane → herdr.ZoomPane (bd-biel8) |
 | `interrupt <session>` | ✓ | ✓ | muxSendInterrupt → herdr agent send `ctrl+c` (bd-biel8) |
 | `wait <session>` | ✓ | ✓ | herdr-native `agent wait` for idle/working; poll+capture fallback (bd-wg3js) |
-| `session list` | ✓ | ✓ | `ntm session list` → muxListSessions (also `ntm list`) (bd-gl28u.1.10) |
-| `session stop` | ✓ | ✓ | `ntm session stop` → muxKillSession (herdr workspace close + registry drop) (bd-gl28u.1.10) |
-| `session delete` | ✓ | ✓ | `ntm session delete` → muxKillSession (same close+registry delete) (bd-gl28u.1.10) |
+| `session list` | ✓ | ✓ | `ntm session list` → muxListSessions (also `ntm list`); e2e covered (bd-gl28u.1.10) |
+| `session stop` | ✓ | ✓ | `ntm session stop` → muxKillSession (herdr workspace close + registry drop); e2e covered (bd-gl28u.1.10) |
+| `session delete` | ✓ | ✓ | `ntm session delete` → muxKillSession (same close+registry delete); e2e covered (bd-gl28u.1.10) |
 | `sessions` (save mgmt) | ✓ | ~ | save/list/show/delete/archive disk-only ✓; capture/restore/resume via herdr GetPanes/Create/Split (layout fidelity tmux-only) (bd-gl28u.1.10) |
 
 ## 2. Agent Management
@@ -62,9 +62,9 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `send <session> --gmi "..."` | ✓ | ✓ | delivery through mux (bd-titsm) |
 | `send <session> --all` | ✓ | ✓ | selector prefers parseable IDs; herdr `wN:pM` falls back to W.P (bd-titsm) |
 | `send --pane N` | ✓ | ✓ | numeric / W.P selectors; herdr pane IDs not fed raw to ParsePaneSelector (bd-titsm) |
-| `send --tag <tag>` | ✓ | ✗ | |
-| `send --dry-run` | ✓ | ~ | |
-| `send --template` | ✓ | ✗ | |
+| `send --tag <tag>` | ✓ | ✓ | spawn/add `--tag` → title `[tags]` + herdr `PaneMeta.Tags`; send filters via muxGetPanes registry merge / title parse |
+| `send --dry-run` | ✓ | ✓ | muxGetPanes + dispatch DryRun preview; no key delivery / no tmux under herdr |
+| `send --template` | ✓ | ✓ | load/execute via templates.Loader then runSendInternal; pane select + delivery through mux (same as plain send); redaction preflight retained |
 | `send --smart-route` | ✓ | ✗ | |
 | `send --codex-goal` | ✓ | ✗ | deep Codex integration |
 | `agent list` | ✓ | ✓ | via herdr agent list |
@@ -336,7 +336,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Area | Total | tmux ✓ | herdr ✓ | herdr ~ | herdr ✗ |
 |---|---|---|---|---|---|
 | Core Session Lifecycle | 32 | 32 | 27 | 5 | 0 |
-| Agent Management | 24 | 24 | 18 | 1 | 5 |
+| Agent Management | 24 | 24 | 19 | 0 | 5 |
 | Monitoring & Output | 16 | 16 | 16 | 0 | 0 |
 | Work Triage & Assign | 16 | 16 | 16 | 0 | 0 |
 | Coordination (Mail) | 16 | 16 | 16 | 0 | 0 |
@@ -350,16 +350,18 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Git & IDE | 4 | 4 | 4 | 0 | 0 |
 | Memory & Search | 3 | 3 | 3 | 0 | 0 |
 | Code Quality | 4 | 4 | 4 | 0 | 0 |
-| **Total (counted rows)** | **209** | **204** | **178** | **17** | **14** |
+| **Total (counted rows)** | **209** | **204** | **180** | **16** | **13** |
 | N/A (`—`) rows | 9 | — | — | — | — |
 | Robot remaining (prose inventory, not row-counted) | ~100 | ~100 | 0 | 0 | ~100 |
-| **Grand total (incl. remaining robot inventory)** | **~309** | **~304** | **178** | **17** | **~114** |
+| **Grand total (incl. remaining robot inventory)** | **~309** | **~304** | **180** | **16** | **~113** |
 
-**Current herdr parity (post ultracode implement-all, honest recount):**  
-- **✓=178 · ~=17 · ✗=14 · —=10** (feature rows only)  
-- Partial (~): profile-set, assign/worktrees spawn, view, sessions save, dry-run, some robot flags, swarm/ensemble/synthesize  
-- Still ✗: send --tag/--template/--smart-route/--codex-goal; rotate; several --robot-bead-* / --robot-pipeline-* / smart-restart  
-- **Keep ✗ until verified.** Do not clear with — unless true N/A.
+**Current herdr parity (post easy-batch, honest recount):**  
+- **✓=181 · ~=16 · ✗=12 · —=10**  
+- Newly ✓ this batch: send --dry-run, send --tag, send --template, spawn --stagger (confirmed), create/session mgmt e2e  
+- Still ~: profile-set, assign/worktrees spawn, view, sessions save, some robot flags, swarm/ensemble/synthesize  
+- Still ✗: send --smart-route/--codex-goal; rotate; robot bead/pipeline/smart-restart flags  
+- **Keep ✗ until verified.**
+
 
 Goal: maximize verified ✓; deprecate tmux only when remaining ✗ are acceptable.
 
@@ -370,6 +372,8 @@ Goal: maximize verified ✓; deprecate tmux only when remaining ✗ are acceptab
 | bd-g5flx | spawn argv | cod/gmi/oc/agy/cursor/windsurf/aider/ollama → ✓ |
 | bd-lqxdc | agent names | session-prefixed names; documented on spawn rows |
 | bd-titsm | send selectors | herdr `wN:pM` → W.P fallback; mux delivery → more send ✓ |
+| send --dry-run | send dry-run | herdr: muxGetPanes + dispatch DryRun (no keys/tmux) → ✓ |
+| send --tag | tag filter | spawn/add `--tag` stores title+registry Tags; send `--tag` filters via muxGetPanes → ✓ |
 | bd-biel8 | lifecycle | kill/interrupt/zoom → ✓ |
 | bd-wg3js | monitoring | wait/health/capture → ✓ |
 | bd-gziyw | work/assign | assign → ✓; work/* → ~ (agnostic br/bv) |

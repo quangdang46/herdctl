@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # E2E smoke for NTM_BACKEND=herdr.
 #
-# FEATURES.md §1 P0 coverage (bd-gl28u.1.6 / bd-gl28u.1.8):
+# FEATURES.md §1 P0 coverage (bd-gl28u.1.6 / bd-gl28u.1.8 / bd-gl28u.1.10):
 #   spawn → list → status → status --watch → attach → send → kill
 #   multi-agent spawn (cc=2,cod=1) — agent_name_taken regression
 #   mid-session add (spawn --cc=1; add --cc=1 / --cod=1) — NTMIndex
 #   spawn --label — full session name in registry + herdr workspace label
+#   create --panes → session list → session stop/delete (mux lifecycle)
 #
 # Prerequisites:
 #   - herdr binary on PATH (or HERDR_BIN_PATH)
@@ -40,6 +41,7 @@ LABEL_SUFFIX="${LABEL_SUFFIX:-frontend}"
 LABEL_SESSION="${LABEL_SESSION:-${LABEL_BASE}--${LABEL_SUFFIX}}"
 CP_SESSION="${CP_SESSION:-test-checkpoint}"
 PERSIST_SESSION="${PERSIST_SESSION:-test-persist}"
+CREATE_SESSION="${CREATE_SESSION:-test-create}"
 TEST_MSG="${TEST_MSG:-echo herdr-test}"
 # Short watch for e2e (status --interval is milliseconds)
 WATCH_INTERVAL_MS="${WATCH_INTERVAL_MS:-400}"
@@ -286,6 +288,7 @@ cleanup_all() {
   kill_session_best_effort "$MULTI_SESSION"
   kill_session_best_effort "$ADD_SESSION"
   kill_session_best_effort "$LABEL_SESSION"
+  kill_session_best_effort "$CREATE_SESSION"
 
   # Drop registry file so subsequent runs start clean.
   if [[ -f "$HERDCTL_HERDR_REGISTRY" ]]; then
@@ -414,7 +417,8 @@ seed_registry() {
   kill_session_best_effort "$MULTI_SESSION"
   kill_session_best_effort "$ADD_SESSION"
   kill_session_best_effort "$LABEL_SESSION"
-  ok "pre-cleaned leftover demo/multi/add/label workspaces (if any)"
+  kill_session_best_effort "$CREATE_SESSION"
+  ok "pre-cleaned leftover demo/multi/add/label/create workspaces (if any)"
 }
 
 # Log context for a case (FEATURES e2e quality: backend, registry, workspace, agents).
@@ -616,23 +620,20 @@ test_agent_ops() {
 }
 
 # status --watch must re-fetch via mux each tick (no tmux poll) and exit cleanly
-# on SIGINT (bd-gl28u.1.8).
+# on SIGINT / SIGTERM (bd-gl28u.1.8).
 test_status_watch() {
   section "Test: status --watch ${DEMO_SESSION} (mux each tick)"
   log_case_context "$DEMO_SESSION"
 
   local out_file
   out_file="$(mktemp -t ntm-status-watch-XXXXXX)"
-  local rc_file
-  rc_file="$(mktemp -t ntm-status-watch-rc-XXXXXX)"
 
-  # Run watch in background; kill after a few intervals so we observe ≥1 refresh.
-  (
-    set +e
-    run_ntm status "$DEMO_SESSION" --watch --interval "$WATCH_INTERVAL_MS" >"$out_file" 2>&1
-    echo $? >"$rc_file"
-  ) &
+  # Background the ntm process directly (no subshell wrapper) so SIGINT/SIGTERM
+  # hit the watch loop, not an intermediate bash that may swallow signals.
+  set +e
+  run_ntm status "$DEMO_SESSION" --watch --interval "$WATCH_INTERVAL_MS" >"$out_file" 2>&1 &
   local watch_pid=$!
+  set -e
   info "status --watch pid=${watch_pid} interval_ms=${WATCH_INTERVAL_MS}"
 
   # Wait for at least WATCH_TICKS * interval (+ startup headroom).
@@ -640,6 +641,7 @@ test_status_watch() {
   wait_s="$(awk -v ms="$WATCH_INTERVAL_MS" -v ticks="$WATCH_TICKS" 'BEGIN { printf "%.2f", (ms * (ticks + 1)) / 1000.0 + 0.5 }')"
   sleep "$wait_s"
 
+  local sent_sig="none"
   if ! kill -0 "$watch_pid" 2>/dev/null; then
     # Process already exited — may be error or immediate completion.
     wait "$watch_pid" 2>/dev/null || true
@@ -648,13 +650,14 @@ test_status_watch() {
     if [[ "$early_out" == *"Error"* || "$early_out" == *"not found"* ]]; then
       bad "status --watch exited early with error"
       info "output: ${early_out}"
-      rm -f "$out_file" "$rc_file"
+      rm -f "$out_file"
       return 1
     fi
     warn "status --watch exited before SIGINT (output may still be valid)"
   else
-    # Clean Ctrl-C path: SIGINT then wait.
+    # Clean stop path: SIGINT first (both SIGINT and SIGTERM print stop line).
     # runStatusOnce can take several seconds (herdr RPCs); allow up to ~8s.
+    sent_sig="SIGINT"
     kill -INT "$watch_pid" 2>/dev/null || true
     local i
     for i in $(seq 1 40); do
@@ -665,9 +668,17 @@ test_status_watch() {
     done
     if kill -0 "$watch_pid" 2>/dev/null; then
       warn "status --watch still running after SIGINT; sending SIGTERM"
+      sent_sig="SIGTERM"
       kill -TERM "$watch_pid" 2>/dev/null || true
-      sleep 0.5
+      for i in $(seq 1 10); do
+        if ! kill -0 "$watch_pid" 2>/dev/null; then
+          break
+        fi
+        sleep 0.2
+      done
       if kill -0 "$watch_pid" 2>/dev/null; then
+        warn "status --watch still running after SIGTERM; sending SIGKILL"
+        sent_sig="SIGKILL"
         kill -KILL "$watch_pid" 2>/dev/null || true
       fi
     fi
@@ -676,7 +687,7 @@ test_status_watch() {
 
   local out
   out="$(cat "$out_file" 2>/dev/null || true)"
-  rm -f "$out_file" "$rc_file"
+  rm -f "$out_file"
 
   if [[ -z "$out" ]]; then
     bad "status --watch produced no output"
@@ -692,11 +703,15 @@ test_status_watch() {
     info "output: ${out:0:400}"
   fi
 
-  # Prefer clean stop message; not required if SIGTERM used.
+  # SIGINT and SIGTERM both print "Watch mode stopped."; only SIGKILL may miss it.
   if [[ "$out" == *"Watch mode stopped"* ]]; then
     ok "status --watch stopped cleanly (Watch mode stopped)"
+  elif [[ "$sent_sig" == "SIGKILL" ]]; then
+    warn "status --watch did not print 'Watch mode stopped' (SIGKILL after hang)"
   else
-    warn "status --watch did not print 'Watch mode stopped' (signal may have been SIGTERM)"
+    # Soft fail for residual races (redirect buffering / go run wrapper).
+    warn "status --watch did not print 'Watch mode stopped' after ${sent_sig}"
+    info "output tail: ${out: -200}"
   fi
 
   # Must not mention tmux binary failures under herdr.
@@ -744,6 +759,37 @@ test_attach() {
     ok "attach does not invoke tmux attach"
   fi
   info "attach output: ${out}"
+}
+
+test_send_dry_run() {
+  section "Test: send ${DEMO_SESSION} --cc --dry-run"
+  log_case_context "$DEMO_SESSION"
+  local out rc=0
+  out="$(run_ntm send "$DEMO_SESSION" --cc "$TEST_MSG" --dry-run 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "send ${DEMO_SESSION} --cc --dry-run (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  # Human dry-run output lists targets; must not require/mention tmux install.
+  if [[ "$out" == *"tmux is not installed"* || "$out" == *"install tmux"* ]]; then
+    bad "send --dry-run appears to require tmux under herdr"
+    info "output: ${out}"
+    return 1
+  fi
+  if [[ "$out" == *"Dry Run"* || "$out" == *"Would send"* || "$out" == *"pane"* || "$out" == *"dry_run"* ]]; then
+    ok "send ${DEMO_SESSION} --cc --dry-run previewed panes (no crash)"
+  else
+    # Exit 0 with empty matching panes is still a successful dry-run path.
+    if [[ "$out" == *"No matching panes"* ]]; then
+      ok "send --dry-run exited 0 with no matching panes"
+    else
+      bad "send --dry-run output missing dry-run/pane markers"
+      info "output: ${out}"
+      return 1
+    fi
+  fi
+  info "send --dry-run output: ${out}"
 }
 
 test_send() {
@@ -1220,6 +1266,145 @@ test_persistence_disk_cmds() {
   fi
 }
 
+test_create_and_session_mgmt() {
+  section "Test: create + session list/stop/delete (${CREATE_SESSION}) (bd-gl28u.1.10)"
+  track_session "$CREATE_SESSION"
+  kill_session_best_effort "$CREATE_SESSION"
+
+  # create is interactive about attach/dir; answer y for mkdir, n for attach prompts.
+  local out rc=0
+  out="$(printf 'y\nn\n' | run_ntm create "$CREATE_SESSION" --panes=2 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "create ${CREATE_SESSION} --panes=2 (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "create ${CREATE_SESSION} --panes=2 succeeded"
+  info "create output: ${out}"
+  log_case_context "$CREATE_SESSION"
+
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* || "$out" == *"attaching to tmux"* ]]; then
+    bad "create required/invoked tmux under herdr"
+    info "output: ${out}"
+  else
+    ok "create did not require tmux under herdr"
+  fi
+
+  local labels
+  labels="$(workspace_labels)"
+  assert_contains "herdr workspace list includes ${CREATE_SESSION}" "$labels" "$CREATE_SESSION"
+
+  local ws_id panes
+  ws_id="$(workspace_ids_for_label "$CREATE_SESSION" | head -n1)"
+  if [[ -n "$ws_id" ]]; then
+    ok "workspace id for ${CREATE_SESSION}: ${ws_id}"
+    panes="$(pane_count_for_workspace "$ws_id")"
+    if [[ "${panes:-0}" -ge 2 ]]; then
+      ok "create workspace ${ws_id} has ${panes} panes (>=2)"
+    else
+      bad "create workspace ${ws_id} pane count=${panes}, expected >=2"
+    fi
+  else
+    bad "could not resolve workspace id for ${CREATE_SESSION}"
+  fi
+
+  # session list (live) should show the created session (same path as ntm list).
+  rc=0
+  out="$(run_ntm session list 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm session list (exit=${rc})"
+    info "output: ${out}"
+  else
+    ok "ntm session list succeeded"
+    assert_contains "session list includes ${CREATE_SESSION}" "$out" "$CREATE_SESSION"
+  fi
+
+  # Also confirm top-level list still sees it.
+  rc=0
+  out="$(run_ntm list 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm list after create (exit=${rc})"
+    info "output: ${out}"
+  else
+    assert_contains "ntm list includes created ${CREATE_SESSION}" "$out" "$CREATE_SESSION"
+  fi
+
+  # session stop closes workspace + drops registry binding (muxKillSession).
+  rc=0
+  out="$(run_ntm session stop "$CREATE_SESSION" --force 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "session stop ${CREATE_SESSION} --force (exit=${rc})"
+    info "output: ${out}"
+    kill_session_best_effort "$CREATE_SESSION"
+    return 1
+  fi
+  ok "session stop ${CREATE_SESSION} --force succeeded"
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* ]]; then
+    bad "session stop required tmux under herdr"
+  else
+    ok "session stop did not require tmux"
+  fi
+
+  labels="$(workspace_labels)"
+  if [[ "$labels" == *"$CREATE_SESSION"* ]]; then
+    sleep 0.5
+    labels="$(workspace_labels)"
+  fi
+  if [[ "$labels" == *"$CREATE_SESSION"* ]]; then
+    bad "workspace label ${CREATE_SESSION} still present after session stop"
+    info "labels: ${labels}"
+  else
+    ok "workspace label ${CREATE_SESSION} gone after session stop"
+  fi
+
+  # Re-create and exercise session delete (same muxKillSession path).
+  kill_session_best_effort "$CREATE_SESSION"
+  rc=0
+  out="$(printf 'y\nn\n' | run_ntm create "$CREATE_SESSION" --panes=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "re-create ${CREATE_SESSION} for session delete (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "re-create ${CREATE_SESSION} for session delete"
+
+  rc=0
+  out="$(run_ntm session delete "$CREATE_SESSION" --force 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "session delete ${CREATE_SESSION} --force (exit=${rc})"
+    info "output: ${out}"
+    kill_session_best_effort "$CREATE_SESSION"
+    return 1
+  fi
+  ok "session delete ${CREATE_SESSION} --force succeeded"
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* ]]; then
+    bad "session delete required tmux under herdr"
+  else
+    ok "session delete did not require tmux"
+  fi
+
+  labels="$(workspace_labels)"
+  if [[ "$labels" == *"$CREATE_SESSION"* ]]; then
+    sleep 0.5
+    labels="$(workspace_labels)"
+  fi
+  if [[ "$labels" == *"$CREATE_SESSION"* ]]; then
+    bad "workspace label ${CREATE_SESSION} still present after session delete"
+    info "labels: ${labels}"
+  else
+    ok "workspace label ${CREATE_SESSION} gone after session delete"
+  fi
+
+  local list_out
+  list_out="$(run_ntm session list 2>&1 || true)"
+  if [[ "$list_out" == *"$CREATE_SESSION"* ]]; then
+    bad "session list still shows ${CREATE_SESSION} after delete"
+    info "list: ${list_out}"
+  else
+    ok "session list no longer shows ${CREATE_SESSION}"
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # Summary / FEATURES checklist
 # ---------------------------------------------------------------------------
@@ -1234,10 +1419,12 @@ print_features_checklist() {
   info "checklist: status --watch        (test_status_watch / bd-gl28u.1.8)"
   info "checklist: attach <session>      (test_attach / bd-gl28u.1.3)"
   info "checklist: send --cc             (test_send)"
+  info "checklist: send --dry-run        (test_send_dry_run)"
   info "checklist: kill --force          (test_kill_demo)"
   info "checklist: multi-agent spawn     (test_multi_agent)"
   info "checklist: add --cc/--cod        (test_add_agents / bd-gl28u.1.2)"
   info "checklist: spawn --label         (test_spawn_label / bd-gl28u.1.4)"
+  info "checklist: create + session list/stop/delete (test_create_and_session_mgmt / bd-gl28u.1.10)"
   info "checklist: checkpoint save/restore (test_checkpoint_save_restore / bd-gl28u.3.1)"
   info "checklist: timeline/history/handoff (test_persistence_disk_cmds / bd-gl28u.3.2)"
   info "See FEATURES.md §1 for official ✓/~ /✗; this script only verifies exercised paths."
@@ -1263,7 +1450,7 @@ print_summary() {
 
 main() {
   info "herdr-ntm backend e2e starting (cwd=${ROOT_DIR})"
-  info "sessions: demo=${DEMO_SESSION} multi=${MULTI_SESSION} add=${ADD_SESSION} label=${LABEL_SESSION} cp=${CP_SESSION}"
+  info "sessions: demo=${DEMO_SESSION} multi=${MULTI_SESSION} add=${ADD_SESSION} label=${LABEL_SESSION} create=${CREATE_SESSION} cp=${CP_SESSION}"
   check_prereqs
   seed_registry
 
@@ -1273,11 +1460,13 @@ main() {
   test_agent_ops
   test_status_watch
   test_attach
+  test_send_dry_run
   test_send
   test_kill_demo
   test_multi_agent
   test_add_agents
   test_spawn_label
+  test_create_and_session_mgmt
   test_checkpoint_save_restore
   test_persistence_disk_cmds
 

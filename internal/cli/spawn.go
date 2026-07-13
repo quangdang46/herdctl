@@ -800,6 +800,10 @@ type SpawnOptions struct {
 
 	// Goal label for multi-session support (bd-1933u)
 	Label string
+
+	// Tags applied to every spawned agent pane title / registry PaneMeta.
+	// Enables send --tag filtering (OR logic). Format in title: [tag1,tag2].
+	Tags []string
 }
 
 // RecoveryContext holds all the information needed to help an agent recover
@@ -970,6 +974,9 @@ func newSpawnCmd() *cobra.Command {
 
 	// Goal label for multi-session support (bd-1933u)
 	var label string
+
+	// Tags for agent organization / send --tag filtering
+	var tags []string
 
 	// Interactive wizard flag
 	var interactive bool
@@ -1349,6 +1356,7 @@ Examples:
 				MarchingOrders:          marchingOrders,
 				DefaultPrompts:          cfg.Prompts,
 				Label:                   label,
+				Tags:                    tags,
 			}
 
 			normalizeSpawnOptions(&opts)
@@ -1390,6 +1398,9 @@ Examples:
 
 	// Goal label for multi-session support (bd-1933u)
 	cmd.Flags().StringVarP(&label, "label", "l", "", "Goal label for multi-session support (e.g., --label frontend creates session PROJECT--frontend)")
+
+	// Tags for agent organization (stored in pane title + herdr registry)
+	cmd.Flags().StringSliceVar(&tags, "tag", nil, "tags for spawned agents (comma-separated or repeatable; enables send --tag filter)")
 
 	// Stagger flag for thundering herd prevention
 	// Custom handling: --stagger enables with default 30s, --stagger=2m for custom duration
@@ -1954,9 +1965,9 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 			time.Sleep(testPacing.agentDelay)
 		}
 
-		// Format pane title with optional model variant
-		// Format: {session}__{type}_{index} or {session}__{type}_{index}_{variant}
-		title := muxFormatPaneName(opts.Session, string(agent.Type), agent.Index, agent.Model)
+		// Format pane title with optional model variant and tags
+		// Format: {session}__{type}_{index}[tags] or {session}__{type}_{index}_{variant}[tags]
+		title := muxAppendTags(muxFormatPaneName(opts.Session, string(agent.Type), agent.Index, agent.Model), opts.Tags)
 		if pane.ID != "" {
 			if err := muxSetPaneTitle(pane.ID, title); err != nil {
 				return outputError(fmt.Errorf("setting pane title: %w", err))
@@ -2151,12 +2162,14 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 			}
 		}
 
-		// Update pane title with profile name if assigned
+		// Update pane title with profile name if assigned (preserve --tag brackets)
 		if personaName != "" {
-			title = muxFormatPaneName(opts.Session, string(agent.Type), agent.Index, personaName)
-			if err := muxSetPaneTitle(pane.ID, title); err != nil {
-				if !IsJSONOutput() {
-					fmt.Printf("⚠ Warning: could not update pane title with profile name: %v\n", err)
+			title = muxAppendTags(muxFormatPaneName(opts.Session, string(agent.Type), agent.Index, personaName), opts.Tags)
+			if pane.ID != "" {
+				if err := muxSetPaneTitle(pane.ID, title); err != nil {
+					if !IsJSONOutput() {
+						fmt.Printf("⚠ Warning: could not update pane title with profile name: %v\n", err)
+					}
 				}
 			}
 		}

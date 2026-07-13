@@ -78,7 +78,7 @@ func TestResolveExplicitSessionName(t *testing.T) {
 			allowPrefix: true,
 			sessions:    nil,
 			wantErr:     true,
-			errContains: []string{"no tmux sessions running"},
+			errContains: []string{"no sessions running"},
 		},
 	}
 
