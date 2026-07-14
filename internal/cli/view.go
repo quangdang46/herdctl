@@ -26,7 +26,7 @@ type SessionViewInput struct {
 func init() {
 	kernel.MustRegister(kernel.Command{
 		Name:        "sessions.view",
-		Description: "Apply tiled layout to a session",
+		Description: "View all panes (tmux: tile; herdr: unzoom + TUI guidance)",
 		Category:    "sessions",
 		Input: &kernel.SchemaRef{
 			Name: "SessionViewInput",
@@ -43,7 +43,7 @@ func init() {
 		Examples: []kernel.Example{
 			{
 				Name:        "view",
-				Description: "Apply tiled layout to a session",
+				Description: "View all panes (tmux: tile; herdr: unzoom + TUI guidance)",
 				Command:     "herdctl view myproject",
 			},
 		},
@@ -71,11 +71,18 @@ func newViewCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "view [session-name]",
 		Aliases: []string{"v", "tile"},
-		Short:   "View all panes in a session (unzoom, tile, attach)",
-		Long: `View all panes in a session by:
-1. Unzooming any zoomed panes
-2. Applying tiled layout to all windows (tmux); herdr unzooms only
-3. Attaching/switching to the session (tmux) or printing herdr TUI guidance
+		Short:   "View all panes (tmux: tile+attach; herdr: unzoom+TUI guidance)",
+		Long: `View all panes in a session.
+
+tmux backend:
+  1. Unzoom any zoomed panes
+  2. Apply tiled layout to all windows (select-layout tiled)
+  3. Attach/switch to the session
+
+herdr backend:
+  1. Unzoom all panes (pane zoom --off) — best-effort; already-unzoomed is OK
+  2. Print honest no-tiled guidance (herdr has no select-layout tiled)
+  3. Print herdr TUI attach guidance (exit 0; attach is client-side)
 
 If no session is specified:
 - If inside tmux/herdr, operates on the current session
@@ -84,7 +91,7 @@ If no session is specified:
 Examples:
   herdctl view myproject
   herdctl view                 # Select session or use current
-  ntm tile myproject       # Alias
+  herdctl tile myproject       # Alias
   NTM_BACKEND=herdr herdctl view myproject`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

@@ -3,7 +3,7 @@ name: ntm
 description: >-
   Run NTM for multi-agent tmux orchestration, work triage, robot mode, safety,
   coordination, and local APIs. Use when spawning swarms, dispatching work, or
-  operating `ntm` as an agent or human operator.
+  operating `herdctl` as an agent or human operator.
 ---
 
 <!-- TOC: Quick Start | Session Orchestration | Dispatch & Reusable Assets | Work Intelligence | Coordination | Safety | Robot Mode | Serve API | Project Resolution | References | Related Skills -->
@@ -29,20 +29,20 @@ description: >-
 ```bash
 # Install / sanity check
 curl -fsSL "https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install.sh?$(date +%s)" | bash -s -- --easy-mode
-ntm deps -v
+herdctl deps -v
 
 # Create or resolve a project
-ntm quick myproject --template=go
+herdctl quick myproject --template=go
 
 # Launch a mixed swarm
-ntm spawn myproject --cc=2 --cod=1 --agy=1
+herdctl spawn myproject --cc=2 --cod=1 --agy=1
 
 # Dispatch work
-ntm send myproject --cc "Map the auth layer and propose a refactor plan."
+herdctl send myproject --cc "Map the auth layer and propose a refactor plan."
 
 # Inspect the current work graph and system state
-ntm work triage --format=markdown
-ntm --robot-snapshot
+herdctl work triage --format=markdown
+herdctl --robot-snapshot
 ```
 
 ## Session Orchestration
@@ -50,28 +50,28 @@ ntm --robot-snapshot
 Use these for day-to-day session lifecycle management:
 
 ```bash
-ntm spawn myproject --cc=3 --cod=2 --agy=1
-ntm spawn myproject --label frontend --cc=2
-ntm spawn myproject --label backend --cc=2 --worktrees
-ntm add myproject --cc=1
-ntm add myproject --label frontend --cod=1
-ntm list
-ntm status myproject
-ntm view myproject
-ntm zoom myproject 3
-ntm attach myproject
-ntm dashboard myproject
-ntm palette myproject
+herdctl spawn myproject --cc=3 --cod=2 --agy=1
+herdctl spawn myproject --label frontend --cc=2
+herdctl spawn myproject --label backend --cc=2 --worktrees
+herdctl add myproject --cc=1
+herdctl add myproject --label frontend --cod=1
+herdctl list
+herdctl status myproject
+herdctl view myproject
+herdctl zoom myproject 3
+herdctl attach myproject
+herdctl dashboard myproject
+herdctl palette myproject
 ```
 
 Useful spawn patterns:
 
 ```bash
-ntm spawn myproject --prompt "Read AGENTS.md and start on ready work"
-ntm spawn myproject -r full-stack
-ntm spawn myproject -t red-green
-ntm spawn myproject --persona=architect --persona=implementer:2
-ntm spawn myproject --stagger-mode=smart --cc=6 --cod=4
+herdctl spawn myproject --prompt "Read AGENTS.md and start on ready work"
+herdctl spawn myproject -r full-stack
+herdctl spawn myproject -t red-green
+herdctl spawn myproject --persona=architect --persona=implementer:2
+herdctl spawn myproject --stagger-mode=smart --cc=6 --cod=4
 ```
 
 ## Dispatch and Reusable Assets
@@ -80,22 +80,22 @@ High-leverage NTM usage is not just `spawn` plus `send`. The real power shows up
 you combine richer dispatch patterns with reusable session and prompt assets.
 
 ```bash
-ntm send myproject --all "Checkpoint and summarize blockers."
-ntm send myproject --pane=2 "Own the auth migration."
-ntm send --project myproject "Sync to main and report conflicts."
-ntm send myproject -c internal/auth/service.go "Review this subsystem"
-ntm send myproject -t fix --var issue="nil pointer" --file internal/auth/service.go
-ntm send myproject --smart --route=affinity "Take the auth follow-up"
-ntm send myproject --distribute --dist-strategy=dependency
+herdctl send myproject --all "Checkpoint and summarize blockers."
+herdctl send myproject --pane=2 "Own the auth migration."
+herdctl send --project myproject "Sync to main and report conflicts."
+herdctl send myproject -c internal/auth/service.go "Review this subsystem"
+herdctl send myproject -t fix --var issue="nil pointer" --file internal/auth/service.go
+herdctl send myproject --smart --route=affinity "Take the auth follow-up"
+herdctl send myproject --distribute --dist-strategy=dependency
 
-ntm recipes list
-ntm recipes show full-stack
-ntm workflows list
-ntm workflows show red-green
-ntm template list
-ntm template show refactor
-ntm session-templates list
-ntm session-templates show refactor
+herdctl recipes list
+herdctl recipes show full-stack
+herdctl workflows list
+herdctl workflows show red-green
+herdctl template list
+herdctl template show refactor
+herdctl session-templates list
+herdctl session-templates show refactor
 ```
 
 User-level and project-level assets both matter. NTM can resolve configuration from
@@ -107,16 +107,16 @@ assuming defaults.
 NTM is no longer just a pane launcher. It has first-class work selection and assignment:
 
 ```bash
-ntm work triage
-ntm work triage --by-track
-ntm work alerts
-ntm work search "JWT auth"
-ntm work impact internal/api/auth.go
-ntm work next
-ntm work graph
+herdctl work triage
+herdctl work triage --by-track
+herdctl work alerts
+herdctl work search "JWT auth"
+herdctl work impact internal/api/auth.go
+herdctl work next
+herdctl work graph
 
-ntm assign myproject --auto --strategy=dependency
-ntm assign myproject --beads=br-123,br-124 --agent=codex
+herdctl assign myproject --auto --strategy=dependency
+herdctl assign myproject --beads=br-123,br-124 --agent=codex
 ```
 
 Use `herdctl work ...` when you want NTM to wrap `bv` and present work in operator-friendly form.
@@ -127,23 +127,23 @@ Use raw `bv --robot-*` when you specifically want the graph engine's native robo
 NTM now exposes the surrounding coordination stack directly:
 
 ```bash
-ntm mail send myproject --all "Report blockers and current file focus."
-ntm mail inbox myproject
-ntm locks list myproject --all-agents
-ntm locks renew myproject
-ntm locks force-release myproject 42 --note "agent inactive"
-ntm coordinator status myproject
-ntm coordinator digest myproject
-ntm coordinator conflicts myproject
-ntm checkpoint save myproject -m "before risky refactor"
-ntm checkpoint list myproject
-ntm checkpoint restore myproject
-ntm timeline list
-ntm timeline show <session-id>
-ntm history search "authentication error"
-ntm audit show myproject
-ntm changes conflicts myproject
-ntm resume myproject
+herdctl mail send myproject --all "Report blockers and current file focus."
+herdctl mail inbox myproject
+herdctl locks list myproject --all-agents
+herdctl locks renew myproject
+herdctl locks force-release myproject 42 --note "agent inactive"
+herdctl coordinator status myproject
+herdctl coordinator digest myproject
+herdctl coordinator conflicts myproject
+herdctl checkpoint save myproject -m "before risky refactor"
+herdctl checkpoint list myproject
+herdctl checkpoint restore myproject
+herdctl timeline list
+herdctl timeline show <session-id>
+herdctl history search "authentication error"
+herdctl audit show myproject
+herdctl changes conflicts myproject
+herdctl resume myproject
 ```
 
 Treat `herdctl checkpoint save` as a routine cadence, not just a pre-disaster snapshot. Good points to checkpoint: once prompts are confirmed received after a spawn or restore, after an investigation isolates a root cause, before risky edits, after significant uncommitted work but before verification, after a green verification, and before a merge/cleanup/handoff. Cheap checkpoints make any later `herdctl checkpoint restore` land on a known-good state.
@@ -154,12 +154,12 @@ Isolation options:
 
 ```bash
 # Coordination-first
-ntm locks list myproject
+herdctl locks list myproject
 
 # Isolation-first when policy allows it
-ntm spawn myproject --cc=3 --worktrees
-ntm worktrees list
-ntm worktrees merge claude_1
+herdctl spawn myproject --cc=3 --worktrees
+herdctl worktrees list
+herdctl worktrees merge claude_1
 ```
 
 ## Safety and Approvals
@@ -167,20 +167,20 @@ ntm worktrees merge claude_1
 NTM has built-in safety, policy, and approval surfaces. Use them instead of ad hoc shell habits:
 
 ```bash
-ntm safety status
-ntm safety check -- git reset --hard
-ntm safety blocked --hours 24
-ntm safety install
+herdctl safety status
+herdctl safety check -- git reset --hard
+herdctl safety blocked --hours 24
+herdctl safety install
 
-ntm policy show --all
-ntm policy validate
-ntm policy edit
-ntm policy automation
+herdctl policy show --all
+herdctl policy validate
+herdctl policy edit
+herdctl policy automation
 
-ntm approve list
-ntm approve show abc123
-ntm approve abc123
-ntm approve deny abc123 --reason "wrong target branch"
+herdctl approve list
+herdctl approve show abc123
+herdctl approve abc123
+herdctl approve deny abc123 --reason "wrong target branch"
 ```
 
 If the repo instructions require offloading builds or tests through another tool such as `rch`, obey the repo instructions.
@@ -190,27 +190,27 @@ If the repo instructions require offloading builds or tests through another tool
 Start with these:
 
 ```bash
-ntm --robot-help
-ntm --robot-capabilities
-ntm --robot-status
-ntm --robot-snapshot
-ntm --robot-plan
-ntm --robot-dashboard
-ntm --robot-markdown --md-compact
-ntm --robot-terse
+herdctl --robot-help
+herdctl --robot-capabilities
+herdctl --robot-status
+herdctl --robot-snapshot
+herdctl --robot-plan
+herdctl --robot-dashboard
+herdctl --robot-markdown --md-compact
+herdctl --robot-terse
 ```
 
 Common task-specific robot surfaces:
 
 ```bash
-ntm --robot-send=myproject --msg="Summarize blockers." --type=claude
-ntm --robot-ack=myproject --ack-timeout=30s
-ntm --robot-tail=myproject --lines=50
-ntm --robot-mail-check --mail-project=myproject --urgent-only
-ntm --robot-cass-search="authentication error"
-ntm --robot-beads-list --beads-status=open
-ntm --robot-bead-claim=br-123 --bead-assignee=agent1
-ntm --robot-bead-close=br-123 --bead-close-reason="Completed"
+herdctl --robot-send=myproject --msg="Summarize blockers." --type=claude
+herdctl --robot-ack=myproject --ack-timeout=30s
+herdctl --robot-tail=myproject --lines=50
+herdctl --robot-mail-check --mail-project=myproject --urgent-only
+herdctl --robot-cass-search="authentication error"
+herdctl --robot-beads-list --beads-status=open
+herdctl --robot-bead-claim=br-123 --bead-assignee=agent1
+herdctl --robot-bead-close=br-123 --bead-close-reason="Completed"
 ```
 
 Operator loop:
@@ -218,7 +218,7 @@ Operator loop:
 ```text
 1. Bootstrap with --robot-snapshot
 2. Tend with --robot-attention or --robot-wait
-3. Act with --robot-send, ntm send, ntm assign, ntm locks, or ntm mail
+3. Act with --robot-send, herdctl send, herdctl assign, herdctl locks, or herdctl mail
 4. Re-bootstrap with --robot-snapshot if the cursor expires
 ```
 
@@ -229,13 +229,13 @@ Prefer `--robot-*` when another agent or script needs structured output.
 NTM also exposes local API and durable workflow surfaces:
 
 ```bash
-ntm serve --port 7337
-ntm openapi generate
-ntm pipeline run .ntm/pipelines/review.yaml --session myproject
-ntm pipeline status run-20241230-123456-abcd
-ntm pipeline list
-ntm pipeline resume run-20241230-123456-abcd
-ntm pipeline cleanup --older=7d
+herdctl serve --port 7337
+herdctl openapi generate
+herdctl pipeline run .ntm/pipelines/review.yaml --session myproject
+herdctl pipeline status run-20241230-123456-abcd
+herdctl pipeline list
+herdctl pipeline resume run-20241230-123456-abcd
+herdctl pipeline cleanup --older=7d
 ```
 
 Use `herdctl serve` for long-lived local integrations. Use `--robot-*` for single-shot agent control.
@@ -245,8 +245,8 @@ Use `herdctl serve` for long-lived local integrations. Use `--robot-*` for singl
 `herdctl spawn` needs a project directory that NTM can resolve.
 
 ```bash
-ntm config get projects_base
-ntm quick myproject --template=go
+herdctl config get projects_base
+herdctl quick myproject --template=go
 
 # Or point projects_base at an existing repo layout / create a symlink when needed
 ```

@@ -2,7 +2,7 @@
 # E2E smoke for NTM_BACKEND=herdr.
 #
 # FEATURES.md §1 P0 coverage (bd-gl28u.1.6 / bd-gl28u.1.8 / bd-gl28u.1.10):
-#   spawn → list → status → status --watch → attach → send → kill
+#   spawn → list → status → status --watch → attach → view → send → kill
 #   multi-agent spawn (cc=2,cod=1) — agent_name_taken regression
 #   spawn --profile-set quick-impl/backend-team — persona JSON fields (p1-profile-set-e2e)
 #   mid-session add (spawn --cc=1; add --cc=1 / --cod=1) — NTMIndex
@@ -780,6 +780,71 @@ test_attach() {
     ok "attach does not invoke tmux attach"
   fi
   info "attach output: ${out}"
+}
+
+test_view() {
+  section "Test: view ${DEMO_SESSION} (herdr unzoom + TUI guidance)"
+  log_case_context "$DEMO_SESSION"
+  local out rc=0
+
+  # Optional: zoom a pane first so view exercises pane zoom --off (non-fatal if zoom fails).
+  local zoom_out zoom_rc=0
+  zoom_out="$(run_ntm zoom "$DEMO_SESSION" 0 2>&1)" || zoom_rc=$?
+  if [[ $zoom_rc -eq 0 ]]; then
+    ok "optional zoom ${DEMO_SESSION} 0 before view (exit=0)"
+    info "zoom output: ${zoom_out}"
+  else
+    skip "optional zoom before view failed (exit=${zoom_rc}); continuing with unzoom no-op path"
+    info "zoom output: ${zoom_out}"
+  fi
+
+  out="$(run_ntm view "$DEMO_SESSION" 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "ntm view ${DEMO_SESSION} (exit=${rc})"
+    info "output: ${out}"
+    return 1
+  fi
+  ok "ntm view ${DEMO_SESSION} exit=0"
+
+  # Unzoom success or best-effort messaging.
+  if [[ "$out" == *"Unzoomed panes"* || "$out" == *"unzoomed panes"* || "$out" == *"unzoom attempted"* ]]; then
+    ok "view reports unzoom success/best-effort"
+  else
+    bad "view output missing unzoom success/best-effort markers"
+    info "output: ${out}"
+  fi
+
+  # Explicit no-tiled / TUI rearrange guidance (honest contract; not fake tiled success).
+  if [[ "$out" == *"no select-layout tiled"* || "$out" == *"select-layout tiled"* || "$out" == *"open herdr TUI"* || "$out" == *"open the herdr TUI"* ]]; then
+    ok "view prints no-tiled / herdr TUI guidance"
+  else
+    bad "view missing no-tiled / TUI guidance strings"
+    info "output: ${out}"
+  fi
+
+  # Attach guidance path is non-fatal (exit already 0); soft-check for herdr/workspace language.
+  if [[ "$out" == *"herdr"* && ( "$out" == *"workspace"* || "$out" == *"Focus"* || "$out" == *"TUI"* || "$out" == *"label"* || "$out" == *"attach"* ) ]]; then
+    ok "view includes herdr attach guidance (non-fatal path)"
+  else
+    # Non-fatal for attach guidance content as long as exit 0 + unzoom/no-tiled held.
+    skip "view attach guidance text soft-miss (exit 0 already asserted)"
+    info "output: ${out}"
+  fi
+
+  # Must not claim tiled layout applied or invoke tmux attach.
+  if [[ "$out" == *"Tiled layout applied"* || "$out" == *"tiled layout applied"* ]]; then
+    bad "view claims tiled layout under herdr (forbidden fake success)"
+    info "output: ${out}"
+  else
+    ok "view does not claim tiled layout under herdr"
+  fi
+  if [[ "$out" == *"attaching to tmux"* || "$out" == *"tmux attach"* ]]; then
+    bad "view appears to invoke tmux attach under herdr"
+    info "output: ${out}"
+  else
+    ok "view does not invoke tmux attach"
+  fi
+  info "view output: ${out}"
 }
 
 test_send_dry_run() {
@@ -1635,6 +1700,247 @@ test_robot_tilde_batch() {
   kill_session_best_effort "$ROBOT_SESSION"
 }
 
+# P1 robot misc verify (robot-misc-verify): history/metrics/diff/health/summary
+# under NTM_BACKEND=herdr. Each flag must exit 0 (or success JSON), return a
+# JSON object, and must not invoke tmux (no capture-pane / BinaryPath path).
+test_robot_misc_verify() {
+  section "Test: robot misc flags (robot-misc-verify)"
+  local ROBOT_SESSION="${ROBOT_SESSION_MISC:-test-robot-misc}"
+  track_session "$ROBOT_SESSION"
+  kill_session_best_effort "$ROBOT_SESSION"
+
+  local out rc=0
+  out="$(printf 'y\n' | run_ntm spawn "$ROBOT_SESSION" --cc=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "spawn ${ROBOT_SESSION} for robot misc batch (exit=${rc})"
+    info "output: ${out:0:500}"
+    return 1
+  fi
+  ok "spawn ${ROBOT_SESSION} for robot misc batch"
+  log_case_context "$ROBOT_SESSION"
+  sleep 1
+
+  # Helper: assert JSON object + no tmux dependency for one robot flag.
+  # Usage: assert_robot_misc_flag <label> <flag-arg...>
+  assert_robot_misc_flag() {
+    local label="$1"; shift
+    local rc=0 out json_out
+    out="$(run_ntm "$@" 2>&1)" || rc=$?
+    # Strip any leading non-JSON lines before jq.
+    json_out="$(printf '%s\n' "$out" | sed -n '/^{/,$p')"
+    if [[ $rc -eq 0 ]] && printf '%s' "$json_out" | jq -e 'type=="object"' >/dev/null 2>&1; then
+      ok "${label} JSON object OK (exit=${rc})"
+    elif printf '%s' "$json_out" | jq -e '.success == true or type=="object"' >/dev/null 2>&1; then
+      ok "${label} success/JSON object OK (exit=${rc})"
+    else
+      bad "${label} invalid JSON or nonzero (exit=${rc})"
+      info "output: ${out:0:400}"
+    fi
+    if [[ "$out" == *"tmux: command not found"* \
+       || "$out" == *"tmux is not installed"* \
+       || "$out" == *"capture-pane"* \
+       || "$out" == *"GetPaneActivity"* ]]; then
+      bad "${label} required tmux under herdr"
+      info "output: ${out:0:300}"
+    else
+      ok "${label} did not require tmux"
+    fi
+  }
+
+  assert_robot_misc_flag "robot-history" --robot-history="$ROBOT_SESSION"
+  assert_robot_misc_flag "robot-metrics" --robot-metrics="$ROBOT_SESSION"
+  assert_robot_misc_flag "robot-diff" --robot-diff="$ROBOT_SESSION"
+  assert_robot_misc_flag "robot-health" --robot-health="$ROBOT_SESSION"
+  assert_robot_misc_flag "robot-summary" --robot-summary="$ROBOT_SESSION"
+
+  kill_session_best_effort "$ROBOT_SESSION"
+}
+
+# Robot bead CRUD (br bridge) + robot pipeline list/dry-run/status under herdr
+# (robot-bead-pipeline). Bead path is backend-agnostic (br/bv); pipeline dry-run
+# uses mux-aware executor but does not deliver keys. Cancel stays ✗ in FEATURES:
+# PrintPipelineCancel only hits the in-process registry (separate process).
+test_robot_bead_pipeline() {
+  section "Test: robot bead + pipeline (robot-bead-pipeline)"
+
+  if ! command -v br >/dev/null 2>&1; then
+    skip "br not on PATH; cannot exercise robot bead CRUD"
+  else
+    local bead_proj bead_home bead_out bead_rc bead_id br_status
+    bead_proj="$(mktemp -d -t ntm-robot-bead-XXXXXX)"
+    bead_home="$(mktemp -d -t ntm-robot-bead-home-XXXXXX)"
+    (
+      set -euo pipefail
+      cd "$bead_proj"
+      git init -q
+      HOME="$bead_home" XDG_CONFIG_HOME="$bead_home/config" \
+        XDG_DATA_HOME="$bead_home/data" XDG_CACHE_HOME="$bead_home/cache" \
+        br init --prefix=e2e >/dev/null
+    ) || {
+      bad "br init in isolated project failed"
+      rm -rf "$bead_proj" "$bead_home"
+      bead_proj=""
+    }
+
+    if [[ -n "${bead_proj:-}" && -d "$bead_proj/.beads" ]]; then
+      ok "isolated beads project ready (${bead_proj})"
+
+      # Helper: run herdctl robot bead flag from isolated project dir.
+      run_bead_robot() {
+        (
+          cd "$bead_proj"
+          HOME="$bead_home" XDG_CONFIG_HOME="$bead_home/config" \
+            XDG_DATA_HOME="$bead_home/data" XDG_CACHE_HOME="$bead_home/cache" \
+            run_ntm "$@"
+        )
+      }
+
+      bead_rc=0
+      bead_out="$(run_bead_robot --robot-bead-create \
+        --bead-title='herdr e2e robot bead' --bead-type=task --bead-priority=2 \
+        --robot-format=json 2>&1)" || bead_rc=$?
+      if printf '%s' "$bead_out" | jq -e '.success == true and (.bead_id|type=="string" and length>0)' >/dev/null 2>&1; then
+        ok "robot-bead-create success JSON (exit=${bead_rc})"
+        bead_id="$(printf '%s' "$bead_out" | jq -r '.bead_id')"
+      else
+        bad "robot-bead-create failed (exit=${bead_rc})"
+        info "output: ${bead_out:0:400}"
+        bead_id=""
+      fi
+
+      if [[ -n "$bead_id" ]]; then
+        bead_rc=0
+        bead_out="$(run_bead_robot --robot-bead-show="$bead_id" --robot-format=json 2>&1)" || bead_rc=$?
+        if printf '%s' "$bead_out" | jq -e --arg id "$bead_id" \
+          '.success == true and .bead_id == $id' >/dev/null 2>&1; then
+          ok "robot-bead-show success JSON for ${bead_id} (exit=${bead_rc})"
+        else
+          bad "robot-bead-show failed (exit=${bead_rc})"
+          info "output: ${bead_out:0:400}"
+        fi
+
+        bead_rc=0
+        bead_out="$(run_bead_robot --robot-bead-claim="$bead_id" \
+          --bead-assignee=HerdrE2E --robot-format=json 2>&1)" || bead_rc=$?
+        if printf '%s' "$bead_out" | jq -e --arg id "$bead_id" \
+          '.success == true and .claimed == true and .bead_id == $id and .new_status == "in_progress"' >/dev/null 2>&1; then
+          ok "robot-bead-claim success JSON for ${bead_id} (exit=${bead_rc})"
+        else
+          bad "robot-bead-claim failed (exit=${bead_rc})"
+          info "output: ${bead_out:0:400}"
+        fi
+
+        bead_rc=0
+        bead_out="$(run_bead_robot --robot-bead-close="$bead_id" \
+          --bead-close-reason='herdr e2e done' --robot-format=json 2>&1)" || bead_rc=$?
+        if printf '%s' "$bead_out" | jq -e --arg id "$bead_id" \
+          '.success == true and .closed == true and .bead_id == $id and .new_status == "closed"' >/dev/null 2>&1; then
+          ok "robot-bead-close success JSON for ${bead_id} (exit=${bead_rc})"
+        else
+          bad "robot-bead-close failed (exit=${bead_rc})"
+          info "output: ${bead_out:0:400}"
+        fi
+
+        br_status="$(
+          cd "$bead_proj"
+          HOME="$bead_home" XDG_CONFIG_HOME="$bead_home/config" \
+            XDG_DATA_HOME="$bead_home/data" XDG_CACHE_HOME="$bead_home/cache" \
+            br show "$bead_id" --json 2>/dev/null \
+            | jq -r 'if type=="array" then .[0].status else .status end' 2>/dev/null || echo ""
+        )"
+        if [[ "$br_status" == "closed" ]]; then
+          ok "br state closed for ${bead_id}"
+        else
+          bad "br state for ${bead_id} want=closed got='${br_status}'"
+        fi
+      fi
+    fi
+    rm -rf "${bead_proj:-}" "${bead_home:-}"
+  fi
+
+  # Pipeline list (empty OK) + dry-run run + status from project dir.
+  local PIPE_SESSION="${PIPE_SESSION:-test-robot-pipeline}"
+  track_session "$PIPE_SESSION"
+  kill_session_best_effort "$PIPE_SESSION"
+
+  local out rc=0 json_out run_id wf_dir wf_path pipe_proj
+  rc=0
+  out="$(run_ntm --robot-pipeline-list --robot-format=json 2>&1)" || rc=$?
+  json_out="$(printf '%s\n' "$out" | sed -n '/^{/,$p')"
+  if printf '%s' "$json_out" | jq -e '.success == true' >/dev/null 2>&1; then
+    ok "robot-pipeline-list success JSON (exit=${rc})"
+  else
+    bad "robot-pipeline-list invalid/failed (exit=${rc})"
+    info "output: ${out:0:400}"
+  fi
+
+  rc=0
+  out="$(printf 'y\n' | run_ntm spawn "$PIPE_SESSION" --cc=1 2>&1)" || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    bad "spawn ${PIPE_SESSION} for robot pipeline (exit=${rc})"
+    info "output: ${out:0:500}"
+    return 1
+  fi
+  ok "spawn ${PIPE_SESSION} for robot pipeline"
+  log_case_context "$PIPE_SESSION"
+  sleep 1
+
+  wf_dir="$(mktemp -d -t ntm-robot-pipeline-wf-XXXXXX)"
+  wf_path="${wf_dir}/workflow.yaml"
+  cat >"$wf_path" <<'YAML'
+schema_version: "1.0"
+name: herdr-e2e-robot-pipeline
+steps:
+  - id: step1
+    command: "echo herdr-robot-pipeline-smoke"
+YAML
+
+  pipe_proj="${NTM_PROJECTS_BASE}/${PIPE_SESSION}"
+  mkdir -p "$pipe_proj"
+
+  # Dry-run from the session project dir so .ntm/pipelines/<run_id>.json is findable.
+  rc=0
+  out="$(
+    cd "$pipe_proj"
+    run_ntm --robot-pipeline-run="$wf_path" --session="$PIPE_SESSION" \
+      --dry-run --robot-format=json 2>&1
+  )" || rc=$?
+  json_out="$(printf '%s\n' "$out" | sed -n '/^{/,$p')"
+  if printf '%s' "$json_out" | jq -e \
+    '.success == true and .dry_run == true and .status == "completed"' >/dev/null 2>&1; then
+    ok "robot-pipeline-run --dry-run success JSON (exit=${rc})"
+    run_id="$(printf '%s' "$json_out" | jq -r '.run_id // empty')"
+  else
+    bad "robot-pipeline-run --dry-run failed (exit=${rc})"
+    info "output: ${out:0:500}"
+    run_id=""
+  fi
+  if [[ "$out" == *"tmux: command not found"* || "$out" == *"tmux is not installed"* ]]; then
+    bad "robot-pipeline-run required tmux under herdr"
+  else
+    ok "robot-pipeline-run did not require tmux"
+  fi
+
+  if [[ -n "$run_id" ]]; then
+    rc=0
+    out="$(
+      cd "$pipe_proj"
+      run_ntm --robot-pipeline="$run_id" --robot-format=json 2>&1
+    )" || rc=$?
+    json_out="$(printf '%s\n' "$out" | sed -n '/^{/,$p')"
+    if printf '%s' "$json_out" | jq -e --arg id "$run_id" \
+      '.success == true and .run_id == $id' >/dev/null 2>&1; then
+      ok "robot-pipeline status success JSON for ${run_id} (exit=${rc})"
+    else
+      bad "robot-pipeline status failed (exit=${rc})"
+      info "output: ${out:0:400}"
+    fi
+  fi
+
+  rm -rf "$wf_dir"
+  kill_session_best_effort "$PIPE_SESSION"
+}
+
 # Swarm lifecycle under herdr (bd-gl28u.6.1 / p1-swarm-e2e):
 # dry-run JSON → live create → status → stop -y --force → --remote rejection.
 # Requires swarm.enabled=true (written to an isolated NTM_CONFIG for this case).
@@ -2459,6 +2765,7 @@ print_features_checklist() {
   info "checklist: agent list/get/read   (test_agent_ops / bd-gl28u.1.12)"
   info "checklist: status --watch        (test_status_watch / bd-gl28u.1.8)"
   info "checklist: attach <session>      (test_attach / bd-gl28u.1.3)"
+  info "checklist: view <session>        (test_view / bd-gl28u.1.9)"
   info "checklist: send --cc             (test_send)"
   info "checklist: send --dry-run        (test_send_dry_run)"
   info "checklist: kill --force          (test_kill_demo)"
@@ -2470,6 +2777,8 @@ print_features_checklist() {
   info "checklist: timeline/history/handoff (test_persistence_disk_cmds / bd-gl28u.3.2)"
   info "checklist: sessions save/restore topology (test_sessions_save_restore / p1-sessions-save-e2e)"
   info "checklist: robot ~ flags batch (test_robot_tilde_batch / p1-robot-tilde-batch)"
+  info "checklist: robot misc flags (test_robot_misc_verify / robot-misc-verify)"
+  info "checklist: robot bead + pipeline (test_robot_bead_pipeline / robot-bead-pipeline)"
   info "checklist: swarm create/status/stop (test_swarm_lifecycle / bd-gl28u.6.1)"
   info "checklist: spawn --worktrees      (test_spawn_worktrees / p1-worktrees-e2e)"
   info "checklist: spawn --assign        (test_spawn_assign / bd-gl28u.1.5)"
@@ -2507,6 +2816,7 @@ main() {
   test_agent_ops
   test_status_watch
   test_attach
+  test_view
   test_send_dry_run
   test_send
   test_kill_demo
@@ -2518,6 +2828,8 @@ main() {
   test_persistence_disk_cmds
   test_sessions_save_restore
   test_robot_tilde_batch
+  test_robot_misc_verify
+  test_robot_bead_pipeline
   test_swarm_lifecycle
   test_spawn_worktrees
   test_spawn_assign

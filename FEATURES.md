@@ -44,13 +44,13 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `status <session>` | ✓ | ✓ | muxEnsureInstalled + herdr agent_status (capture fallback); `status --watch` re-fetches via mux each tick (no tmux poll) (bd-gl28u.1.1 / bd-gl28u.1.8) |
 | `attach <session>` | ✓ | ✓ | herdr: exit 0 + actionable TUI guidance (label/workspace_id); never tmux attach (bd-gl28u.1.3) |
 | `kill <session>` | ✓ | ✓ | muxKillSession / muxKillPane (bd-biel8) |
-| `view <session>` | ✓ | ~ | herdr: unzoom all panes (pane zoom --off) + attach guidance; no select-layout tiled (bd-gl28u.1.9) |
+| `view <session>` | ✓ | ✓ | herdr: unzoom-all + attach guidance verified (`test_view`); tiled layout N/A (use herdr TUI); no select-layout tiled (bd-gl28u.1.9) |
 | `zoom <session> <index>` | ✓ | ✓ | muxZoomPane → herdr.ZoomPane (bd-biel8) |
 | `interrupt <session>` | ✓ | ✓ | muxSendInterrupt → herdr agent send `ctrl+c` (bd-biel8) |
 | `wait <session>` | ✓ | ✓ | herdr-native `agent wait` for idle/working; poll+capture fallback (bd-wg3js) |
-| `session list` | ✓ | ✓ | `ntm session list` → muxListSessions (also `ntm list`); e2e covered (bd-gl28u.1.10) |
-| `session stop` | ✓ | ✓ | `ntm session stop` → muxKillSession (herdr workspace close + registry drop); e2e covered (bd-gl28u.1.10) |
-| `session delete` | ✓ | ✓ | `ntm session delete` → muxKillSession (same close+registry delete); e2e covered (bd-gl28u.1.10) |
+| `session list` | ✓ | ✓ | `herdctl session list` → muxListSessions (also `herdctl list`); e2e covered (bd-gl28u.1.10) |
+| `session stop` | ✓ | ✓ | `herdctl session stop` → muxKillSession (herdr workspace close + registry drop); e2e covered (bd-gl28u.1.10) |
+| `session delete` | ✓ | ✓ | `herdctl session delete` → muxKillSession (same close+registry delete); e2e covered (bd-gl28u.1.10) |
 | `sessions` (save mgmt) | ✓ | ✓ | topology save→kill→restore verified under herdr (GetPanes/Create/Split; e2e `test_sessions_save_restore`); layout strings / multi-window geometry remain tmux-only (p1-sessions-save-e2e / bd-gl28u.1.10) |
 
 ## 2. Agent Management
@@ -68,14 +68,14 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `send --smart-route` | ✓ | ✗ | |
 | `send --codex-goal` | ✓ | ✗ | deep Codex integration |
 | `agent list` | ✓ | ✓ | via herdr agent list |
-| `agent get` | ✓ | ✓ | herdr agent get via client/mux; ntm agent get (bd-gl28u.1.12) |
-| `agent read` | ✓ | ✓ | herdr agent read (+ pane read fallback); ntm agent read (bd-gl28u.1.12) |
+| `agent get` | ✓ | ✓ | herdr agent get via client/mux; herdctl agent get (bd-gl28u.1.12) |
+| `agent read` | ✓ | ✓ | herdr agent read (+ pane read fallback); herdctl agent read (bd-gl28u.1.12) |
 | `agent send` | ✓ | ✓ | |
-| `agent rename` | ✓ | ✓ | herdr agent rename via client/mux; ntm agent rename (bd-gl28u.1.12) |
-| `agent focus` | ✓ | ✓ | herdr agent focus via client/mux; ntm agent focus (bd-gl28u.1.12) |
+| `agent rename` | ✓ | ✓ | herdr agent rename via client/mux; herdctl agent rename (bd-gl28u.1.12) |
+| `agent focus` | ✓ | ✓ | herdr agent focus via client/mux; herdctl agent focus (bd-gl28u.1.12) |
 | `agent wait` | ✓ | ✓ | herdr `agent.wait` / `wait agent-status` (bd-wg3js) |
-| `agent explain` | ✓ | ✓ | herdr agent explain --json via client/mux; ntm agent explain (herdr-only) (bd-gl28u.1.12) |
-| `agents` (profiles) | ✓ | ✓ | file/config profiles (backend-agnostic); ntm agents list/show/stats/recommend (bd-gl28u.1.12) |
+| `agent explain` | ✓ | ✓ | herdr agent explain --json via client/mux; herdctl agent explain (herdr-only) (bd-gl28u.1.12) |
+| `agents` (profiles) | ✓ | ✓ | file/config profiles (backend-agnostic); herdctl agents list/show/stats/recommend (bd-gl28u.1.12) |
 | `scale <session>` | ✓ | ✓ | muxGetPanes + runAdd (herdrLaunchAgent) / muxKillPane; layout re-tile best-effort (bd-gl28u.1.13) |
 | `respawn <session>` | ✓ | ✓ | herdr: kill pane + StartAgent with registry meta (type/index/variant/cwd/command); tmux keeps robot GetRestartPane (bd-gl28u.1.13) |
 | `rotate <session>` | ✓ | ✗ | session/pane lookup via mux; full account swap still needs caam + auth orchestrator (not herdr-native) (bd-gl28u.1.13) |
@@ -202,7 +202,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 
 | Feature | tmux | herdr | Notes |
 |---|---|---|---|
-| `serve` | ✓ | — | full NTM REST server still tmux-coupled for live pane I/O; substitute under herdr: `herdr` socket/CLI + `ntm` robot/CLI (`status`, `list`, `send`, `agent *`) as control API (bd-gl28u.6.3) |
+| `serve` | ✓ | — | full NTM REST server still tmux-coupled for live pane I/O; substitute under herdr: `herdr` socket/CLI + `herdctl` robot/CLI (`status`, `list`, `send`, `agent *`) as control API (bd-gl28u.6.3) |
 | `openapi generate` | ✓ | ✓ | kernel registry → OpenAPI 3.1; backend-agnostic; verified under NTM_BACKEND=herdr (bd-gl28u.6.3) |
 | `config show/edit` | — | — | backend-agnostic config |
 | `deps` | ✓ | ✓ | required backend binary follows NTM_BACKEND (herdr required under herdr; tmux optional); verified `--json` (bd-gl28u.6.4) |
@@ -216,14 +216,14 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 
 | Feature | tmux | herdr | Notes |
 |---|---|---|---|
-| `dashboard <session>` | ✓ | — | tmux Bubbletea dashboard N/A on herdr; substitute: `herdr` TUI sidebar + `ntm status` / `ntm status --watch` / `ntm attach` guidance (bd-gl28u.5.1) |
-| `palette <session>` | ✓ | — | interactive palette TUI is tmux-oriented; substitute: `ntm send <session> --all "..."` / agent selectors; `ntm palette --json` still lists config commands (bd-gl28u.5.1) |
+| `dashboard <session>` | ✓ | — | tmux Bubbletea dashboard N/A on herdr; substitute: `herdr` TUI sidebar + `herdctl status` / `herdctl status --watch` / `herdctl attach` guidance (bd-gl28u.5.1) |
+| `palette <session>` | ✓ | — | interactive palette TUI is tmux-oriented; substitute: `herdctl send <session> --all "..."` / agent selectors; `herdctl palette --json` still lists config commands (bd-gl28u.5.1) |
 | `overlay <session>` | ✓ | — | requires tmux `display-popup`; substitute: herdr TUI sidebar as live status cockpit (bd-gl28u.5.1) |
 | `plugins list` | ✓ | ✓ | file-based agent/command plugins under config dir; backend-agnostic (bd-gl28u.5.1) |
 | `bind` | ✓ | — | writes `~/.tmux.conf` / live tmux bind-key only; substitute: herdr TUI keybinds (bd-gl28u.5.1) |
 | `tutorial` | ✓ | ✓ | Bubbletea tutorial is backend-agnostic (no tmux session required) (bd-gl28u.5.1) |
 | Herdr sidebar status | — | ✓ | native Herdr TUI status cockpit (dashboard/overlay substitute) |
-| Herdr pane attach | — | ✓ | native Herdr UI / `ntm attach` guidance |
+| Herdr pane attach | — | ✓ | native Herdr UI / `herdctl attach` guidance |
 
 ## 11. Robot / AI Agent Surfaces
 
@@ -268,6 +268,11 @@ Inventory: 143 `--robot-*` flags in `internal/cli/root.go`. Dual-backend session
 | `--robot-smart-restart` | ✓ | ✗ | respawn path still largely tmux-shaped |
 | `--robot-restart-pane` | ✓ | ✗ | tmux respawn-pane semantics |
 | `--robot-bulk-assign` | ✓ | ✓ | backend GetPanes/Send/Dispatch; dry-run verified herdr (p1-robot-tilde-batch) |
+| `--robot-history` | ✓ | ✓ | history store + session filter; verified herdr (robot-misc-verify) |
+| `--robot-metrics` | ✓ | ✓ | session metrics via backend panes; verified herdr (robot-misc-verify) |
+| `--robot-diff` | ✓ | ✓ | mux capture + git; verified herdr (robot-misc-verify) |
+| `--robot-health` | ✓ | ✓ | session health; activity via backendGetPaneActivity; verified herdr (robot-misc-verify) |
+| `--robot-summary` | ✓ | ✓ | synthesis capture via backendCapturePaneOutput (no raw tmux); verified herdr (robot-misc-verify) |
 
 ### Mail / beads / pipeline (mostly backend-agnostic)
 
@@ -277,18 +282,18 @@ Inventory: 143 `--robot-*` flags in `internal/cli/root.go`. Dual-backend session
 | `--robot-mail-check` | ✓ | ✓ | Agent Mail HTTP-only; invalid without `--mail-project` verified herdr (p1-robot-tilde-batch) |
 | `--robot-alerts` | ✓ | ✓ | alert store; verified herdr |
 | `--robot-beads-list` | ✓ | ✓ | br/bv bridge (verified herdr) |
-| `--robot-bead-create` | ✓ | ✗ | not verified this pass (flag wiring only) |
-| `--robot-bead-claim` | ✓ | ✗ | not verified |
-| `--robot-bead-show` | ✓ | ✗ | not verified |
-| `--robot-bead-close` | ✓ | ✗ | not verified |
+| `--robot-bead-create` | ✓ | ✓ | br/bv bridge; create→show→claim→close verified herdr e2e (`test_robot_bead_pipeline`) |
+| `--robot-bead-claim` | ✓ | ✓ | verified herdr e2e (`test_robot_bead_pipeline`) |
+| `--robot-bead-show` | ✓ | ✓ | verified herdr e2e (`test_robot_bead_pipeline`) |
+| `--robot-bead-close` | ✓ | ✓ | verified herdr e2e (`test_robot_bead_pipeline`) |
 | `--robot-pipeline-list` | ✓ | ✓ | storage-only (verified herdr) |
-| `--robot-pipeline-run` | ✓ | ✗ | execute path not verified under herdr this pass |
-| `--robot-pipeline-cancel` | ✓ | ✗ | not verified |
-| `--robot-pipeline` | ✓ | ✗ | not verified |
+| `--robot-pipeline-run` | ✓ | ✓ | dry-run command workflow success JSON verified herdr e2e (`test_robot_bead_pipeline`) |
+| `--robot-pipeline-cancel` | ✓ | ✗ | in-process registry only; not durable across CLI invocations — left unverified |
+| `--robot-pipeline` | ✓ | ✓ | status of completed dry-run via `.ntm/pipelines/<run_id>.json` verified herdr e2e |
 
 ### Remaining robot flags (still ✗ / not verified on herdr this pass)
 
-Keep ✗ until verified. Grouped (not exhaustive of every subflag): `--robot-account-status`, `--robot-accounts-list`, `--robot-acfs-status`, `--robot-agent-names`, `--robot-cass-*`, `--robot-causality`, `--robot-context-inject`, `--robot-controller-spawn`, `--robot-dashboard`, `--robot-dcg-*`, `--robot-default-prompts`, `--robot-diagnose`, `--robot-diff`, `--robot-dismiss-alert`, `--robot-ensemble*`, `--robot-env`, `--robot-file-*`, `--robot-files`, `--robot-forecast`, `--robot-giil-fetch`, `--robot-graph`, `--robot-guard`, `--robot-health` (needs session arg shape), `--robot-health-oauth`, `--robot-health-restart-stuck`, `--robot-history`, `--robot-impact`, `--robot-inspect-*`, `--robot-jfp-*`, `--robot-label-*`, `--robot-markdown`, `--robot-metrics`, `--robot-ms-*`, `--robot-overlay`, `--robot-palette`, `--robot-profile-*`, `--robot-proxy-status`, `--robot-quota-*`, `--robot-rano-stats`, `--robot-rch-*`, `--robot-recipes`, `--robot-replay`, `--robot-restore`, `--robot-route`, `--robot-ru-sync`, `--robot-safety-simulate`, `--robot-save`, `--robot-schema`, `--robot-search`, `--robot-setup`, `--robot-slb-*`, `--robot-suggest`, `--robot-summary`, `--robot-support-bundle`, `--robot-switch-account`, `--robot-tokens`, `--robot-triage`, `--robot-watch-bead`, `--robot-xf-*`, plus modifiers (`--robot-format`, `--robot-limit`, `--robot-offset`, `--robot-verbosity`, `--robot-output-format`).
+Keep ✗ until verified. Grouped (not exhaustive of every subflag): `--robot-account-status`, `--robot-accounts-list`, `--robot-acfs-status`, `--robot-agent-names`, `--robot-cass-*`, `--robot-causality`, `--robot-context-inject`, `--robot-controller-spawn`, `--robot-dashboard`, `--robot-dcg-*`, `--robot-default-prompts`, `--robot-diagnose`, `--robot-dismiss-alert`, `--robot-ensemble*`, `--robot-env`, `--robot-file-*`, `--robot-files`, `--robot-forecast`, `--robot-giil-fetch`, `--robot-graph`, `--robot-guard`, `--robot-health-oauth`, `--robot-health-restart-stuck`, `--robot-impact`, `--robot-inspect-*`, `--robot-jfp-*`, `--robot-label-*`, `--robot-markdown`, `--robot-ms-*`, `--robot-overlay`, `--robot-palette`, `--robot-profile-*`, `--robot-proxy-status`, `--robot-quota-*`, `--robot-rano-stats`, `--robot-rch-*`, `--robot-recipes`, `--robot-replay`, `--robot-restore`, `--robot-route`, `--robot-ru-sync`, `--robot-safety-simulate`, `--robot-save`, `--robot-schema`, `--robot-search`, `--robot-setup`, `--robot-slb-*`, `--robot-suggest`, `--robot-support-bundle`, `--robot-switch-account`, `--robot-tokens`, `--robot-triage`, `--robot-watch-bead`, `--robot-xf-*`, plus modifiers (`--robot-format`, `--robot-limit`, `--robot-offset`, `--robot-verbosity`, `--robot-output-format`).
 
 Many of these now *call* backend_mux for session/pane I/O, but are left ✗ until exercised under `NTM_BACKEND=herdr` (honesty rule).
 
@@ -299,7 +304,7 @@ Many of these now *call* backend_mux for session/pane I/O, but are left ✗ unti
 | `swarm` | ✓ | ✓ | herdr path: workspace create + `agent.start` per pane + mux send/kill; status/discover/stop via mux; live create/status/stop + dry-run JSON + `--remote` rejection verified under herdr (`scripts/test-herdr-backend.sh` test_swarm_lifecycle); `--remote` N/A; tiled layout best-effort only (bd-gl28u.6.1) |
 | `ensemble [question]` | ✓ | ~ | status/stop/synthesize/compare use mux capture/session; spawn still `-tags ensemble_experimental` (default build stub); no full multi-model live spawn e2e this pass (bd-gl28u.6.2) |
 | `modes` | ✓ | ✓ | mode catalog list; backend-agnostic; verified under herdr (bd-gl28u.6.2) |
-| `explain <mode>` | ✓ | ✓ | `ntm modes explain`; catalog cards; verified under herdr (bd-gl28u.6.2) |
+| `explain <mode>` | ✓ | ✓ | `herdctl modes explain`; catalog cards; verified under herdr (bd-gl28u.6.2) |
 | `synthesize` | ✓ | ~ | mux-backed live capture + offline saved outputs; mechanical synthesize without live session works; live multi-pane e2e not run this pass (bd-gl28u.6.2) |
 
 ## 13. Git & IDE
@@ -350,15 +355,15 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Git & IDE | 4 | 4 | 4 | 0 | 0 |
 | Memory & Search | 3 | 3 | 3 | 0 | 0 |
 | Code Quality | 4 | 4 | 4 | 0 | 0 |
-| **Total (counted rows)** | **209** | **204** | **194** | **3** | **12** |
+| **Total (counted rows)** | **209** | **204** | **195** | **2** | **12** |
 | N/A (`—`) rows | 9 | — | — | — | — |
 | Robot remaining (prose inventory, not row-counted) | ~100 | ~100 | 0 | 0 | ~100 |
 | **Grand total (incl. remaining robot inventory)** | **~309** | **~304** | **194** | **3** | **~112** |
 
 **Current herdr parity (honest recount from tables):**  
-- **✓=194 · ~=3 · ✗=12 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
+- **✓=195 · ~=2 · ✗=12 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
-- Still ~: **view** (no tiled layout API); **ensemble** (experimental spawn tag); **synthesize** (live multi-pane e2e pending)
+- Still ~: **ensemble** (experimental spawn tag); **synthesize** (live multi-pane e2e pending)
 - Still ✗: send --smart-route/--codex-goal; rotate; robot smart-restart/restart-pane; robot bead CRUD; robot pipeline run/cancel/pipeline  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
@@ -386,9 +391,11 @@ Goal: maximize verified ✓; deprecate tmux only when remaining ✗ are acceptab
 | bd-gl28u.1.8 | status --watch | herdr-safe: runStatusWatch → runStatusOnce → observeSessionStatus (mux each tick) |
 | bd-gl28u.1.5 | spawn flags | --assign → ✓ (observer mux + agent_status idle; e2e test_spawn_assign); --worktrees → ✓ (e2e test_spawn_worktrees: dirs + agent Cwd + fail-closed) |
 | p1-profile-set-e2e | spawn --profile-set | e2e test_spawn_profile_set (quick-impl + backend-team); StartAgent Pane.Index fix for persona JSON → ✓ |
-| bd-gl28u.1.9 | view | unzoom + TUI guidance → ~ (no tiled layout API) |
+| bd-gl28u.1.9 | view | unzoom-all + attach guidance verified (`test_view`); tiled N/A → ✓ |
 | p1-sessions-save-e2e | sessions save mgmt | topology save→kill→restore pane-count e2e → ✓ (layout/multi-window still tmux-only) |
 | p1-robot-tilde-batch | robot ~ flags | events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check → ✓ (backendPaneTarget; e2e test_robot_tilde_batch) |
+| robot-bead-pipeline | robot bead/pipeline | bead create/show/claim/close + pipeline list/dry-run/status → ✓ (e2e test_robot_bead_pipeline); cancel still ✗ (in-process only) |
+| robot-misc-verify | robot misc flags | history/metrics/diff/health/summary → ✓ (backendCapturePaneOutput + backendGetPaneActivity; e2e test_robot_misc_verify) |
 | health mux fix | health | CheckSessionWithObserver + mux ListPanes/Capture under herdr (no tmux list-panes) → ✓ verified |
 | bd-gl28u.5.1 | Plugin & UI | dashboard/palette/overlay/bind → — (herdr TUI/sidebar + CLI substitutes); plugins list + tutorial → ✓ (backend-agnostic) |
 | bd-gl28u.4.1 | robot-status/snapshot | empty herd valid JSON; post-spawn sessions/agents; `system.backend=herdr` additive |

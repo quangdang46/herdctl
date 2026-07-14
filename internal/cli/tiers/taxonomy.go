@@ -244,7 +244,7 @@ var Registry = map[string]CommandInfo{
 		Tier:        TierJourneyman,
 		Alias:       "vnt",
 		Category:    CategorySessionNav,
-		Description: "Tile all panes and attach",
+		Description: "Unzoom/tile panes + attach (herdr: unzoom+TUI guidance)",
 		Examples: []string{
 			"herdctl view myproject",
 		},

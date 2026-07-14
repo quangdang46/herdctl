@@ -89,7 +89,7 @@ func PrintStunningHelp(w io.Writer) {
 				{"attach", "rnt", "<session>", "Attach/switch to session"},
 				{"list", "lnt", "", "List all tmux sessions"},
 				{"status", "snt", "<session>", "Show detailed session status"},
-				{"view", "vnt", "<session>", "Tile all panes and attach"},
+				{"view", "vnt", "<session>", "Unzoom/tile panes + attach (herdr: unzoom+TUI)"},
 				{"zoom", "znt", "<session> <pane|cc|cod|agy|gmi>", "Zoom to specific pane"},
 				{"dashboard", "", "<session>", "Interactive session dashboard"},
 			},
@@ -239,7 +239,7 @@ func renderExamples(width int, t theme.Theme, ic icons.IconSet) string {
 		{"herdctl spawn myproject --cc=2 --cod=2", "Create session with 2 Claude + 2 Codex agents"},
 		{"herdctl send myproject \"fix the tests\"", "Send prompt to all agents"},
 		{"herdctl palette myproject", "Open command palette (or press F6)"},
-		{"herdctl view myproject", "Tile all panes and attach"},
+		{"herdctl view myproject", "Unzoom/tile panes + attach (herdr: unzoom+TUI)"},
 		{"herdctl dashboard myproject", "Open interactive dashboard"},
 	}
 
@@ -282,7 +282,7 @@ func PrintCompactHelp(w io.Writer) {
 		{"status", "Show session status"},
 		{"list", "List all sessions"},
 		{"attach", "Attach to session"},
-		{"view", "Tile and view all panes"},
+		{"view", "Unzoom/tile panes + attach (herdr: unzoom+TUI)"},
 		{"dashboard", "Interactive dashboard"},
 	}
 

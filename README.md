@@ -82,54 +82,54 @@ NTM is a pure Go project, but the runtime experience is intentionally integratio
 ### First Session
 
 ```bash
-# Build from source (ntm binary — dual-backend)
+# Build from source (herdctl binary — dual-backend)
 
 # Enable shell integration
-eval "$(ntm shell zsh)"
+eval "$(herdctl shell zsh)"
 
 # Verify tools and integrations
-ntm deps -v
+herdctl deps -v
 
 # Scaffold a project directory
-ntm quick api --template=go
+herdctl quick api --template=go
 
 # Launch a mixed swarm
-ntm spawn api --cc=2 --cod=1 --agy=1
+herdctl spawn api --cc=2 --cod=1 --agy=1
 
 # Open the live operator surfaces
-ntm dashboard api
-ntm palette api
+herdctl dashboard api
+herdctl palette api
 
 # Dispatch work
-ntm send api --cc "Map the auth layer and propose a refactor plan."
+herdctl send api --cc "Map the auth layer and propose a refactor plan."
 
 # If the repo uses br/bv, inspect the work graph
-ntm work triage --format=markdown
+herdctl work triage --format=markdown
 
 # Save a recoverable checkpoint
-ntm checkpoint save api -m "before auth refactor"
+herdctl checkpoint save api -m "before auth refactor"
 
 # Expose local APIs for dashboards, scripts, and agents
-ntm serve --port 7337
-ntm --robot-snapshot
+herdctl serve --port 7337
+herdctl --robot-snapshot
 ```
 
 ### Herdr UX (`NTM_BACKEND=herdr`)
 
 When the mux backend is herdr, interactive **tmux-native** NTM surfaces are not ported.
-Use herdr's own TUI as the status cockpit and ntm CLI for orchestration:
+Use herdr's own TUI as the status cockpit and herdctl CLI for orchestration:
 
 ```bash
 export NTM_BACKEND=herdr
 
-ntm spawn api --cc=2 --cod=1
-ntm status api
-ntm status api --watch
-ntm attach api                 # prints herdr workspace focus guidance (does not tmux-attach)
+herdctl spawn api --cc=2 --cod=1
+herdctl status api
+herdctl status api --watch
+herdctl attach api                 # prints herdr workspace focus guidance (does not tmux-attach)
 herdr                          # open herdr TUI sidebar / pane focus
-ntm send api --all "..."       # dispatch without the Bubbletea palette
-ntm plugins list               # file-based plugins still work
-ntm tutorial                   # interactive tutorial (backend-agnostic)
+herdctl send api --all "..."       # dispatch without the Bubbletea palette
+herdctl plugins list               # file-based plugins still work
+herdctl tutorial                   # interactive tutorial (backend-agnostic)
 ```
 
 Not applicable on herdr (intentional substitutes, not missing work): `herdctl dashboard`,
@@ -146,24 +146,24 @@ It handles session naming, pane layout, agent startup, labels, and inspection so
 can treat a swarm like a manageable unit instead of a pile of terminals.
 
 ```bash
-ntm quick payments --template=go
-ntm spawn payments --cc=3 --cod=2 --agy=1
-ntm add payments --cc=1
-ntm list
-ntm status payments
-ntm view payments
-ntm zoom payments 3
-ntm attach payments
+herdctl quick payments --template=go
+herdctl spawn payments --cc=3 --cod=2 --agy=1
+herdctl add payments --cc=1
+herdctl list
+herdctl status payments
+herdctl view payments
+herdctl zoom payments 3
+herdctl attach payments
 ```
 
 Use labels when you want multiple coordinated swarms on the same project while
 keeping a shared project directory:
 
 ```bash
-ntm quick payments --template=go
-ntm spawn payments --label backend --cc=2 --cod=1
-ntm spawn payments --label frontend --cc=2
-ntm add payments --label frontend --cc=1
+herdctl quick payments --template=go
+herdctl spawn payments --label backend --cc=2 --cod=1
+herdctl spawn payments --label frontend --cc=2
+herdctl add payments --label frontend --cc=1
 ```
 
 ### 2. Dispatch, Monitoring, and Recovery
@@ -173,15 +173,15 @@ responses, search pane history, and keep an eye on activity without dropping to 
 `tmux` commands.
 
 ```bash
-ntm send payments --all "Checkpoint and summarize current progress."
-ntm interrupt payments
-ntm activity payments --watch
-ntm health payments
-ntm watch payments --cc
-ntm extract payments --lang=go
-ntm diff payments cc_1 cod_1
-ntm grep "timeout" payments -C 3
-ntm analytics --days 7
+herdctl send payments --all "Checkpoint and summarize current progress."
+herdctl interrupt payments
+herdctl activity payments --watch
+herdctl health payments
+herdctl watch payments --cc
+herdctl extract payments --lang=go
+herdctl diff payments cc_1 cod_1
+herdctl grep "timeout" payments -C 3
+herdctl analytics --days 7
 ```
 
 ### 3. Work Graph Triage and Assignment
@@ -191,15 +191,15 @@ hope." It can surface the best next task, highlight blockers, analyze impact, fo
 work, and push assignments to specific panes or agent types.
 
 ```bash
-ntm work triage
-ntm work triage --by-track
-ntm work alerts
-ntm work search "JWT auth"
-ntm work impact internal/api/auth.go
-ntm work next
-ntm work graph
-ntm assign payments --auto --strategy=dependency
-ntm assign payments --beads=br-123,br-124 --agent=codex
+herdctl work triage
+herdctl work triage --by-track
+herdctl work alerts
+herdctl work search "JWT auth"
+herdctl work impact internal/api/auth.go
+herdctl work next
+herdctl work graph
+herdctl assign payments --auto --strategy=dependency
+herdctl assign payments --beads=br-123,br-124 --agent=codex
 ```
 
 When `br` and `bv` report that no ready work exists, use the queue-dry flow to
@@ -211,10 +211,10 @@ br ready --json
 bv --robot-triage | jq '.triage.quick_ref'
 
 # Diagnose why the queue appears dry.
-ntm work queue-dry --format=json | jq '{queue_dry, evidence, recommendations}'
+herdctl work queue-dry --format=json | jq '{queue_dry, evidence, recommendations}'
 
 # Render an advisory roadmap only after the dry queue is confirmed.
-ntm work queue-dry --ideate --format=json | jq '{
+herdctl work queue-dry --ideate --format=json | jq '{
   queue_dry,
   ideation: {
     status: .ideation.status,
@@ -226,7 +226,7 @@ ntm work queue-dry --ideate --format=json | jq '{
 }'
 
 # The same plan is available as markdown for human review.
-ntm work queue-dry --ideate --format=markdown
+herdctl work queue-dry --ideate --format=markdown
 ```
 
 Review the duplicate and novelty evidence before creating anything. If `br ready`
@@ -238,10 +238,10 @@ Gated creation is opt-in and still uses Beads as the source of truth:
 
 ```bash
 # Re-check the preview and guard before mutating Beads.
-ntm work queue-dry --ideate --format=json | jq '.ideation.creation.remaining_commands'
+herdctl work queue-dry --ideate --format=json | jq '.ideation.creation.remaining_commands'
 
 # Create proposed beads only after review. The plan version is an audit token.
-ntm work queue-dry --ideate --create-beads --yes --plan-version="$(git rev-parse --short HEAD)"
+herdctl work queue-dry --ideate --create-beads --yes --plan-version="$(git rev-parse --short HEAD)"
 
 # Validate the graph and export Beads state after any mutation.
 br dep cycles --json
@@ -263,14 +263,14 @@ Human Overseer, inspect inbox state, review reservations, renew or force-release
 locks, and coordinate work without inventing an ad hoc protocol.
 
 ```bash
-ntm mail send payments --all "Sync to main and report blockers."
-ntm mail inbox payments
-ntm locks list payments --all-agents
-ntm locks renew payments
-ntm locks force-release payments 42 --note "agent inactive"
-ntm coordinator status payments
-ntm coordinator digest payments
-ntm coordinator conflicts payments
+herdctl mail send payments --all "Sync to main and report blockers."
+herdctl mail inbox payments
+herdctl locks list payments --all-agents
+herdctl locks renew payments
+herdctl locks force-release payments 42 --note "agent inactive"
+herdctl coordinator status payments
+herdctl coordinator digest payments
+herdctl coordinator conflicts payments
 ```
 
 ### 5. Safety Policy and Approvals
@@ -280,20 +280,20 @@ rules define what is allowed, blocked, or approval-gated. Approvals are durable,
 and support SLB-style two-person workflows for high-risk operations.
 
 ```bash
-ntm safety status
-ntm safety check -- git reset --hard
-ntm safety blocked --hours 24
-ntm safety install
+herdctl safety status
+herdctl safety check -- git reset --hard
+herdctl safety blocked --hours 24
+herdctl safety install
 
-ntm policy show --all
-ntm policy validate
-ntm policy edit
-ntm policy automation
+herdctl policy show --all
+herdctl policy validate
+herdctl policy edit
+herdctl policy automation
 
-ntm approve list
-ntm approve show abc123
-ntm approve abc123
-ntm approve deny abc123 --reason "wrong target branch"
+herdctl approve list
+herdctl approve show abc123
+herdctl approve abc123
+herdctl approve deny abc123 --reason "wrong target branch"
 ```
 
 ### 6. Pipelines, Templates, Recipes, and Workflow Assets
@@ -307,18 +307,18 @@ NTM supports several layers of reusable automation:
 - `session-templates`: higher-level session layouts
 
 ```bash
-ntm recipes list
-ntm recipes show full-stack
-ntm workflows list
-ntm workflows show red-green
-ntm template list
-ntm template show fix-bug
+herdctl recipes list
+herdctl recipes show full-stack
+herdctl workflows list
+herdctl workflows show red-green
+herdctl template list
+herdctl template show fix-bug
 
-ntm pipeline run .ntm/pipelines/review.yaml --session payments
-ntm pipeline status run-20241230-123456-abcd
-ntm pipeline list
-ntm pipeline resume run-20241230-123456-abcd --mode=continue
-ntm pipeline cleanup --older=7d
+herdctl pipeline run .ntm/pipelines/review.yaml --session payments
+herdctl pipeline status run-20241230-123456-abcd
+herdctl pipeline list
+herdctl pipeline resume run-20241230-123456-abcd --mode=continue
+herdctl pipeline cleanup --older=7d
 ```
 
 Pipeline resume preserves completed step outputs by default and re-runs the first incomplete
@@ -333,16 +333,16 @@ be replayed, audit records can be exported, and prompt/session history remains a
 for analysis or resumption.
 
 ```bash
-ntm checkpoint save payments -m "pre-migration"
-ntm checkpoint list payments
-ntm checkpoint restore payments
+herdctl checkpoint save payments -m "pre-migration"
+herdctl checkpoint list payments
+herdctl checkpoint restore payments
 
-ntm timeline list
-ntm timeline show <session-id>
-ntm history search "authentication error"
-ntm audit show payments
-ntm changes conflicts payments
-ntm resume payments
+herdctl timeline list
+herdctl timeline show <session-id>
+herdctl history search "authentication error"
+herdctl audit show payments
+herdctl changes conflicts payments
+herdctl resume payments
 ```
 
 ## Robot Mode and Local API
@@ -357,24 +357,24 @@ NTM has two automation layers:
 Start with these:
 
 ```bash
-ntm --robot-help
-ntm --robot-capabilities
-ntm --robot-status
-ntm --robot-snapshot
-ntm --robot-plan
-ntm --robot-dashboard
-ntm --robot-markdown --md-compact
-ntm --robot-terse
+herdctl --robot-help
+herdctl --robot-capabilities
+herdctl --robot-status
+herdctl --robot-snapshot
+herdctl --robot-plan
+herdctl --robot-dashboard
+herdctl --robot-markdown --md-compact
+herdctl --robot-terse
 ```
 
 Common task-specific surfaces:
 
 ```bash
-ntm --robot-send=payments --msg="Summarize current blockers." --type=claude
-ntm --robot-ack=payments --ack-timeout=30s
-ntm --robot-tail=payments --lines=50
-ntm --robot-mail-check --mail-project=payments --urgent-only
-ntm --robot-cass-search="authentication error"
+herdctl --robot-send=payments --msg="Summarize current blockers." --type=claude
+herdctl --robot-ack=payments --ack-timeout=30s
+herdctl --robot-tail=payments --lines=50
+herdctl --robot-mail-check --mail-project=payments --urgent-only
+herdctl --robot-cass-search="authentication error"
 ```
 
 ### REST, SSE, WebSocket, and OpenAPI
@@ -382,7 +382,7 @@ ntm --robot-cass-search="authentication error"
 Run the local server:
 
 ```bash
-ntm serve
+herdctl serve
 ```
 
 Important surfaces:
@@ -396,8 +396,8 @@ Important surfaces:
 Generate or refresh the OpenAPI document:
 
 ```bash
-ntm openapi generate
-ntm openapi generate --stdout
+herdctl openapi generate
+herdctl openapi generate --stdout
 ```
 
 ## Command Map
@@ -440,12 +440,12 @@ Project-local assets live under `.ntm/` and override built-ins and user defaults
 Useful config commands:
 
 ```bash
-ntm config init
-ntm config show
-ntm config diff
-ntm config get projects_base
-ntm config edit
-ntm config reset
+herdctl config init
+herdctl config show
+herdctl config diff
+herdctl config get projects_base
+herdctl config edit
+herdctl config reset
 ```
 
 ## Design Principles
@@ -541,7 +541,7 @@ docker run --rm -it ntm
 ```bash
 git clone https://github.com/Dicklesworthstone/ntm.git
 cd ntm
-go build -o /tmp/herdctl ./cmd/ntm && sudo cp /tmp/herdctl /usr/local/bin/ntm
+go build -o /tmp/herdctl ./cmd/herdctl && sudo cp /tmp/herdctl /usr/local/bin/ntm
 ```
 
 ## Troubleshooting
@@ -551,7 +551,7 @@ go build -o /tmp/herdctl ./cmd/ntm && sudo cp /tmp/herdctl /usr/local/bin/ntm
 Install `tmux` first, then re-run:
 
 ```bash
-ntm deps -v
+herdctl deps -v
 ```
 
 ### Agent panes start empty or an agent CLI fails immediately
@@ -576,7 +576,7 @@ command -v claude
 command -v codex
 command -v agy
 command -v gemini
-ntm deps -v
+herdctl deps -v
 ```
 
 If those `command -v` checks come up empty here but succeed in your interactive shell, the
@@ -585,12 +585,12 @@ is a small wrapper that exports the right `PATH` and then `exec`s NTM (paths var
 
 ```bash
 #!/usr/bin/env bash
-# ~/bin/ntm-wrapper — ensure agent CLIs are on PATH, then hand off to ntm.
+# ~/bin/ntm-wrapper — ensure agent CLIs are on PATH, then hand off to herdctl.
 export PATH="$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
-exec ntm "$@"
+exec herdctl "$@"
 ```
 
-Make it executable (`chmod +x ~/bin/ntm-wrapper`) and invoke that instead of `ntm`. Re-run
+Make it executable (`chmod +x ~/bin/ntm-wrapper`) and invoke that instead of `herdctl`. Re-run
 `herdctl deps -v` through the wrapper to confirm all three CLIs are now detected.
 
 ### A work command has nothing useful to say
@@ -614,7 +614,7 @@ state lives under that directory's `.ntm/` tree.
 
 No. NTM is a structured orchestration layer on top of `tmux` by default.
 With `NTM_BACKEND=herdr` it orchestrates herdr workspaces instead; herdr owns the
-interactive TUI (sidebar/pane attach), while ntm remains the swarm control plane.
+interactive TUI (sidebar/pane attach), while herdctl remains the swarm control plane.
 
 ### Can I use it with one agent instead of a swarm?
 
@@ -652,7 +652,7 @@ of the normal product model.
 Build and verification:
 
 ```bash
-go build ./cmd/ntm
+go build ./cmd/herdctl
 go test -short ./...
 golangci-lint run
 ```
@@ -660,7 +660,7 @@ golangci-lint run
 Regenerate the OpenAPI document:
 
 ```bash
-ntm openapi generate
+herdctl openapi generate
 ```
 
 ## About Contributions

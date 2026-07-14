@@ -375,7 +375,7 @@ _ntm() {
     'attach:Attach to a session'
     'list:List all sessions'
     'status:Show session status'
-    'view:View all panes (unzoom, tile)'
+    'view:View all panes (tmux: tile; herdr: unzoom+TUI)'
     'zoom:Zoom a specific pane'
     'copy:Copy pane output to clipboard'
     'save:Save pane outputs to files'
@@ -734,7 +734,7 @@ abbr -a dnt 'herdctl deps'
 	complete -c ntm -n "__fish_use_subcommand" -a "attach" -d "Attach to a session"
 	complete -c ntm -n "__fish_use_subcommand" -a "list" -d "List all sessions"
 	complete -c ntm -n "__fish_use_subcommand" -a "status" -d "Show session status"
-	complete -c ntm -n "__fish_use_subcommand" -a "view" -d "View all panes (unzoom, tile)"
+	complete -c ntm -n "__fish_use_subcommand" -a "view" -d "View all panes (tmux: tile; herdr: unzoom+TUI)"
 	complete -c ntm -n "__fish_use_subcommand" -a "zoom" -d "Zoom a specific pane"
 	complete -c ntm -n "__fish_use_subcommand" -a "copy" -d "Copy pane output to clipboard"
 	complete -c ntm -n "__fish_use_subcommand" -a "save" -d "Save pane outputs to files"

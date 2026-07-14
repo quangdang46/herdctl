@@ -298,9 +298,9 @@ func getAgentHealth(session string, pane tmux.Pane) AgentHealthInfo {
 		LastActivitySec: -1,
 	}
 
-	// Get pane activity time
-	activityTime, err := tmux.GetPaneActivity(pane.ID)
-	if err == nil {
+	// Get pane activity time (no-op zero time under herdr — no window_activity).
+	activityTime, err := backendGetPaneActivity(pane.ID)
+	if err == nil && !activityTime.IsZero() {
 		health.LastActivitySec = int(time.Since(activityTime).Seconds())
 
 		// Check if unresponsive (no output for threshold time)
@@ -817,9 +817,9 @@ func GetSessionHealth(session string) (*SessionHealthOutput, error) {
 			Health:    "healthy",
 		}
 
-		// Get activity time - how long since last pane activity
-		activityTime, err := tmux.GetPaneActivity(pane.ID)
-		if err == nil {
+		// Get activity time - how long since last pane activity (herdr: no-op zero).
+		activityTime, err := backendGetPaneActivity(pane.ID)
+		if err == nil && !activityTime.IsZero() {
 			agentHealth.IdleSinceSeconds = int(time.Since(activityTime).Seconds())
 		}
 

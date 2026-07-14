@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // ConflictReason describes why a file conflict was detected.
@@ -1679,8 +1678,8 @@ func GetSummary(opts SummaryOptions) (*SessionSummaryResponse, error) {
 			continue
 		}
 
-		// Capture pane output
-		output, _ := capturePaneOutput(pane.ID, 500)
+		// Capture pane output via active backend (tmux or herdr).
+		output, _ := backendCapturePaneOutput(pane.ID, 500)
 
 		data := AgentActivityData{
 			PaneID:    pane.ID,
@@ -1727,7 +1726,7 @@ type paneInfo struct {
 	State     string
 }
 
-// getPanesForSession gets pane info for a session using tmux.GetPanes.
+// getPanesForSession gets pane info for a session via the active backend.
 func getPanesForSession(session string) ([]paneInfo, error) {
 	tmuxPanes, err := backendGetPanes(session)
 	if err != nil {
@@ -1751,12 +1750,8 @@ func getPanesForSession(session string) ([]paneInfo, error) {
 	return panes, nil
 }
 
-// capturePaneOutput captures output from a tmux pane.
+// capturePaneOutput captures pane scrollback via the active session backend.
+// Kept as a thin wrapper for callers/tests that still use the local name.
 func capturePaneOutput(paneID string, lines int) (string, error) {
-	cmd := exec.Command(tmux.BinaryPath(), "capture-pane", "-t", paneID, "-p", "-S", fmt.Sprintf("-%d", lines))
-	output, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(output), nil
+	return backendCapturePaneOutput(paneID, lines)
 }

@@ -1780,9 +1780,9 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 	fmt.Fprintf(w, "  %sQuick actions:%s\n", overlay, reset)
 	fmt.Fprintf(w, "    %sherdctl send %s --all \"prompt\"%s  %s# Broadcast to all agents%s\n",
 		subtext, session, reset, overlay, reset)
-	fmt.Fprintf(w, "    %sntm view %s%s                 %s# Tile all panes%s\n",
+	fmt.Fprintf(w, "    %sherdctl view %s%s             %s# Unzoom/tile + attach (herdr: unzoom+TUI)%s\n",
 		subtext, session, reset, overlay, reset)
-	fmt.Fprintf(w, "    %sntm zoom %s <n>%s             %s# Zoom pane n%s\n",
+	fmt.Fprintf(w, "    %sherdctl zoom %s <n>%s         %s# Zoom pane n%s\n",
 		subtext, session, reset, overlay, reset)
 	fmt.Fprintln(w)
 
