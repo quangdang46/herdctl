@@ -1625,8 +1625,25 @@ sleep 300
 	if durable == nil {
 		t.Fatal("direct assignment missing from durable ledger")
 	}
-	if durable.OccupancyKey != paneID || durable.DispatchTarget != paneID || first.Data.Receipt.Pane.ID != paneID || first.Data.Receipt.Pane.Target != "2.1" {
-		t.Fatalf("pane identity drift: ledger=%+v receipt=%+v", durable, first.Data.Receipt.Pane)
+	// Physical target (W.P) is environment-dependent (window numbering / session
+	// bootstrap). Assert stable pane id identity and a non-empty W.P form.
+	wantPhysical := ""
+	if panes, perr := tmux.GetPanes(session); perr == nil {
+		for _, p := range panes {
+			if p.ID == paneID {
+				wantPhysical = p.Ref().Physical()
+				break
+			}
+		}
+	}
+	if durable.OccupancyKey != paneID || durable.DispatchTarget != paneID || first.Data.Receipt.Pane.ID != paneID {
+		t.Fatalf("pane identity drift: ledger=%+v receipt=%+v wantPaneID=%s", durable, first.Data.Receipt.Pane, paneID)
+	}
+	if first.Data.Receipt.Pane.Target == "" {
+		t.Fatalf("receipt pane target empty; receipt=%+v", first.Data.Receipt.Pane)
+	}
+	if wantPhysical != "" && first.Data.Receipt.Pane.Target != wantPhysical {
+		t.Fatalf("receipt target %q != live physical %q; receipt=%+v", first.Data.Receipt.Pane.Target, wantPhysical, first.Data.Receipt.Pane)
 	}
 }
 
