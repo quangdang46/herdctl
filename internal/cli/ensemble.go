@@ -26,9 +26,9 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/ensemble"
 	"github.com/Dicklesworthstone/ntm/internal/output"
-	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	sessionPkg "github.com/Dicklesworthstone/ntm/internal/session"
 	"github.com/Dicklesworthstone/ntm/internal/status"
+	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	"github.com/Dicklesworthstone/ntm/internal/tui/theme"
 	"github.com/Dicklesworthstone/ntm/internal/util"
 )
@@ -585,7 +585,6 @@ func runEnsembleStatus(w io.Writer, session string, opts ensembleStatusOptions) 
 
 	return renderEnsembleStatus(w, outputData, format)
 }
-
 
 // muxEnsembleCapture routes ensemble pane capture through the active backend.
 type muxEnsembleCapture struct{}

@@ -1142,7 +1142,7 @@ func TestWriteAttentionSection_NextSteps(t *testing.T) {
 	if !strings.Contains(got, "### Suggested Next Steps") {
 		t.Errorf("missing next steps header in output:\n%s", got)
 	}
-	if !strings.Contains(got, "ntm --session proj") {
+	if !strings.Contains(got, "herdctl --session proj") {
 		t.Errorf("missing first next step in output:\n%s", got)
 	}
 	if !strings.Contains(got, "Check agent output") {

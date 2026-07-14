@@ -29,7 +29,8 @@ type Backend interface {
 	StartAgent(ctx context.Context, opts StartAgentOptions) (Pane, error)
 
 	SendKeys(target, keys string, enter bool) error
-	SendKeysWithDelay(target, keys string, enter bool, enterDelay interface{ /* time.Duration */ }) error
+	SendKeysWithDelay(target, keys string, enter bool, enterDelay interface { /* time.Duration */
+	}) error
 	SendInterrupt(target string) error
 	CapturePaneOutput(target string, lines int) (string, error)
 	CapturePaneOutputContext(ctx context.Context, target string, lines int) (string, error)

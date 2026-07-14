@@ -2804,7 +2804,6 @@ func newCLIAtomicAssignmentCoordinator(store *assignment.AssignmentStore, projec
 		}))
 }
 
-
 // muxDispatchDeliverer is a backend-aware dispatchsvc.Deliverer used by the
 // assign atomic path. It mirrors dispatchsvc.TMUXDeliverer but routes key
 // delivery through mux* helpers so herdr panes are not handed to tmux.
@@ -5311,7 +5310,6 @@ func PerformAutoReassignment(completedBeadID string, opts *AutoReassignOptions) 
 
 	return result, nil
 }
-
 
 // mapHerdrAgentState maps herdr agent_status onto assign state strings
 // (idle|working|blocked|unknown). Done is treated as idle for dispatch.

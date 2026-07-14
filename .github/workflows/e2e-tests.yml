@@ -35,7 +35,7 @@ on:
     branches: ["main"]
     paths:
       - 'e2e/**'
-      - 'cmd/ntm/**'
+      - 'cmd/herdctl/**'
       - 'internal/agent/**'
       - 'internal/agentmail/**'
       - 'internal/agentsession/**'
@@ -113,7 +113,7 @@ jobs:
 
       - name: Build ntm
         run: |
-          go build -o ntm ./cmd/ntm
+          go build -o herdctl ./cmd/herdctl
           sudo mv ntm /usr/local/bin/
 
       - name: Verify ntm installed
@@ -184,7 +184,7 @@ jobs:
 
       - name: Run session-not-found test (no agents required)
         run: |
-          go build -o ntm ./cmd/ntm
+          go build -o herdctl ./cmd/herdctl
           sudo mv ntm /usr/local/bin/
           go test -v -tags=e2e ./e2e/... -run TestE2E_SessionNotFoundError -timeout 2m
 
@@ -209,7 +209,7 @@ jobs:
 
       - name: Build ntm
         run: |
-          go build -o ntm ./cmd/ntm
+          go build -o herdctl ./cmd/herdctl
           sudo mv ntm /usr/local/bin/
 
       - name: Create test tmux session

@@ -480,12 +480,12 @@ func runAgentWait(w io.Writer, target, status string, timeoutMS int) error {
 	elapsed := time.Since(start)
 	if IsJSONOutput() {
 		return output.PrintJSON(map[string]any{
-			"success":        true,
-			"backend":        muxBackendLabel(),
-			"target":         target,
-			"status":         status,
-			"waited_ms":      elapsed.Milliseconds(),
-			"timeout_ms":     timeoutMS,
+			"success":    true,
+			"backend":    muxBackendLabel(),
+			"target":     target,
+			"status":     status,
+			"waited_ms":  elapsed.Milliseconds(),
+			"timeout_ms": timeoutMS,
 		})
 	}
 	fmt.Fprintf(w, "agent %s is %s (waited %s)\n", target, status, elapsed.Round(time.Millisecond))
@@ -529,4 +529,3 @@ func emptyDash(s string) string {
 	}
 	return s
 }
-

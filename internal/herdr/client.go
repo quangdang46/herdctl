@@ -1409,7 +1409,6 @@ func (c *Client) renamePane(ctx context.Context, paneID, label string) error {
 	return c.runJSON(ctx, &okResult{}, "pane", "rename", paneID, label)
 }
 
-
 // paneIndexFromID parses a Herdr pane id ("w1:p2") into the numeric pane
 // index (2). Returns 0 when the id is empty or not in the expected form.
 func paneIndexFromID(paneID string) int {

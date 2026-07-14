@@ -2352,7 +2352,7 @@ func populateSnapshotFeedMetadata(output *SnapshotOutput, feed *AttentionFeed) {
 		LatestCursor:    feedStats.NewestCursor,
 		EventCount:      feedStats.Count,
 		RetentionPeriod: feedStats.RetentionPeriod.String(),
-		ResyncCommand:     "herdctl --robot-snapshot",
+		ResyncCommand:   "herdctl --robot-snapshot",
 	}
 
 	if feedStats.Count == 0 {
@@ -3631,7 +3631,7 @@ func getBeadRecommendations(limit int) ([]BeadAction, []string) {
 			Priority:  rec.SuggestedPriority,
 			Impact:    rec.ImpactScore,
 			Reasoning: rec.Reasoning,
-			Command:     fmt.Sprintf("br update %s --status in_progress", rec.IssueID),
+			Command:   fmt.Sprintf("br update %s --status in_progress", rec.IssueID),
 			IsReady:   isReady,
 		}
 

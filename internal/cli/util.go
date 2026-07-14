@@ -16,12 +16,12 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"github.com/Dicklesworthstone/ntm/internal/agentmail"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/cass"
 	"github.com/Dicklesworthstone/ntm/internal/config"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/palette"
 	sessionPkg "github.com/Dicklesworthstone/ntm/internal/session"
-	"github.com/Dicklesworthstone/ntm/internal/backend"
-	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 	utilpkg "github.com/Dicklesworthstone/ntm/internal/util"
 )

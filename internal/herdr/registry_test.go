@@ -125,4 +125,3 @@ func TestPaneIndexFromID(t *testing.T) {
 		t.Fatalf("bad → %d, want 0", got)
 	}
 }
-

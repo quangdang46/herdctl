@@ -85,7 +85,6 @@ func TestHerdrPreferredAgentArgv_GeminiModelOrder(t *testing.T) {
 	}
 }
 
-
 func TestSessionNameFromPanes(t *testing.T) {
 	if got := sessionNameFromPanes(nil); got != "" {
 		t.Fatalf("nil panes → empty, got %q", got)

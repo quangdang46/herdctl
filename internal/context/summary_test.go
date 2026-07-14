@@ -322,7 +322,7 @@ The test file is monitor_test.go.`
 	expected := map[string]bool{
 		"internal/context/monitor.go": true,
 		"internal/config/config.go":   true,
-		"cmd/herdctl/main.go":             true,
+		"cmd/herdctl/main.go":         true,
 		"monitor_test.go":             true,
 	}
 

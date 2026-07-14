@@ -90,7 +90,7 @@ func TestPrintMinimalHelp(t *testing.T) {
 		"Kill a session",                           // kill description
 		"Show help information",                    // help description
 		"QUICK START",                              // Quick start section
-		"For all commands: herdctl --full",             // Instructions for full help
+		"For all commands: herdctl --full",         // Instructions for full help
 	}
 
 	for _, exp := range expected {

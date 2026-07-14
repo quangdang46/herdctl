@@ -595,11 +595,11 @@ func TestBuildSLBCommand(t *testing.T) {
 		resource string
 		want     string
 	}{
-		{"both present", "force_release", "internal/auth/**", "ntm approval: force_release internal/auth/**"},
-		{"action only", "force_release", "", "ntm approval: force_release"},
+		{"both present", "force_release", "internal/auth/**", "herdctl: force_release internal/auth/**"},
+		{"action only", "force_release", "", "herdctl: force_release"},
 		{"empty action", "", "resource", ""},
 		{"both empty", "", "", ""},
-		{"whitespace action", "  force_release  ", "  res  ", "ntm approval: force_release res"},
+		{"whitespace action", "  force_release  ", "  res  ", "herdctl: force_release res"},
 		{"whitespace only action", "   ", "", ""},
 	}
 

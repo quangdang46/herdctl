@@ -1112,7 +1112,6 @@ func waitForSwarmAgentsReady(ctx context.Context, plan *swarm.SwarmPlan, timeout
 	return readyCount, len(panes)
 }
 
-
 // executeSwarmHerdr creates herdr workspaces and starts agents via agent.start
 // (no tmux SplitWindow / send-keys launch). Prompt injection uses muxSendKeys.
 func executeSwarmHerdr(ctx context.Context, plan *swarm.SwarmPlan, prompt string, staggerDelay time.Duration, logger *slog.Logger) (*swarm.SwarmOrchestrationResult, error) {

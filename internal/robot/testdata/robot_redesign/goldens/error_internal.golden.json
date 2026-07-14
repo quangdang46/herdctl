@@ -7,7 +7,7 @@
   "response": {
     "error": "example error for INTERNAL_ERROR",
     "error_code": "INTERNAL_ERROR",
-    "hint": "Report this issue with full context via 'ntm support-bundle'.",
+    "hint": "Report this issue with full context via 'herdctl support-bundle'.",
     "output_format": "auto",
     "success": false,
     "timestamp": "GOLDEN_TIMESTAMP",

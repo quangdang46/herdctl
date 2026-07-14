@@ -7,7 +7,7 @@
   "response": {
     "error": "example error for PANE_NOT_FOUND",
     "error_code": "PANE_NOT_FOUND",
-    "hint": "Use 'ntm status' to see available panes in the session.",
+    "hint": "Use 'herdctl status' to see available panes in the session.",
     "output_format": "auto",
     "success": false,
     "timestamp": "GOLDEN_TIMESTAMP",

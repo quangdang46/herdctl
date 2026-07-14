@@ -75,8 +75,8 @@ jobs:
       - name: OpenAPI drift check (Go Kernel)
         run: |
           # Build ntm and generate kernel-based OpenAPI spec
-          go build -o ntm ./cmd/ntm
-          ./ntm openapi generate -o /tmp/openapi-kernel-new.json
+          go build -o herdctl ./cmd/herdctl
+          ./herdctl openapi generate -o /tmp/openapi-kernel-new.json
 
           # Compare against checked-in spec if it exists
           if [ -f docs/openapi-kernel.json ]; then
@@ -251,7 +251,7 @@ jobs:
           if [ -n "${{ matrix.goarm }}" ]; then
             output="ntm-${{ matrix.goos }}-${{ matrix.goarch }}v${{ matrix.goarm }}"
           fi
-          go build -trimpath -ldflags="-s -w" -o "${output}" ./cmd/ntm
+          go build -trimpath -ldflags="-s -w" -o "${output}" ./cmd/herdctl
           ls -la "${output}"
 
       - name: Upload Binary
@@ -370,17 +370,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y tmux
 
       - name: Build ntm
-        run: go build -o ntm ./cmd/ntm
+        run: go build -o herdctl ./cmd/herdctl
 
       - name: Verify ntm binary
         run: |
-          ./ntm version
-          ./ntm --help
+          ./herdctl version
+          ./herdctl --help
 
       - name: Test shell init output
         run: |
-          ./ntm shell bash | head -20
-          ./ntm shell zsh | head -20
+          ./herdctl shell bash | head -20
+          ./herdctl shell zsh | head -20
 
       - name: Run real tmux integration tests
         env:
@@ -424,7 +424,7 @@ jobs:
           cache: true
 
       - name: Build ntm
-        run: go build -o ntm ./cmd/ntm
+        run: go build -o herdctl ./cmd/herdctl
 
       - name: Verify upgrade --check works
         run: |
@@ -434,7 +434,7 @@ jobs:
           # 2. Report "no releases found" for dev/new forks (acceptable)
           # It should NOT report "no suitable release asset found" (naming mismatch)
 
-          if ./ntm upgrade --check 2>&1 | tee upgrade_output.txt; then
+          if ./herdctl upgrade --check 2>&1 | tee upgrade_output.txt; then
             echo "Upgrade check succeeded"
           else
             # Check if it's a "no releases" error (acceptable for forks/new repos)

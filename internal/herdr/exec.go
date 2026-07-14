@@ -108,7 +108,7 @@ func (c *Client) runJSON(ctx context.Context, resultOut any, args ...string) err
 		return &CommandError{
 			Args:   args,
 			Stdout: outStr,
-			Err: fmt.Errorf("%s: %s", envelope.Error.Code, envelope.Error.Message),
+			Err:    fmt.Errorf("%s: %s", envelope.Error.Code, envelope.Error.Message),
 		}
 	}
 	if resultOut == nil {

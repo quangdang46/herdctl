@@ -189,7 +189,7 @@ func TestClaudeHookScriptBlocksCurrentStdinPayload(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	fakeNTM := filepath.Join(dir, "ntm")
+	fakeCLI := filepath.Join(dir, "herdctl")
 	fakeScript := `#!/bin/sh
 if [ "${1:-}" = "safety" ] && [ "${2:-}" = "check" ]; then
   echo '{"action":"block","reason":"blocked by fake safety"}'
@@ -197,8 +197,8 @@ if [ "${1:-}" = "safety" ] && [ "${2:-}" = "check" ]; then
 fi
 exit 0
 `
-	if err := os.WriteFile(fakeNTM, []byte(fakeScript), 0o755); err != nil {
-		t.Fatalf("write fake ntm: %v", err)
+	if err := os.WriteFile(fakeCLI, []byte(fakeScript), 0o755); err != nil {
+		t.Fatalf("write fake herdctl: %v", err)
 	}
 
 	hookPath := filepath.Join(dir, "ntm-safety.sh")

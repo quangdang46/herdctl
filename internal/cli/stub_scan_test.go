@@ -149,6 +149,15 @@ var placeholderAllowlist = map[string]map[string]string{
 	"internal/cli/mail.go": {
 		"placeholder (case-insensitive, standalone word)": "comment about default subject field being unchanged",
 	},
+
+	// intentional comments about fallback pane id / shells — not stub code
+	"internal/checkpoint/mux.go": {
+		"placeholder (case-insensitive, standalone word)": "intentional comment describing fallback pane id / shell behavior",
+	},
+	// intentional comment about StartAgent replacing placeholder splits
+	"internal/checkpoint/restore.go": {
+		"placeholder (case-insensitive, standalone word)": "intentional comment describing StartAgent replacement of placeholder splits",
+	},
 }
 
 // placeholderHit records a single match found during scanning.

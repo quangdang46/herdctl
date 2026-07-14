@@ -286,14 +286,14 @@ jobs:
           cache: true
 
       - name: Build ntm
-        run: go build -o ntm ./cmd/ntm
+        run: go build -o herdctl ./cmd/herdctl
 
       - name: Verify upgrade --check finds assets
         shell: bash
         run: |
           echo "Testing upgrade --check on ${{ matrix.goos }}/${{ matrix.goarch }}"
           # Run upgrade --check and capture output
-          if ./ntm upgrade --check 2>&1 | tee upgrade_output.txt; then
+          if ./herdctl upgrade --check 2>&1 | tee upgrade_output.txt; then
             echo "Upgrade check passed"
           else
             echo "Upgrade check failed"
@@ -340,7 +340,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "# Source build" >> $GITHUB_STEP_SUMMARY
           echo "git clone --branch ${{ steps.release.outputs.tag }} --depth 1 https://github.com/Dicklesworthstone/ntm.git" >> $GITHUB_STEP_SUMMARY
-          echo "cd ntm && go install ./cmd/ntm" >> $GITHUB_STEP_SUMMARY
+          echo "cd ntm && go install ./cmd/herdctl" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Verification" >> $GITHUB_STEP_SUMMARY

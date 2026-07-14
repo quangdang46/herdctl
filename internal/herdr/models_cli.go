@@ -9,14 +9,14 @@ type workspaceListResult struct {
 }
 
 type workspaceInfo struct {
-	WorkspaceID  string `json:"workspace_id"`
-	Number       int    `json:"number"`
-	Label        string `json:"label"`
-	Focused      bool   `json:"focused"`
-	PaneCount    int    `json:"pane_count"`
-	TabCount     int    `json:"tab_count"`
-	ActiveTabID  string `json:"active_tab_id"`
-	AgentStatus  string `json:"agent_status"`
+	WorkspaceID string `json:"workspace_id"`
+	Number      int    `json:"number"`
+	Label       string `json:"label"`
+	Focused     bool   `json:"focused"`
+	PaneCount   int    `json:"pane_count"`
+	TabCount    int    `json:"tab_count"`
+	ActiveTabID string `json:"active_tab_id"`
+	AgentStatus string `json:"agent_status"`
 }
 
 type workspaceCreatedResult struct {
@@ -47,17 +47,17 @@ type paneListResult struct {
 }
 
 type paneInfo struct {
-	PaneID         string `json:"pane_id"`
-	WorkspaceID    string `json:"workspace_id"`
-	TabID          string `json:"tab_id"`
-	TerminalID     string `json:"terminal_id"`
-	Cwd            string `json:"cwd"`
-	ForegroundCwd  string `json:"foreground_cwd"`
-	Focused        bool   `json:"focused"`
-	AgentStatus    string `json:"agent_status"`
-	Label          string `json:"label"`
-	Revision       int    `json:"revision"`
-	Scroll         *scrollInfo `json:"scroll"`
+	PaneID        string      `json:"pane_id"`
+	WorkspaceID   string      `json:"workspace_id"`
+	TabID         string      `json:"tab_id"`
+	TerminalID    string      `json:"terminal_id"`
+	Cwd           string      `json:"cwd"`
+	ForegroundCwd string      `json:"foreground_cwd"`
+	Focused       bool        `json:"focused"`
+	AgentStatus   string      `json:"agent_status"`
+	Label         string      `json:"label"`
+	Revision      int         `json:"revision"`
+	Scroll        *scrollInfo `json:"scroll"`
 }
 
 type scrollInfo struct {
@@ -72,7 +72,7 @@ type agentListResult struct {
 }
 
 type agentInfo struct {
-	Name          string `json:"name"`
+	Name string `json:"name"`
 	// Agent is the detected/reported agent label from herdr (e.g. "claude").
 	Agent         string `json:"agent,omitempty"`
 	PaneID        string `json:"pane_id"`

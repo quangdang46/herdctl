@@ -7,7 +7,7 @@
   "response": {
     "error": "example error for INVALID_FLAG",
     "error_code": "INVALID_FLAG",
-    "hint": "Check the command syntax with 'ntm \u003ccommand\u003e --help'.",
+    "hint": "Check the command syntax with 'herdctl \u003ccommand\u003e --help'.",
     "output_format": "auto",
     "success": false,
     "timestamp": "GOLDEN_TIMESTAMP",

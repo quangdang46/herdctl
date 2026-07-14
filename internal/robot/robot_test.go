@@ -687,7 +687,7 @@ func TestPrintHelp(t *testing.T) {
 
 	// Verify help content contains expected sections
 	expectedSections := []string{
-		"ntm (Named Tmux Manager)",
+		"herdctl (Named Tmux Manager)",
 		"--robot-status",
 		"--robot-plan",
 		"--robot-send",

@@ -7,7 +7,7 @@
   "response": {
     "error": "example error for SESSION_NOT_FOUND",
     "error_code": "SESSION_NOT_FOUND",
-    "hint": "Use 'ntm list' to see available sessions, or spawn a new session with 'ntm spawn'.",
+    "hint": "Use 'herdctl list' to see available sessions, or spawn a new session with 'herdctl spawn'.",
     "output_format": "auto",
     "success": false,
     "timestamp": "GOLDEN_TIMESTAMP",

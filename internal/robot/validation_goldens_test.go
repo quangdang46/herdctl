@@ -490,7 +490,7 @@ var canonicalErrorGoldens = []errorGoldenTest{
 		GoldenFile:      "error_invalid_flag.golden.json",
 		Description:     "Invalid or missing required flag",
 		IsRetryable:     false,
-		RemediationHint: "Check the command syntax with 'ntm <command> --help'.",
+		RemediationHint: "Check the command syntax with 'herdctl <command> --help'.",
 	},
 	{
 		Code:            ErrCodeTimeout,
@@ -511,7 +511,7 @@ var canonicalErrorGoldens = []errorGoldenTest{
 		GoldenFile:      "error_internal.golden.json",
 		Description:     "Unexpected internal error",
 		IsRetryable:     true,
-		RemediationHint: "Report this issue with full context via 'ntm support-bundle'.",
+		RemediationHint: "Report this issue with full context via 'herdctl support-bundle'.",
 	},
 	{
 		Code:            ErrCodeResourceBusy,
