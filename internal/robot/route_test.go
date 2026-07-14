@@ -206,7 +206,7 @@ func TestRouteExcluded(t *testing.T) {
 func TestRouteAgentHints(t *testing.T) {
 	hints := RouteAgentHints{
 		Summary:     "Route to cc (pane 1) with score 85.5 - WAITING",
-		SendCommand: "ntm --robot-send=test --panes=1 --msg='YOUR_MESSAGE'",
+		SendCommand: "herdctl --robot-send=test --panes=1 --msg='YOUR_MESSAGE'",
 		Suggestions: []string{"Primary strategy succeeded"},
 	}
 

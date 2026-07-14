@@ -116,7 +116,7 @@ export function registerSessionTreeView(
             const session = item.data as SessionInfo;
             const terminal = vscode.window.createTerminal({ name: `NTM: ${session.name}` });
             terminal.show(true);
-            terminal.sendText(`ntm attach ${session.name}`, true);
+            terminal.sendText(`herdctl attach ${session.name}`, true);
         }
     });
 

@@ -40,10 +40,10 @@ Optional agents:
 Also checks for recommended tools like fzf.
 
 Examples:
-  ntm deps           # Quick check
-  ntm deps -v        # Verbose output with versions
-  ntm deps --json    # JSON output for scripts
-  NTM_BACKEND=herdr ntm deps  # Require herdr instead of tmux`,
+  herdctl deps           # Quick check
+  herdctl deps -v        # Verbose output with versions
+  herdctl deps --json    # JSON output for scripts
+  NTM_BACKEND=herdr herdctl deps  # Require herdr instead of tmux`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runDeps(verbose)
 		},
@@ -91,12 +91,12 @@ func init() {
 			{
 				Name:        "deps",
 				Description: "Check dependencies",
-				Command:     "ntm deps",
+				Command:     "herdctl deps",
 			},
 			{
 				Name:        "deps-verbose",
 				Description: "Check dependencies with versions",
-				Command:     "ntm deps --verbose",
+				Command:     "herdctl deps --verbose",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -328,7 +328,7 @@ func runDeps(verbose bool) error {
 		fmt.Printf("%s✗%s Missing required dependencies!\n", colorize(t.Error), "\033[0m")
 		os.Exit(1)
 	} else if agentsAvailable == 0 {
-		fmt.Printf("%s⚠%s No AI agents installed. Install at least one to use ntm spawn.\n",
+		fmt.Printf("%s⚠%s No AI agents installed. Install at least one to use herdctl spawn.\n",
 			colorize(t.Warning), "\033[0m")
 	} else {
 		fmt.Printf("%s✓%s All required dependencies installed. %d agent(s), %d flywheel tool(s) available.\n",

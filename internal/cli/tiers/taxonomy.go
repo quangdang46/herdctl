@@ -100,8 +100,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionCreation,
 		Description: "Create session and launch AI agents",
 		Examples: []string{
-			"ntm spawn myproject --cc=2 --cod=2",
-			"ntm spawn myproject --cc=4 --gmi=2",
+			"herdctl spawn myproject --cc=2 --cod=2",
+			"herdctl spawn myproject --cc=4 --gmi=2",
 		},
 	},
 	"send": {
@@ -111,8 +111,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Send prompt to agents",
 		Examples: []string{
-			"ntm send myproject --cc \"fix the tests\"",
-			"ntm send myproject --all \"summarize your progress\"",
+			"herdctl send myproject --cc \"fix the tests\"",
+			"herdctl send myproject --all \"summarize your progress\"",
 		},
 	},
 	"status": {
@@ -122,7 +122,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionNav,
 		Description: "Show detailed session status",
 		Examples: []string{
-			"ntm status myproject",
+			"herdctl status myproject",
 		},
 	},
 	"kill": {
@@ -132,8 +132,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Kill a session",
 		Examples: []string{
-			"ntm kill myproject",
-			"ntm kill -f myproject",
+			"herdctl kill myproject",
+			"herdctl kill -f myproject",
 		},
 	},
 	"respawn": {
@@ -143,9 +143,9 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Restart worker agents in a session",
 		Examples: []string{
-			"ntm respawn myproject",
-			"ntm respawn myproject --panes=1,2",
-			"ntm respawn myproject --type=cc",
+			"herdctl respawn myproject",
+			"herdctl respawn myproject --panes=1,2",
+			"herdctl respawn myproject --type=cc",
 		},
 	},
 	"version": {
@@ -164,9 +164,9 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "View and change CLI proficiency tier",
 		Examples: []string{
-			"ntm level",
-			"ntm level up",
-			"ntm level master",
+			"herdctl level",
+			"herdctl level up",
+			"herdctl level master",
 		},
 	},
 
@@ -182,7 +182,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionCreation,
 		Description: "Create empty session with N panes",
 		Examples: []string{
-			"ntm create myproject --panes=6",
+			"herdctl create myproject --panes=6",
 		},
 	},
 	"quick": {
@@ -192,7 +192,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionCreation,
 		Description: "Quick project setup with git and VSCode",
 		Examples: []string{
-			"ntm quick myproject --template=go",
+			"herdctl quick myproject --template=go",
 		},
 	},
 
@@ -204,7 +204,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Add agents to existing session",
 		Examples: []string{
-			"ntm add myproject --cc=2",
+			"herdctl add myproject --cc=2",
 		},
 	},
 	"interrupt": {
@@ -214,7 +214,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Send Ctrl+C to all agents",
 		Examples: []string{
-			"ntm interrupt myproject",
+			"herdctl interrupt myproject",
 		},
 	},
 
@@ -226,7 +226,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionNav,
 		Description: "Attach/switch to session",
 		Examples: []string{
-			"ntm attach myproject",
+			"herdctl attach myproject",
 		},
 	},
 	"list": {
@@ -236,7 +236,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionNav,
 		Description: "List all tmux sessions",
 		Examples: []string{
-			"ntm list",
+			"herdctl list",
 		},
 	},
 	"view": {
@@ -246,7 +246,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionNav,
 		Description: "Tile all panes and attach",
 		Examples: []string{
-			"ntm view myproject",
+			"herdctl view myproject",
 		},
 	},
 	"zoom": {
@@ -267,7 +267,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategorySessionNav,
 		Description: "Interactive session dashboard",
 		Examples: []string{
-			"ntm dashboard myproject",
+			"herdctl dashboard myproject",
 		},
 	},
 	"watch": {
@@ -289,8 +289,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryOutput,
 		Description: "Copy pane output to clipboard",
 		Examples: []string{
-			"ntm copy myproject:1",
-			"ntm copy myproject --all",
+			"herdctl copy myproject:1",
+			"herdctl copy myproject --all",
 		},
 	},
 	"save": {
@@ -300,7 +300,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryOutput,
 		Description: "Save all outputs to files",
 		Examples: []string{
-			"ntm save myproject -o ~/logs",
+			"herdctl save myproject -o ~/logs",
 		},
 	},
 	"grep": {
@@ -347,7 +347,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryPersistence,
 		Description: "Create session checkpoint",
 		Examples: []string{
-			"ntm checkpoint save myproject -m \"Before refactor\"",
+			"herdctl checkpoint save myproject -m \"Before refactor\"",
 		},
 	},
 
@@ -359,7 +359,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Open interactive command palette",
 		Examples: []string{
-			"ntm palette myproject",
+			"herdctl palette myproject",
 		},
 	},
 	"bind": {
@@ -368,8 +368,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Set up tmux F6 popup binding",
 		Examples: []string{
-			"ntm bind",
-			"ntm bind --key=F5",
+			"herdctl bind",
+			"herdctl bind --key=F5",
 		},
 	},
 	"deps": {
@@ -379,7 +379,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Check agent CLI dependencies",
 		Examples: []string{
-			"ntm deps -v",
+			"herdctl deps -v",
 		},
 	},
 	"tutorial": {
@@ -388,7 +388,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Interactive tutorial",
 		Examples: []string{
-			"ntm tutorial",
+			"herdctl tutorial",
 		},
 	},
 	"shell": {
@@ -397,7 +397,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryUtilities,
 		Description: "Generate shell integration",
 		Examples: []string{
-			"eval \"$(ntm shell zsh)\"",
+			"eval \"$(herdctl shell zsh)\"",
 		},
 	},
 	"completion": {
@@ -415,8 +415,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryConfiguration,
 		Description: "Manage configuration",
 		Examples: []string{
-			"ntm config init",
-			"ntm config show",
+			"herdctl config init",
+			"herdctl config show",
 		},
 	},
 	"init": {
@@ -460,7 +460,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Rotate agent sessions",
 		Examples: []string{
-			"ntm rotate myproject --cc",
+			"herdctl rotate myproject --cc",
 		},
 	},
 	"quota": {
@@ -469,7 +469,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Manage agent quotas",
 		Examples: []string{
-			"ntm quota show",
+			"herdctl quota show",
 		},
 	},
 	"pipeline": {
@@ -487,7 +487,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Wait for agent completion",
 		Examples: []string{
-			"ntm wait myproject --timeout=5m",
+			"herdctl wait myproject --timeout=5m",
 		},
 	},
 	"plugins": {
@@ -505,7 +505,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAgentManagement,
 		Description: "Agent configuration management",
 		Examples: []string{
-			"ntm agents list",
+			"herdctl agents list",
 		},
 	},
 	"assign": {
@@ -648,7 +648,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAdvanced,
 		Description: "Configure safety settings",
 		Examples: []string{
-			"ntm safety show",
+			"herdctl safety show",
 		},
 	},
 	"policy": {
@@ -657,8 +657,8 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAdvanced,
 		Description: "Manage command policies",
 		Examples: []string{
-			"ntm policy show",
-			"ntm policy validate",
+			"herdctl policy show",
+			"herdctl policy validate",
 		},
 	},
 	"guards": {
@@ -667,7 +667,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAdvanced,
 		Description: "Manage safety guards",
 		Examples: []string{
-			"ntm guards list",
+			"herdctl guards list",
 		},
 	},
 	"approve": {
@@ -723,7 +723,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryAdvanced,
 		Description: "View session analytics",
 		Examples: []string{
-			"ntm analytics --days=7",
+			"herdctl analytics --days=7",
 		},
 	},
 	"metrics": {
@@ -788,7 +788,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryCoordination,
 		Description: "Agent mail management",
 		Examples: []string{
-			"ntm mail inbox",
+			"herdctl mail inbox",
 		},
 	},
 	"lock": {
@@ -882,7 +882,7 @@ var Registry = map[string]CommandInfo{
 		Category:    CategoryConfiguration,
 		Description: "Agent persona/profile management",
 		Examples: []string{
-			"ntm personas list",
+			"herdctl personas list",
 		},
 	},
 	"template": {

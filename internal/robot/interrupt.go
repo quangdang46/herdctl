@@ -260,7 +260,7 @@ func GetInterrupt(opts InterruptOptions) (*InterruptOutput, error) {
 					opts.Session,
 					*targetPane,
 					backendCapturePaneOutput,
-					tmux.GetPaneActivity,
+					backendGetPaneActivity,
 				)
 				state := interruptPaneStateFromObservation(current, interruptPaneAgentType(*targetPane))
 

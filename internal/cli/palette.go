@@ -30,8 +30,8 @@ Filter by typing, select with Enter, then choose the target agents.
 If no session is specified and you're inside tmux, uses the current session.
 
 Examples:
-  ntm palette myproject  # Open palette for specific session
-  ntm palette            # Use current tmux session`,
+  herdctl palette myproject  # Open palette for specific session
+  herdctl palette            # Use current tmux session`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string
@@ -69,7 +69,7 @@ func runPalette(w io.Writer, errW io.Writer, session string) error {
 		})
 	}
 
-	// Herdr: interactive palette TUI is tmux-oriented; point at herdr + ntm send.
+	// Herdr: interactive palette TUI is tmux-oriented; point at herdr + herdctl send.
 	if backend.IsHerdr() {
 		return printHerdrUISubstitute("palette", session)
 	}
@@ -106,7 +106,7 @@ func runPalette(w io.Writer, errW io.Writer, session string) error {
 		return err
 	}
 	if len(paletteCommands) == 0 {
-		return fmt.Errorf("no palette commands configured - run 'ntm config init' first")
+		return fmt.Errorf("no palette commands configured - run 'herdctl config init' first")
 	}
 
 	// Create and run the TUI palette

@@ -220,28 +220,28 @@ func FatalMsg(msg string, jsonMode bool) {
 // Common error hints for frequent scenarios
 var (
 	// Session errors
-	HintSessionNotFound  = "Run 'ntm list' to see available sessions, or 'ntm spawn <name>' to create one"
-	HintSessionExists    = "Use a different name, or 'ntm kill <name>' to remove the existing session"
-	HintNoSessions       = "Run 'ntm spawn <name>' to create a new session"
-	HintSessionInference = "Specify a session name explicitly, e.g., 'ntm status <session>'"
+	HintSessionNotFound  = "Run 'herdctl list' to see available sessions, or 'herdctl spawn <name>' to create one"
+	HintSessionExists    = "Use a different name, or 'herdctl kill <name>' to remove the existing session"
+	HintNoSessions       = "Run 'herdctl spawn <name>' to create a new session"
+	HintSessionInference = "Specify a session name explicitly, e.g., 'herdctl status <session>'"
 
 	// Tmux errors
 	HintTmuxNotInstalled = "Install tmux: brew install tmux (macOS) or apt install tmux (Linux)"
-	HintTmuxNotRunning   = "Start tmux server with 'tmux new-session -d' or run ntm spawn"
+	HintTmuxNotRunning   = "Start tmux server with 'tmux new-session -d' or run herdctl spawn"
 	HintNotInTmux        = "Run this command from within a tmux session, or specify --session"
 
 	// Config errors
-	HintConfigNotFound = "Run 'ntm config init' to create a default configuration"
-	HintConfigInvalid  = "Check config syntax with 'ntm config show' or edit ~/.config/ntm/config.toml"
+	HintConfigNotFound = "Run 'herdctl config init' to create a default configuration"
+	HintConfigInvalid  = "Check config syntax with 'herdctl config show' or edit ~/.config/ntm/config.toml"
 
 	// Agent errors
 	HintAgentNotInstalled = "Install the agent CLI tool first (claude, codex-cli, or gemini-cli)"
 	HintAgentRateLimit    = "Wait a few minutes or switch to a different API key/account"
 
 	// Pane errors
-	HintPaneNotFound  = "Run 'ntm status <session>' to see available panes"
-	HintNoPanes       = "Add agents with 'ntm add <session> --cc=1' or '--cod=1'"
-	HintPaneIndexHelp = "Pane indices start at 0; use 'ntm status' to see valid indices"
+	HintPaneNotFound  = "Run 'herdctl status <session>' to see available panes"
+	HintNoPanes       = "Add agents with 'herdctl add <session> --cc=1' or '--cod=1'"
+	HintPaneIndexHelp = "Pane indices start at 0; use 'herdctl status' to see valid indices"
 
 	// Permission errors
 	HintPermissionDenied = "Check file permissions or run with appropriate privileges"
@@ -293,14 +293,14 @@ func AgentTypeError(agentType string) *CLIError {
 func PersonaNotFoundError(name string) *CLIError {
 	return NewCLIError(fmt.Sprintf("persona '%s' not found", name)).
 		WithCode("PERSONA_NOT_FOUND").
-		WithHint("Run 'ntm personas list' to see available personas")
+		WithHint("Run 'herdctl personas list' to see available personas")
 }
 
 // CheckpointNotFoundError creates a checkpoint not found error with hint
 func CheckpointNotFoundError(id, session string) *CLIError {
 	return NewCLIError(fmt.Sprintf("checkpoint '%s' not found in session '%s'", id, session)).
 		WithCode("CHECKPOINT_NOT_FOUND").
-		WithHint("Run 'ntm checkpoint list <session>' to see available checkpoints")
+		WithHint("Run 'herdctl checkpoint list <session>' to see available checkpoints")
 }
 
 // ConfigLoadError creates a config load error with hint

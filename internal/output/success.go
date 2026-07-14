@@ -14,7 +14,7 @@ import (
 
 // Suggestion represents a "what next" command suggestion
 type Suggestion struct {
-	Command     string // The command to run (e.g., "ntm attach myproject")
+	Command     string // The command to run (e.g., "herdctl attach myproject")
 	Description string // Brief description (e.g., "Connect to session")
 }
 
@@ -76,9 +76,9 @@ func isStdoutTerminal() bool {
 // SpawnSuggestions returns suggestions for after spawning a session
 func SpawnSuggestions(session string) []Suggestion {
 	return []Suggestion{
-		{Command: fmt.Sprintf("ntm attach %s", session), Description: "Connect to session"},
-		{Command: fmt.Sprintf("ntm dashboard %s", session), Description: "Live status overview"},
-		{Command: "ntm palette", Description: "Quick command launcher"},
+		{Command: fmt.Sprintf("herdctl attach %s", session), Description: "Connect to session"},
+		{Command: fmt.Sprintf("herdctl dashboard %s", session), Description: "Live status overview"},
+		{Command: "herdctl palette", Description: "Quick command launcher"},
 	}
 }
 
@@ -86,32 +86,32 @@ func SpawnSuggestions(session string) []Suggestion {
 func QuickSuggestions(projectDir, sessionName string) []Suggestion {
 	return []Suggestion{
 		{Command: fmt.Sprintf("cd %s", projectDir), Description: "Enter project directory"},
-		{Command: fmt.Sprintf("ntm spawn %s --cc=2", sessionName), Description: "Start agents"},
+		{Command: fmt.Sprintf("herdctl spawn %s --cc=2", sessionName), Description: "Start agents"},
 	}
 }
 
 // AddSuggestions returns suggestions for after adding agents
 func AddSuggestions(session string, addedCount int) []Suggestion {
 	return []Suggestion{
-		{Command: fmt.Sprintf("ntm status %s", session), Description: "Check session status"},
-		{Command: fmt.Sprintf("ntm send %s", session), Description: "Send prompt to agents"},
-		{Command: fmt.Sprintf("ntm dashboard %s", session), Description: "Live status overview"},
+		{Command: fmt.Sprintf("herdctl status %s", session), Description: "Check session status"},
+		{Command: fmt.Sprintf("herdctl send %s", session), Description: "Send prompt to agents"},
+		{Command: fmt.Sprintf("herdctl dashboard %s", session), Description: "Live status overview"},
 	}
 }
 
 // SendSuggestions returns suggestions for after sending a prompt
 func SendSuggestions(session string) []Suggestion {
 	return []Suggestion{
-		{Command: fmt.Sprintf("ntm dashboard %s", session), Description: "Monitor progress"},
-		{Command: fmt.Sprintf("ntm attach %s", session), Description: "Connect to session"},
+		{Command: fmt.Sprintf("herdctl dashboard %s", session), Description: "Monitor progress"},
+		{Command: fmt.Sprintf("herdctl attach %s", session), Description: "Connect to session"},
 	}
 }
 
 // KillSuggestions returns suggestions for after killing a session
 func KillSuggestions() []Suggestion {
 	return []Suggestion{
-		{Command: "ntm list", Description: "View remaining sessions"},
-		{Command: "ntm spawn <name>", Description: "Create a new session"},
+		{Command: "herdctl list", Description: "View remaining sessions"},
+		{Command: "herdctl spawn <name>", Description: "Create a new session"},
 	}
 }
 

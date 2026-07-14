@@ -153,7 +153,7 @@ func (s *GuardsTestSuite) RunGuardsInstall(flags ...string) (*GuardsInstallRespo
 	args := []string{"guards", "install", "--json"}
 	args = append(args, flags...)
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Dir = s.tempDir
 	output, err := cmd.CombinedOutput()
 
@@ -182,7 +182,7 @@ func (s *GuardsTestSuite) RunGuardsInstall(flags ...string) (*GuardsInstallRespo
 func (s *GuardsTestSuite) RunGuardsStatus() (*GuardsStatusResponse, error) {
 	s.logger.Log("[E2E-GUARDS] Running guards status")
 
-	cmd := exec.Command("ntm", "guards", "status", "--json")
+	cmd := exec.Command(mustE2EBin(), "guards", "status", "--json")
 	cmd.Dir = s.tempDir
 	output, err := cmd.CombinedOutput()
 
@@ -211,7 +211,7 @@ func (s *GuardsTestSuite) RunGuardsStatus() (*GuardsStatusResponse, error) {
 func (s *GuardsTestSuite) RunGuardsUninstall() (*GuardsUninstallResponse, error) {
 	s.logger.Log("[E2E-GUARDS] Running guards uninstall")
 
-	cmd := exec.Command("ntm", "guards", "uninstall", "--json")
+	cmd := exec.Command(mustE2EBin(), "guards", "uninstall", "--json")
 	cmd.Dir = s.tempDir
 	output, err := cmd.CombinedOutput()
 
@@ -630,7 +630,7 @@ func TestGuardsNotInGitRepo(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Try guards status
-	cmd := exec.Command("ntm", "guards", "status", "--json")
+	cmd := exec.Command(mustE2EBin(), "guards", "status", "--json")
 	cmd.Dir = tempDir
 	output, _ := cmd.CombinedOutput()
 
@@ -646,7 +646,7 @@ func TestGuardsNotInGitRepo(t *testing.T) {
 	}
 
 	// Try guards install (should fail)
-	cmd = exec.Command("ntm", "guards", "install", "--json")
+	cmd = exec.Command(mustE2EBin(), "guards", "install", "--json")
 	cmd.Dir = tempDir
 	output, err = cmd.CombinedOutput()
 

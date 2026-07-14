@@ -202,7 +202,7 @@ func runRobotFormatCmd(t *testing.T, suite *TestSuite, format string, cmd string
 	t.Helper()
 
 	fullArgs := append([]string{fmt.Sprintf("--robot-format=%s", format)}, args...)
-	command := exec.Command("ntm", fullArgs...)
+	command := exec.Command(mustE2EBin(), fullArgs...)
 	output, err := command.CombinedOutput()
 
 	suite.Logger().Log("[E2E-ROBOT-FORMAT] format=%s cmd=%s bytes=%d", format, cmd, len(output))
@@ -616,7 +616,7 @@ func TestE2ERobotInterruptFollowUpRedactionBuiltBinaryRealTmux(t *testing.T) {
 
 func supportsRobotFormat(t *testing.T) bool {
 	t.Helper()
-	cmd := exec.Command("ntm", "--help")
+	cmd := exec.Command(mustE2EBin(), "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false

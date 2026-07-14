@@ -735,8 +735,8 @@ func TestLooksLikeShellCommand(t *testing.T) {
 
 // TestSendFlagNoOptDefVal verifies that --cc/--cod/--gmi flags work without consuming
 // the next positional argument as the flag value. This tests the NoOptDefVal fix.
-// Before the fix: "ntm send session --cod hello" would fail because "hello" was consumed by --cod
-// After the fix: "ntm send session --cod hello" correctly parses "hello" as the prompt
+// Before the fix: "herdctl send session --cod hello" would fail because "hello" was consumed by --cod
+// After the fix: "herdctl send session --cod hello" correctly parses "hello" as the prompt
 func TestSendFlagNoOptDefVal(t *testing.T) {
 	cmd := newSendCmd()
 
@@ -1983,7 +1983,7 @@ func TestSendForceNonInteractiveFlag(t *testing.T) {
 	cmd := newSendCmd()
 	flag := cmd.Flags().Lookup("force-non-interactive")
 	if flag == nil {
-		t.Fatal("--force-non-interactive flag is not registered on `ntm send`")
+		t.Fatal("--force-non-interactive flag is not registered on `herdctl send`")
 	}
 	if flag.DefValue != "false" {
 		t.Errorf("--force-non-interactive default = %q, want %q", flag.DefValue, "false")
@@ -2061,7 +2061,7 @@ func TestSendResultJSONEmitsForceFieldWhenSet(t *testing.T) {
 }
 
 // ============================================================================
-// FIX D: ntm kill orphan reap
+// FIX D: herdctl kill orphan reap
 // ============================================================================
 
 // TestOrphanReapExcluded verifies the exclusion predicate never lets the reap
@@ -2136,7 +2136,7 @@ func TestCollectPaneDescendants_RecursiveAndExclusion(t *testing.T) {
 	}
 
 	// Excluding the inputs: passing self / parent / init as pane PIDs must
-	// collect nothing dangerous (their real children are not ntm agents, but
+	// collect nothing dangerous (their real children are not herdctl agents, but
 	// the predicate guarantees self/parent/init are never returned either way).
 	for _, pid := range collectPaneDescendants([]int{os.Getpid(), os.Getppid(), 1, 0}) {
 		if orphanReapExcluded(pid) {

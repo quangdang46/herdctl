@@ -85,7 +85,7 @@ func (s *RedactionTestSuite) killSession() {
 func (s *RedactionTestSuite) runNTM(args ...string) (string, string, error) {
 	s.logger.Log("[E2E-REDACTION] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 
 	var stdout, stderr strings.Builder

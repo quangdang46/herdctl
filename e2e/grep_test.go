@@ -81,7 +81,7 @@ func (s *GrepTestSuite) RunGrep(pattern string, flags ...string) (*GrepResult, e
 	args := []string{"grep", pattern, s.Session(), "--json"}
 	args = append(args, flags...)
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.CombinedOutput()
 
 	s.Logger().Log("[E2E-GREP] Output: %s", string(output))
@@ -111,7 +111,7 @@ func (s *GrepTestSuite) RunGrepList(pattern string, flags ...string) (*GrepListR
 	args := []string{"grep", pattern, s.Session(), "--json", "-l"}
 	args = append(args, flags...)
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.CombinedOutput()
 
 	s.Logger().Log("[E2E-GREP] Output: %s", string(output))
@@ -541,7 +541,7 @@ func TestGrepNoSession(t *testing.T) {
 	defer logger.Close()
 
 	// Try to grep a non-existent session
-	cmd := exec.Command("ntm", "grep", "pattern", "nonexistent_session_12345", "--json")
+	cmd := exec.Command(mustE2EBin(), "grep", "pattern", "nonexistent_session_12345", "--json")
 	output, err := cmd.CombinedOutput()
 
 	logger.Log("[E2E-GREP] NoSession output: %s", string(output))
@@ -671,7 +671,7 @@ func TestGrepExitCodes(t *testing.T) {
 
 	// Test successful search (exit 0)
 	t.Run("SuccessExitCode", func(t *testing.T) {
-		cmd := exec.Command("ntm", "grep", "EXIT_CODE", suite.Session())
+		cmd := exec.Command(mustE2EBin(), "grep", "EXIT_CODE", suite.Session())
 		err := cmd.Run()
 		if err != nil {
 			t.Logf("[E2E-GREP] Note: grep with matches returned error: %v", err)
@@ -680,7 +680,7 @@ func TestGrepExitCodes(t *testing.T) {
 
 	// Test invalid regex (should fail)
 	t.Run("InvalidRegexExitCode", func(t *testing.T) {
-		cmd := exec.Command("ntm", "grep", "[invalid(regex", suite.Session())
+		cmd := exec.Command(mustE2EBin(), "grep", "[invalid(regex", suite.Session())
 		err := cmd.Run()
 		if err == nil {
 			t.Logf("[E2E-GREP] Note: Invalid regex should typically return an error")

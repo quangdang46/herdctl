@@ -65,7 +65,7 @@ func TestE2E_ManualSummarization(t *testing.T) {
 
 	// Run ntm summary
 	suite.Logger().Log("[E2E-SUMMARY] Running ntm summary on session: %s", session)
-	cmd := exec.Command("ntm", "summary", session)
+	cmd := exec.Command(mustE2EBin(), "summary", session)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		suite.Logger().Log("[E2E-SUMMARY] Summary command failed: %v output=%s", err, string(output))
@@ -135,7 +135,7 @@ func TestE2E_AutoSummarizeOnKill(t *testing.T) {
 
 	// Run kill with summarize flag
 	suite.Logger().Log("[E2E-SUMMARY] Running ntm kill --summarize on session: %s", session)
-	cmd := exec.Command("ntm", "kill", session, "--summarize", "--force")
+	cmd := exec.Command(mustE2EBin(), "kill", session, "--summarize", "--force")
 	output, err := cmd.CombinedOutput()
 
 	outputStr := string(output)
@@ -210,7 +210,7 @@ func TestE2E_PerAgentBreakdown(t *testing.T) {
 
 	// Run ntm summary with detailed format
 	suite.Logger().Log("[E2E-SUMMARY] Running ntm summary --format=detailed on session: %s", session)
-	cmd := exec.Command("ntm", "summary", session, "--format=detailed")
+	cmd := exec.Command(mustE2EBin(), "summary", session, "--format=detailed")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		suite.Logger().Log("[E2E-SUMMARY] Summary command returned error: %v", err)
@@ -273,7 +273,7 @@ func TestE2E_SummaryFormats(t *testing.T) {
 	// Test JSON format
 	t.Run("json_format", func(t *testing.T) {
 		suite.Logger().Log("[E2E-SUMMARY] Testing JSON format...")
-		cmd := exec.Command("ntm", "summary", session, "--format=json")
+		cmd := exec.Command(mustE2EBin(), "summary", session, "--format=json")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			suite.Logger().Log("[E2E-SUMMARY] JSON format command error: %v", err)
@@ -299,7 +299,7 @@ func TestE2E_SummaryFormats(t *testing.T) {
 	// Test text format (default)
 	t.Run("text_format", func(t *testing.T) {
 		suite.Logger().Log("[E2E-SUMMARY] Testing text format...")
-		cmd := exec.Command("ntm", "summary", session, "--format=text")
+		cmd := exec.Command(mustE2EBin(), "summary", session, "--format=text")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			suite.Logger().Log("[E2E-SUMMARY] Text format command error: %v", err)
@@ -326,7 +326,7 @@ func TestE2E_SummaryFormats(t *testing.T) {
 	// Test detailed format
 	t.Run("detailed_format", func(t *testing.T) {
 		suite.Logger().Log("[E2E-SUMMARY] Testing detailed format...")
-		cmd := exec.Command("ntm", "summary", session, "--format=detailed")
+		cmd := exec.Command(mustE2EBin(), "summary", session, "--format=detailed")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			suite.Logger().Log("[E2E-SUMMARY] Detailed format command error: %v", err)
@@ -345,7 +345,7 @@ func TestE2E_SummaryFormats(t *testing.T) {
 	// Test handoff format
 	t.Run("handoff_format", func(t *testing.T) {
 		suite.Logger().Log("[E2E-SUMMARY] Testing handoff format...")
-		cmd := exec.Command("ntm", "summary", session, "--format=handoff")
+		cmd := exec.Command(mustE2EBin(), "summary", session, "--format=handoff")
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			suite.Logger().Log("[E2E-SUMMARY] Handoff format command error: %v", err)
@@ -385,7 +385,7 @@ func TestE2E_SummaryListSessions(t *testing.T) {
 
 	// Run ntm summary --all
 	suite.Logger().Log("[E2E-SUMMARY] Running ntm summary --all")
-	cmd := exec.Command("ntm", "summary", "--all")
+	cmd := exec.Command(mustE2EBin(), "summary", "--all")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		suite.Logger().Log("[E2E-SUMMARY] Summary --all error: %v output=%s", err, string(output))
@@ -438,7 +438,7 @@ func TestE2E_SummarySinceFlag(t *testing.T) {
 	for _, since := range sinceValues {
 		t.Run("since_"+since, func(t *testing.T) {
 			suite.Logger().Log("[E2E-SUMMARY] Testing --since=%s", since)
-			cmd := exec.Command("ntm", "summary", session, "--since="+since)
+			cmd := exec.Command(mustE2EBin(), "summary", session, "--since="+since)
 			output, err := cmd.CombinedOutput()
 			if err != nil {
 				suite.Logger().Log("[E2E-SUMMARY] Summary --since=%s error: %v", since, err)
@@ -469,7 +469,7 @@ func TestE2E_SummaryNonExistentSession(t *testing.T) {
 	defer suite.Teardown()
 
 	suite.Logger().Log("[E2E-SUMMARY] Running ntm summary on non-existent session: %s", nonExistentSession)
-	cmd := exec.Command("ntm", "summary", nonExistentSession)
+	cmd := exec.Command(mustE2EBin(), "summary", nonExistentSession)
 	output, err := cmd.CombinedOutput()
 
 	outputStr := string(output)
@@ -497,7 +497,7 @@ func TestE2E_SummaryNonExistentSession(t *testing.T) {
 // killSupportsSummarize checks if ntm kill supports --summarize flag
 func killSupportsSummarize(t *testing.T) bool {
 	t.Helper()
-	cmd := exec.Command("ntm", "kill", "--help")
+	cmd := exec.Command(mustE2EBin(), "kill", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false

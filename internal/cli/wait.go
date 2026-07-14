@@ -111,12 +111,12 @@ Exit Codes:
   3  Agent error detected (with --exit-on-error)
 
 Examples:
-  ntm wait myproject --until=idle
-  ntm wait myproject --until=idle --timeout=2m
-  ntm wait myproject --until=generating --any
-  ntm wait myproject --until=idle --type=claude
-  ntm wait myproject --until=idle --pane=2
-  ntm wait myproject --until=healthy --exit-on-error`,
+  herdctl wait myproject --until=idle
+  herdctl wait myproject --until=idle --timeout=2m
+  herdctl wait myproject --until=generating --any
+  herdctl wait myproject --until=idle --type=claude
+  herdctl wait myproject --until=idle --pane=2
+  herdctl wait myproject --until=healthy --exit-on-error`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string

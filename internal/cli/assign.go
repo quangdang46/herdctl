@@ -28,6 +28,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	dispatchsvc "github.com/Dicklesworthstone/ntm/internal/dispatch"
 	"github.com/Dicklesworthstone/ntm/internal/events"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/pressure"
 	"github.com/Dicklesworthstone/ntm/internal/redaction"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
@@ -100,8 +101,19 @@ type assignSessionObserver interface {
 	Observe(context.Context, string) (statuspkg.SessionObservation, error)
 }
 
+// newAssignSessionObserver builds a status observer that routes pane list/capture
+// through the active backend (tmux or herdr). Required under NTM_BACKEND=herdr —
+// the default observer always calls raw tmux (mirrors health.go / robot).
 var newAssignSessionObserver = func() assignSessionObserver {
-	return statuspkg.NewSessionObserver(statuspkg.NewDetector())
+	detector := statuspkg.NewDetector()
+	return statuspkg.NewSessionObserverWithDependencies(
+		detector,
+		statuspkg.DefaultSessionObserverConfig(detector.Config()),
+		statuspkg.SessionObserverDependencies{
+			ListPanes:   muxGetPanesWithActivityContext,
+			CapturePane: muxCapturePaneOutputContext,
+		},
+	)
 }
 
 // assignAgentInfo holds information about an agent pane for assignment matching
@@ -670,7 +682,7 @@ func buildAssignWatchOverlayHint(key string, installedNow bool) string {
 }
 
 func buildAssignWatchOverlayWarning(key string, err error) string {
-	return fmt.Sprintf("Warning: Could not auto-set up the %s overlay binding (%v); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut.", key, err)
+	return fmt.Sprintf("Warning: Could not auto-set up the %s overlay binding (%v); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut.", key, err)
 }
 
 // resolveAgentTypeFilter determines the agent type filter from flags
@@ -1029,6 +1041,7 @@ func getAssignOutput(opts robot.AssignOptions) (*robot.AssignOutput, error) {
 	// Panes holding an active assignment must be excluded from the idle pool
 	// even if they momentarily show an idle prompt between turns (FIX C).
 	activePanes := loadActiveAssignmentPanes(opts.Session)
+	herdrStatuses := muxHerdrAgentStatuses(opts.Session)
 
 	for _, pane := range panes {
 		agentType := agentTypeForPane(pane)
@@ -1043,9 +1056,8 @@ func getAssignOutput(opts robot.AssignOptions) (*robot.AssignOutput, error) {
 			continue
 		}
 
-		// Capture state
-		scrollback, _ := muxCaptureForStatusDetection(pane.ID)
-		state := determineAgentState(scrollback, agentType)
+		// Prefer herdr agent_status; fall back to scrollback classification.
+		state, _ := resolvePaneAgentState(pane.ID, agentType, herdrStatuses)
 		if state == "idle" {
 			idleAgentPanes = append(idleAgentPanes, fmt.Sprintf("%d", pane.Index))
 		}
@@ -1242,7 +1254,7 @@ func detectModelFromTitle(agentType, title string) string {
 //  2. A live-window thinking check (robot.IsLiveBusy) inspects the trailing
 //     window of the scrollback for THINKING-category patterns from the same
 //     library that `--robot-activity` consults. This catches the case where
-//     another orchestrator drove the pane via `ntm send` (so the assign
+//     another orchestrator drove the pane via `herdctl send` (so the assign
 //     ledger has no record), but the pane is still actively working — the
 //     live-window patterns ("• Working (...)", "esc to interrupt", etc.)
 //     are visible regardless of who started the work (#124).
@@ -1615,6 +1627,7 @@ func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced,
 	// is the watch-dispatch path, so the guard is what keeps the periodic
 	// ready-work re-scan (FIX B) from double-dispatching in-flight work.
 	activePanes := loadActiveAssignmentPanes(opts.Session)
+	herdrStatuses := muxHerdrAgentStatuses(opts.Session)
 
 	for _, pane := range panes {
 		at := agentTypeForPane(pane)
@@ -1633,8 +1646,7 @@ func getAssignOutputEnhanced(opts *AssignCommandOptions) (*AssignOutputEnhanced,
 		}
 
 		model := detectModelFromTitle(at, pane.Title)
-		scrollback, _ := muxCaptureForStatusDetection(pane.ID)
-		state := determineAgentState(scrollback, at)
+		state, scrollback := resolvePaneAgentState(pane.ID, at, herdrStatuses)
 
 		if state == "idle" {
 			idleAgents = append(idleAgents, assignAgentInfo{
@@ -2727,7 +2739,7 @@ func executeAssignmentsEnhanced(session string, out *AssignOutputEnhanced, opts 
 		if reservedCount > 0 {
 			fmt.Printf("  File reservations: %d beads with reserved paths\n", reservedCount)
 		}
-		fmt.Println("Use 'ntm status --assignments' to monitor progress.")
+		fmt.Println("Use 'herdctl status --assignments' to monitor progress.")
 	}
 	if failCount > 0 {
 		return fmt.Errorf("%d of %d assignments failed", failCount, successCount+failCount)
@@ -5300,6 +5312,46 @@ func PerformAutoReassignment(completedBeadID string, opts *AutoReassignOptions) 
 	return result, nil
 }
 
+
+// mapHerdrAgentState maps herdr agent_status onto assign state strings
+// (idle|working|blocked|unknown). Done is treated as idle for dispatch.
+func mapHerdrAgentState(agentStatus string) string {
+	switch strings.ToLower(strings.TrimSpace(agentStatus)) {
+	case herdr.AgentStatusIdle, herdr.AgentStatusDone:
+		return "idle"
+	case herdr.AgentStatusWorking:
+		return "working"
+	case herdr.AgentStatusBlocked:
+		return "blocked"
+	default:
+		return "unknown"
+	}
+}
+
+// resolvePaneAgentState prefers herdr-native agent_status when available,
+// falling back to scrollback classification. Returns state and optional
+// scrollback (captured only when needed for classification or backlog scoring).
+func resolvePaneAgentState(paneID, agentType string, herdrStatuses map[string]string) (state, scrollback string) {
+	if paneID != "" && herdrStatuses != nil {
+		if hs, ok := herdrStatuses[paneID]; ok && strings.TrimSpace(hs) != "" {
+			mapped := mapHerdrAgentState(hs)
+			if mapped != "unknown" {
+				return mapped, ""
+			}
+		}
+	}
+	if paneID != "" {
+		if s, err := muxGetAgentStatus(paneID); err == nil && strings.TrimSpace(s) != "" {
+			mapped := mapHerdrAgentState(s)
+			if mapped != "unknown" {
+				return mapped, ""
+			}
+		}
+	}
+	scrollback, _ = muxCaptureForStatusDetection(paneID)
+	return determineAgentState(scrollback, agentType), scrollback
+}
+
 // getIdleAgents returns a list of idle agents that can take new assignments
 func getIdleAgents(session, agentTypeFilter string, verbose bool) ([]assignAgentInfo, error) {
 	normalizedFilter := normalizeAgentTypeAlias(agentTypeFilter)
@@ -5321,6 +5373,7 @@ func getIdleAgents(session, agentTypeFilter string, verbose bool) ([]assignAgent
 	// Panes holding an active assignment must be excluded from the idle pool
 	// even if they momentarily show an idle prompt between turns (FIX C).
 	activePanes := loadActiveAssignmentPanes(session)
+	herdrStatuses := muxHerdrAgentStatuses(session)
 
 	for _, pane := range panes {
 		agentType := agentTypeForPane(pane)
@@ -5342,8 +5395,7 @@ func getIdleAgents(session, agentTypeFilter string, verbose bool) ([]assignAgent
 		}
 
 		model := detectModelFromTitle(agentType, pane.Title)
-		scrollback, _ := muxCaptureForStatusDetection(pane.ID)
-		state := determineAgentState(scrollback, agentType)
+		state, scrollback := resolvePaneAgentState(pane.ID, agentType, herdrStatuses)
 
 		if state == "idle" {
 			idleAgents = append(idleAgents, assignAgentInfo{

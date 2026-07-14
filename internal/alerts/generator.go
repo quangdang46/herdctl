@@ -235,7 +235,7 @@ func (g *Generator) detectRateLimit(session string, pane tmux.Pane, lines []stri
 					guidance = "New cod launches are paused automatically. " +
 						"Claude and Gemini agents continue unaffected. " +
 						"Consider reducing concurrent Codex panes or waiting for quota reset. " +
-						"Check throttle status with: ntm --robot-status"
+						"Check throttle status with: herdctl --robot-status"
 				}
 
 				ctx := map[string]interface{}{

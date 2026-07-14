@@ -227,7 +227,7 @@ func TestCheckRecoverableState_WithStateDB(t *testing.T) {
 func TestCheckNoSilentDataLoss_WithPreCommitGuard(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create .git/hooks directory with pre-commit containing ntm guard
+	// Create .git/hooks directory with pre-commit containing herdctl guard
 	hooksDir := filepath.Join(tmpDir, ".git", "hooks")
 	if err := os.MkdirAll(hooksDir, 0755); err != nil {
 		t.Fatal(err)

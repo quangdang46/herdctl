@@ -1088,7 +1088,7 @@ func simulateSendDryRun(opts SendOptions, panes []mockPane) SendOutput {
 
 // TestRobotSendUsesDoubleEnter verifies the #187 delivery-protocol selection:
 // agent panes with Enter requested get the double-Enter submission protocol
-// (same as ntm send / palette, #94); user/unknown panes and --enter=false
+// (same as herdctl send / palette, #94); user/unknown panes and --enter=false
 // keep the single delayed-Enter path.
 func TestRobotSendUsesDoubleEnter(t *testing.T) {
 	tests := []struct {

@@ -1694,11 +1694,11 @@ func queueDryIdeationNextActions(report QueueDryResponse, guard ideaplan.Novelty
 func commandForGuardRecommendation(rec ideaplan.GuardRecommendation) string {
 	switch rec {
 	case ideaplan.GuardRecommendationReviewRecentWork:
-		return "ntm review-queue <session>"
+		return "herdctl review-queue <session>"
 	case ideaplan.GuardRecommendationValidateCloseout:
-		return "ntm work alerts --critical-only"
+		return "herdctl work alerts --critical-only"
 	case ideaplan.GuardRecommendationWaitForCoordination:
-		return "ntm work commit-ready --format=json"
+		return "herdctl work commit-ready --format=json"
 	default:
 		return ""
 	}
@@ -2076,7 +2076,7 @@ func buildQueueDryRecommendations(report QueueDryResponse) []QueueDryRecommendat
 		recs = append(recs, QueueDryRecommendation{
 			Code:     "inspect_active_reservations",
 			Summary:  "active file reservations may block work pickup",
-			Command:  "ntm locks list <session> --all-agents",
+			Command:  "herdctl locks list <session> --all-agents",
 			Evidence: fmt.Sprintf("%d active reservations", report.Evidence.Reservations.Count),
 		})
 	}
@@ -2086,13 +2086,13 @@ func buildQueueDryRecommendations(report QueueDryResponse) []QueueDryRecommendat
 			QueueDryRecommendation{
 				Code:     "review_pass",
 				Summary:  "queue is dry; pivot to review-queue prompts for idle agents",
-				Command:  "ntm review-queue <session>",
+				Command:  "herdctl review-queue <session>",
 				Evidence: fmt.Sprintf("actionable=%d ready=%d", report.Evidence.ActionableCount, report.Evidence.ReadyCount),
 			},
 			QueueDryRecommendation{
 				Code:    "alerts_sweep",
 				Summary: "run critical alert sweep for hidden blockers or stale graph issues",
-				Command: "ntm work alerts --critical-only",
+				Command: "herdctl work alerts --critical-only",
 			},
 			QueueDryRecommendation{
 				Code:    "seed_new_task",
@@ -2124,12 +2124,12 @@ func queueDryRecipes() []QueueDryRecipe {
 	return []QueueDryRecipe{
 		{
 			Name:    "Critical Alerts Sweep",
-			Command: "ntm work alerts --critical-only",
+			Command: "herdctl work alerts --critical-only",
 			Purpose: "Find hidden blockers and stale dependency warnings before creating new work.",
 		},
 		{
 			Name:    "Review Queue Pivot",
-			Command: "ntm review-queue <session>",
+			Command: "herdctl review-queue <session>",
 			Purpose: "Keep idle agents productive when no ready beads are available.",
 		},
 		{

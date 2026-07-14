@@ -123,6 +123,30 @@ func backendGetPanesWithActivityContext(ctx context.Context, session string) ([]
 	return out, nil
 }
 
+// backendGetPaneActivity returns last activity for a pane. Under herdr this is a
+// no-op (zero time, nil error): herdr has no window_activity equivalent, and a
+// hard error would fail-closed interrupt readiness polls that already refresh
+// via capture.
+func backendGetPaneActivity(paneID string) (time.Time, error) {
+	if backend.IsHerdr() {
+		return time.Time{}, nil
+	}
+	return tmux.GetPaneActivity(paneID)
+}
+
+// backendPaneTarget prefers pane.ID (herdr wN:pM / tmux %N). Falls back to the
+// tmux physical form session:win.pane only when the backend is tmux and ID is empty.
+// Under herdr an empty ID is an error — session:win.pane is not a valid herdr target.
+func backendPaneTarget(session string, pane tmux.Pane) (string, error) {
+	if id := strings.TrimSpace(pane.ID); id != "" {
+		return id, nil
+	}
+	if backend.IsHerdr() {
+		return "", fmt.Errorf("pane %d in session %q has empty ID", pane.Index, session)
+	}
+	return fmt.Sprintf("%s:%d.%d", session, pane.WindowIndex, pane.Index), nil
+}
+
 // backendCapturePaneOutput captures recent pane text via the active backend.
 func backendCapturePaneOutput(target string, lines int) (string, error) {
 	return backendCapturePaneOutputContext(context.Background(), target, lines)

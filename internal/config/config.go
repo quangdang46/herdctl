@@ -377,7 +377,7 @@ type RobotConfig struct {
 // Safety: the semantic signal is advisory only. It never flips is_working from
 // true to false and never produces a kill/reassign recommendation on its own.
 type SemanticConfig struct {
-	// Stamp, when true, makes `ntm send` / `ntm assign` inject a per-pane
+	// Stamp, when true, makes `herdctl send` / `ntm assign` inject a per-pane
 	// `NTM-Pane: <session>/<window>.<pane>` commit-trailer instruction into the
 	// dispatched marching orders (and, when a bead id is cleanly known, a
 	// best-effort bead label carrying the same pane identity). Default false, so
@@ -2677,7 +2677,7 @@ Run tests after merging to ensure nothing is broken.`,
 			Label:    "Check Project Inbox",
 			Category: "Coordination",
 			Prompt: `Check the project inbox for any new messages from other agents or the human overseer.
-Run 'ntm mail inbox' to see the full list of messages.`,
+Run 'herdctl mail inbox' to see the full list of messages.`,
 		},
 
 		// Investigation
@@ -3091,7 +3091,7 @@ func Print(cfg *Config, w io.Writer) error {
 	fmt.Fprintln(w)
 
 	fmt.Fprintln(w, "# Palette state (favorites/pins)")
-	fmt.Fprintln(w, "# Managed by the command palette UI (ntm palette)")
+	fmt.Fprintln(w, "# Managed by the command palette UI (herdctl palette)")
 	fmt.Fprintln(w, "[palette_state]")
 	if len(cfg.PaletteState.Pinned) > 0 {
 		fmt.Fprintf(w, "pinned = %s\n", renderTOMLStringArray(cfg.PaletteState.Pinned))

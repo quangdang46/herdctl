@@ -443,8 +443,8 @@ func NewSessionAgentRegistry(sessionName, projectKey string) *SessionAgentRegist
 // HydrateClientTokensForProject scans every session under the ntm
 // sessions base dir for an agent_registry.json that targets the given
 // projectKey and pushes each (agent_name, registration_token) pair
-// into the Client's per-agent token cache. This lets `ntm mail inbox`,
-// `ntm mail send`, and other commands that don't carry session context
+// into the Client's per-agent token cache. This lets `herdctl mail inbox`,
+// `herdctl mail send`, and other commands that don't carry session context
 // still authenticate as their existing agents on mcp-agent-mail >=2.13
 // (ntm#146). Errors enumerating sessions are non-fatal — the function
 // just hydrates whatever it can find.

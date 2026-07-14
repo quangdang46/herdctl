@@ -141,7 +141,7 @@ func (s *ValidateTestSuite) RunValidate(flags ...string) (*ValidationReport, err
 	args := []string{"config", "validate", "--json"}
 	args = append(args, flags...)
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Dir = s.tempDir
 	output, err := cmd.CombinedOutput()
 
@@ -694,7 +694,7 @@ default_cc = 1
 			t.Fatalf("[E2E-VALIDATE] Failed to create config: %v", err)
 		}
 
-		cmd := exec.Command("ntm", "config", "validate")
+		cmd := exec.Command(mustE2EBin(), "config", "validate")
 		cmd.Dir = suite.TempDir()
 		err := cmd.Run()
 
@@ -714,7 +714,7 @@ broken syntax
 			t.Fatalf("[E2E-VALIDATE] Failed to create config: %v", err)
 		}
 
-		cmd := exec.Command("ntm", "config", "validate")
+		cmd := exec.Command(mustE2EBin(), "config", "validate")
 		cmd.Dir = suite.TempDir()
 		err := cmd.Run()
 

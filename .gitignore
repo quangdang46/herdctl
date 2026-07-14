@@ -1,5 +1,6 @@
-# Binaries (only at root, not cmd/ntm/)
+# Binaries (only at root, not cmd/ntm/ or cmd/herdctl/)
 /ntm
+/herdctl
 *.exe
 dist/
 

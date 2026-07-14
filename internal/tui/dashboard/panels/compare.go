@@ -207,7 +207,7 @@ func (p *ComparePanel) View() string {
 
 	if p.data.Result == nil {
 		content.WriteString(components.EmptyState(
-			"No comparison loaded. Use 'ntm ensemble compare <run1> <run2>'",
+			"No comparison loaded. Use 'herdctl ensemble compare <run1> <run2>'",
 			w-4,
 		) + "\n")
 		return boxStyle.Render(FitToHeight(content.String(), h-4))

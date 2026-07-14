@@ -56,7 +56,7 @@ func GetEnsembleSuggest(question string) (*EnsembleSuggestOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			ErrMissingQuestion,
 			ErrCodeInvalidFlag,
-			"Provide a question: ntm --robot-ensemble-suggest=\"What security issues exist?\"",
+			"Provide a question: herdctl --robot-ensemble-suggest=\"What security issues exist?\"",
 		)
 		return output, nil
 	}

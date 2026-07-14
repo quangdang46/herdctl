@@ -26,7 +26,7 @@ The overlay lets you monitor agents without leaving their terminal output.
 Press Escape to dismiss the overlay and interact with panes directly.
 Press Enter/z on a pane to dismiss the overlay AND zoom into that pane.
 
-Use 'ntm bind --overlay' to set up F12 as a toggle key.
+Use 'herdctl bind --overlay' to set up F12 as a toggle key.
 
 If no session is specified:
 - Inside tmux: uses the current session
@@ -35,7 +35,7 @@ If no session is specified:
 Examples:
   ntm overlay myproject     # Open dashboard overlay for myproject
   ntm overlay               # Auto-detect session (must be inside tmux)
-  ntm bind --overlay        # Set up F12 toggle key`,
+  herdctl bind --overlay        # Set up F12 toggle key`,
 		Aliases: []string{"ov", "hud"},
 		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

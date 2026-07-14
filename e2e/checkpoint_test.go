@@ -182,7 +182,7 @@ func (s *CheckpointTestSuite) HasTmuxSession() bool {
 // RunCheckpoint executes ntm checkpoint subcommand and returns the output
 func (s *CheckpointTestSuite) RunCheckpoint(args ...string) ([]byte, error) {
 	allArgs := append([]string{"checkpoint"}, args...)
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	cmd.Dir = s.tempDir
 
 	s.logger.Log("[E2E-CHECKPOINT] Running: ntm %v", allArgs)
@@ -200,7 +200,7 @@ func (s *CheckpointTestSuite) RunCheckpoint(args ...string) ([]byte, error) {
 func (s *CheckpointTestSuite) RunCheckpointJSON(args ...string) ([]byte, error) {
 	allArgs := append([]string{"checkpoint"}, args...)
 	allArgs = append(allArgs, "--json")
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	cmd.Dir = s.tempDir
 
 	s.logger.Log("[E2E-CHECKPOINT] Running: ntm %v", allArgs)
@@ -227,7 +227,7 @@ func (s *CheckpointTestSuite) RunCheckpointJSON(args ...string) ([]byte, error) 
 // RunRollback executes ntm rollback and returns the output
 func (s *CheckpointTestSuite) RunRollback(args ...string) ([]byte, error) {
 	allArgs := append([]string{"rollback"}, args...)
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	cmd.Dir = s.tempDir
 
 	s.logger.Log("[E2E-CHECKPOINT] Running: ntm %v", allArgs)

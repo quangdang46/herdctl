@@ -56,7 +56,7 @@ func TestE2E_ScrubScansArtifactsSafely(t *testing.T) {
 
 	logger.Log("[E2E-SCRUB] Created artifact: %s", artifactPath)
 
-	cmd := exec.Command("ntm", "scrub", "--path", tempDir, "--format", "json")
+	cmd := exec.Command(mustE2EBin(), "scrub", "--path", tempDir, "--format", "json")
 	cmd.Env = append(os.Environ(), "HOME="+tempDir, "XDG_CONFIG_HOME="+tempDir)
 	output, err := cmd.CombinedOutput()
 	logger.Log("[E2E-SCRUB] Running: ntm scrub --path %s --format json", tempDir)

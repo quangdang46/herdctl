@@ -22,8 +22,8 @@ func newQuotaCmd() *cobra.Command {
 Sends /usage command to supported agents (Claude) and parses the output.
 
 Examples:
-  ntm quota myproject
-  ntm quota --json`,
+  herdctl quota myproject
+  herdctl quota --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string

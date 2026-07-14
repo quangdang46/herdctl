@@ -100,7 +100,7 @@ func GetEnsemble(session string) (*EnsembleOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session name: ntm --robot-ensemble=myproject",
+			"Provide a session name: herdctl --robot-ensemble=myproject",
 		)
 		return output, nil
 	}
@@ -119,7 +119,7 @@ func GetEnsemble(session string) (*EnsembleOutput, error) {
 			output.RobotResponse = NewErrorResponse(
 				fmt.Errorf("ensemble state not found for session '%s'", session),
 				ErrCodeEnsembleNotFound,
-				"Spawn an ensemble first: ntm ensemble <preset> <question>",
+				"Spawn an ensemble first: herdctl ensemble <preset> <question>",
 			)
 			return output, nil
 		}

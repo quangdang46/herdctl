@@ -59,7 +59,7 @@ func GetHistory(opts HistoryOptions) (*HistoryOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide session name: ntm --robot-history=myproject",
+			"Provide session name: herdctl --robot-history=myproject",
 		)
 		return output, nil
 	}

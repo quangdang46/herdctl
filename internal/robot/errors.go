@@ -157,7 +157,7 @@ func GetErrors(opts ErrorsOptions) (*ErrorsOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			nil,
 			"INVALID_ARGS",
-			"Provide session name: ntm --robot-errors=myproject",
+			"Provide session name: herdctl --robot-errors=myproject",
 		)
 		output.Error = "session name required"
 		return output, nil

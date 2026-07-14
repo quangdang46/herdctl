@@ -1500,10 +1500,10 @@ if [ -z "$REAL_GIT" ]; then
 fi
 
 # Check command against policy (include "git" in the command string)
-check_result=$(ntm safety check "git $*" --json 2>&1)
+check_result=$(herdctl safety check "git $*" --json 2>&1)
 exit_code=$?
 
-# ntm safety check exits 0 for allow/approve, 1 for block
+# herdctl safety check exits 0 for allow/approve, 1 for block
 if [ $exit_code -eq 1 ]; then
     # Command was blocked
     reason=$(echo "$check_result" | jq -r '.reason // "Policy violation"' 2>/dev/null)
@@ -1540,10 +1540,10 @@ if [ -z "$REAL_RM" ]; then
 fi
 
 # Check command against policy
-check_result=$(ntm safety check "rm $*" --json 2>&1)
+check_result=$(herdctl safety check "rm $*" --json 2>&1)
 exit_code=$?
 
-# ntm safety check exits 0 for allow/approve, 1 for block
+# herdctl safety check exits 0 for allow/approve, 1 for block
 if [ $exit_code -eq 1 ]; then
     # Command was blocked
     reason=$(echo "$check_result" | jq -r '.reason // "Policy violation"' 2>/dev/null)
@@ -1602,10 +1602,10 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # Check against policy
-check_result=$(ntm safety check "$COMMAND" --json 2>&1)
+check_result=$(herdctl safety check "$COMMAND" --json 2>&1)
 exit_code=$?
 
-# ntm safety check exits 0 for allow/approve, 1 for block
+# herdctl safety check exits 0 for allow/approve, 1 for block
 if [ $exit_code -eq 1 ]; then
     # Command was blocked
     reason=$(echo "$check_result" | jq -r '.reason // "Policy violation"' 2>/dev/null)

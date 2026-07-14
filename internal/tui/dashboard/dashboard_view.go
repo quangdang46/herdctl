@@ -788,7 +788,7 @@ func (m Model) renderRateLimitAlert() string {
 		if multiWindow {
 			msg = fmt.Sprintf("⏳ Rate limit hit on pane %s! Press 'r' to rotate", address)
 		} else {
-			msg = fmt.Sprintf("⏳ Rate limit hit on pane %s! Run: ntm rotate %s --pane=%s",
+			msg = fmt.Sprintf("⏳ Rate limit hit on pane %s! Run: herdctl rotate %s --pane=%s",
 				address, m.session, address)
 		}
 	} else {
@@ -946,15 +946,15 @@ func hintForSessionFetchError(err error) string {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "tmux is not installed"):
-		return "Install tmux, then run: ntm deps -v"
+		return "Install tmux, then run: herdctl deps -v"
 	case strings.Contains(msg, "executable file not found"):
-		return "Install tmux, then run: ntm deps -v"
+		return "Install tmux, then run: herdctl deps -v"
 	case strings.Contains(msg, "no server running"):
-		return "Start tmux or create a session with: ntm spawn <name>"
+		return "Start tmux or create a session with: herdctl spawn <name>"
 	case strings.Contains(msg, "failed to connect to server"):
-		return "Start tmux or create a session with: ntm spawn <name>"
+		return "Start tmux or create a session with: herdctl spawn <name>"
 	case strings.Contains(msg, "can't find session"), strings.Contains(msg, "session not found"):
-		return "Session may have ended. Create a new one with: ntm spawn <name>"
+		return "Session may have ended. Create a new one with: herdctl spawn <name>"
 	}
 
 	return "Press r to retry"

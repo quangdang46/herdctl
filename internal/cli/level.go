@@ -25,11 +25,11 @@ NTM uses a tiered command system to avoid overwhelming new users:
   - Master (Tier 3): Advanced features including robot mode
 
 Examples:
-  ntm level              # Show current tier and stats
-  ntm level up           # Promote to next tier
-  ntm level down         # Demote to previous tier
-  ntm level master       # Jump to Master tier
-  ntm level apprentice   # Reset to Apprentice tier`,
+  herdctl level              # Show current tier and stats
+  herdctl level up           # Promote to next tier
+  herdctl level down         # Demote to previous tier
+  herdctl level master       # Jump to Master tier
+  herdctl level apprentice   # Reset to Apprentice tier`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLevelShow()
 		},
@@ -120,7 +120,7 @@ func runLevelShow() error {
 		cmdStyle := lipgloss.NewStyle().Foreground(t.Yellow).Bold(true)
 		fmt.Printf("  %s %s %s\n\n",
 			hintStyle.Render("Run"),
-			cmdStyle.Render(fmt.Sprintf("ntm level %s", strings.ToLower(nextTier.String()))),
+			cmdStyle.Render(fmt.Sprintf("herdctl level %s", strings.ToLower(nextTier.String()))),
 			hintStyle.Render("to unlock more features."),
 		)
 	} else {

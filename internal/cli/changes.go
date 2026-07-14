@@ -21,13 +21,13 @@ func newChangesCmd() *cobra.Command {
 		Short: "Show recent file changes attributed to agents",
 		Long: `Show which files were modified by agents in recent operations.
 
-		This command tracks file modifications detected after 'ntm send' operations.
+		This command tracks file modifications detected after 'herdctl send' operations.
 		If multiple agents were targeted, changes are attributed to all of them (potential conflict).
 
 		Examples:
-		  ntm changes              # All recent changes
-		  ntm changes myproject    # Changes in specific session
-		  ntm changes --json`,
+		  herdctl changes              # All recent changes
+		  herdctl changes myproject    # Changes in specific session
+		  herdctl changes --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session := ""
@@ -53,9 +53,9 @@ func newConflictsCmd() *cobra.Command {
 		it's flagged as a conflict.
 
 		Examples:
-		  ntm conflicts
-		  ntm conflicts myproject
-		  ntm conflicts --since 6h --limit 10`,
+		  herdctl conflicts
+		  herdctl conflicts myproject
+		  herdctl conflicts --since 6h --limit 10`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session := ""

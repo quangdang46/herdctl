@@ -45,8 +45,8 @@ func newModesCmd() *cobra.Command {
 Reasoning modes are specialized analytical perspectives that can be used
 in ensemble runs to approach problems from different angles.
 
-Use 'ntm modes list' to see all available modes.
-Use 'ntm modes explain <mode>' to get detailed information about a mode.`,
+Use 'herdctl modes list' to see all available modes.
+Use 'herdctl modes explain <mode>' to get detailed information about a mode.`,
 		Example: `  ntm modes list
   ntm modes list --category Formal
   ntm modes list --tier core

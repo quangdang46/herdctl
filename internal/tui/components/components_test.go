@@ -225,7 +225,7 @@ func TestRenderFlag(t *testing.T) {
 }
 
 func TestRenderExample(t *testing.T) {
-	result := RenderExample("ntm spawn myproject")
+	result := RenderExample("herdctl spawn myproject")
 	if result == "" {
 		t.Error("RenderExample should return non-empty string")
 	}

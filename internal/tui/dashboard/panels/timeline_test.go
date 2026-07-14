@@ -267,7 +267,7 @@ func TestTimelinePanel_RenderEmpty(t *testing.T) {
 	if !strings.Contains(view, "No agent activity") {
 		t.Error("expected 'No agent activity' in empty view")
 	}
-	if !strings.Contains(view, "ntm spawn") {
+	if !strings.Contains(view, "herdctl spawn") {
 		t.Error("expected spawn hint in empty view")
 	}
 

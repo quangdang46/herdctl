@@ -58,7 +58,7 @@ type robotSnapshotOutput struct {
 }
 
 func runNTMStdout(args []string, env []string) (stdout []byte, stderr []byte, err error) {
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	if env != nil {
 		cmd.Env = env
 	}
@@ -163,7 +163,7 @@ func TestRobotTools_ReportsMissingToolsWhenPATHIsRestricted(t *testing.T) {
 	logger := NewTestLogger(t, "robot-tools-missing")
 	defer logger.Close()
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found in PATH")
 	}

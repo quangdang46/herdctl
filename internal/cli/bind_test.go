@@ -66,7 +66,7 @@ func TestOverlayBindingCommandGeneration(t *testing.T) {
 				"-w 95%",
 				"-h 95%",
 				"NTM_POPUP=1",
-				"ntm dashboard --popup",
+				"herdctl dashboard --popup",
 				"#{session_name}",
 			},
 			wantNotContains: []string{
@@ -225,7 +225,7 @@ set -g mouse on`,
 		{
 			name: "preserve_other_bindings",
 			key:  "F12",
-			existingConf: `bind-key -n F6 display-popup -E "ntm palette"
+			existingConf: `bind-key -n F6 display-popup -E "herdctl palette"
 bind-key -n F5 run-shell "custom"`,
 			wantInConf: []string{
 				"bind-key -n F6",
@@ -309,8 +309,8 @@ func TestRemoveBindingCommentPreservation(t *testing.T) {
 			name: "removes_binding_and_ntm_comment",
 			key:  "F12",
 			existingConf: `set -g status on
-# NTM Dashboard Overlay (added by 'ntm bind --overlay')
-bind-key -n F12 display-popup -E "ntm dashboard"
+# NTM Dashboard Overlay (added by 'herdctl bind --overlay')
+bind-key -n F12 display-popup -E "herdctl dashboard"
 set -g mouse on`,
 			wantInConf: []string{
 				"set -g status on",
@@ -327,10 +327,10 @@ set -g mouse on`,
 			key:  "F12",
 			existingConf: `# My custom settings
 set -g status on
-# NTM Command Palette (added by 'ntm bind')
-bind-key -n F6 display-popup -E "ntm palette"
+# NTM Command Palette (added by 'herdctl bind')
+bind-key -n F6 display-popup -E "herdctl palette"
 # NTM Dashboard Overlay
-bind-key -n F12 display-popup -E "ntm dashboard"
+bind-key -n F12 display-popup -E "herdctl dashboard"
 set -g mouse on`,
 			wantInConf: []string{
 				"My custom settings",
@@ -348,7 +348,7 @@ set -g mouse on`,
 			name: "no_binding_found",
 			key:  "F12",
 			existingConf: `set -g status on
-bind-key -n F6 display-popup -E "ntm palette"`,
+bind-key -n F6 display-popup -E "herdctl palette"`,
 			wantInConf: []string{
 				"set -g status on",
 				"bind-key -n F6",
@@ -359,7 +359,7 @@ bind-key -n F6 display-popup -E "ntm palette"`,
 			name: "binding_without_comment",
 			key:  "F12",
 			existingConf: `set -g status on
-bind-key -n F12 display-popup -E "ntm dashboard"
+bind-key -n F12 display-popup -E "herdctl dashboard"
 set -g mouse on`,
 			wantInConf: []string{
 				"set -g status on",
@@ -428,7 +428,7 @@ func TestShowBindingOutput(t *testing.T) {
 			name: "binding_found",
 			key:  "F12",
 			existingConf: `set -g status on
-bind-key -n F12 display-popup -E "ntm dashboard"`,
+bind-key -n F12 display-popup -E "herdctl dashboard"`,
 			wantFound: true,
 		},
 		{
@@ -530,10 +530,10 @@ func TestBindingLineWithVariousFormats(t *testing.T) {
 
 // TestSetupBindingPaletteVsOverlay verifies palette vs overlay binding differences.
 func TestSetupBindingPaletteVsOverlay(t *testing.T) {
-	// Palette uses a smaller popup than the overlay and calls "ntm palette"
-	paletteCmd := `bind-key -n F6 display-popup -E -w 80% -h 70% "ntm palette"`
+	// Palette uses a smaller popup than the overlay and calls "herdctl palette"
+	paletteCmd := `bind-key -n F6 display-popup -E -w 80% -h 70% "herdctl palette"`
 
-	// Overlay uses 95% dimensions and calls "NTM_POPUP=1 ntm dashboard --popup"
+	// Overlay uses 95% dimensions and calls "NTM_POPUP=1 herdctl dashboard --popup"
 	overlayCmd := overlayBindingCommand("F12")
 
 	t.Logf("Palette command: %s", paletteCmd)

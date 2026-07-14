@@ -381,7 +381,7 @@ func (m Model) renderQuickStartSlide(tick int) string {
 		b.WriteString(step1 + "\n\n")
 
 		code1 := []string{
-			"$ ntm quick myproject --template=go",
+			"$ herdctl quick myproject --template=go",
 		}
 		b.WriteString("      " + RenderCommandCode(code1, tick-10, true) + "\n\n")
 	}
@@ -392,7 +392,7 @@ func (m Model) renderQuickStartSlide(tick int) string {
 		b.WriteString(step2 + "\n\n")
 
 		code2 := []string{
-			"$ ntm spawn myproject --cc=3 --cod=2 --agy=1",
+			"$ herdctl spawn myproject --cc=3 --cod=2 --agy=1",
 		}
 		b.WriteString("      " + RenderCommandCode(code2, tick-50, true) + "\n\n")
 	}
@@ -403,7 +403,7 @@ func (m Model) renderQuickStartSlide(tick int) string {
 		b.WriteString(step3 + "\n\n")
 
 		code3 := []string{
-			"$ ntm send myproject --all \"Build a REST API\"",
+			"$ herdctl send myproject --all \"Build a REST API\"",
 		}
 		b.WriteString("      " + RenderCommandCode(code3, tick-90, true) + "\n\n")
 	}
@@ -445,36 +445,36 @@ func (m Model) renderCommandsSlide(tick int) string {
 			name:  "Session Creation",
 			color: "#89b4fa",
 			commands: [][]string{
-				{"ntm create", "cnt", "Create empty session"},
-				{"ntm spawn", "sat", "Create + launch agents"},
-				{"ntm quick", "qps", "Full project setup"},
+				{"herdctl create", "cnt", "Create empty session"},
+				{"herdctl spawn", "sat", "Create + launch agents"},
+				{"herdctl quick", "qps", "Full project setup"},
 			},
 		},
 		{
 			name:  "Agent Management",
 			color: "#cba6f7",
 			commands: [][]string{
-				{"ntm add", "ant", "Add more agents"},
-				{"ntm send", "bp", "Broadcast prompt"},
-				{"ntm interrupt", "int", "Stop all agents"},
+				{"herdctl add", "ant", "Add more agents"},
+				{"herdctl send", "bp", "Broadcast prompt"},
+				{"herdctl interrupt", "int", "Stop all agents"},
 			},
 		},
 		{
 			name:  "Navigation",
 			color: "#a6e3a1",
 			commands: [][]string{
-				{"ntm attach", "rnt", "Reattach to session"},
-				{"ntm status", "snt", "Show session status"},
-				{"ntm view", "vnt", "Tile and attach"},
+				{"herdctl attach", "rnt", "Reattach to session"},
+				{"herdctl status", "snt", "Show session status"},
+				{"herdctl view", "vnt", "Tile and attach"},
 			},
 		},
 		{
 			name:  "Utilities",
 			color: "#f9e2af",
 			commands: [][]string{
-				{"ntm palette", "ncp", "Command palette"},
-				{"ntm copy", "cpnt", "Copy pane output (pane, filters, clipboard/file)"},
-				{"ntm save", "svnt", "Save outputs to files"},
+				{"herdctl palette", "ncp", "Command palette"},
+				{"herdctl copy", "cpnt", "Copy pane output (pane, filters, clipboard/file)"},
+				{"herdctl save", "svnt", "Save outputs to files"},
 			},
 		},
 	}
@@ -514,7 +514,7 @@ func (m Model) renderCommandsSlide(tick int) string {
 
 	// Tip
 	if tick > 120 {
-		tip := styles.GradientText("  Tip: Use `ntm --help` for full command details", "#6c7086", "#45475a")
+		tip := styles.GradientText("  Tip: Use `herdctl --help` for full command details", "#6c7086", "#45475a")
 		b.WriteString("\n" + tip)
 	}
 
@@ -590,14 +590,14 @@ func (m Model) renderTipsSlide(tick int) string {
 		detail string
 		color  string
 	}{
-		{"*", "Start Small", "Begin with 1-2 agents, scale with `ntm add`", "#89b4fa"},
-		{"*", "Use Aliases", "Type `bp` instead of `ntm send` for speed", "#cba6f7"},
+		{"*", "Start Small", "Begin with 1-2 agents, scale with `herdctl add`", "#89b4fa"},
+		{"*", "Use Aliases", "Type `bp` instead of `herdctl send` for speed", "#cba6f7"},
 		{"*", "F6 Palette", "Press F6 in tmux for instant command palette", "#f5c2e7"},
-		{"*", "Save Often", "`ntm save myproject -o ~/logs` preserves outputs", "#a6e3a1"},
+		{"*", "Save Often", "`herdctl save myproject -o ~/logs` preserves outputs", "#a6e3a1"},
 		{"*", "Width Tiers", "120+ cols split view; 200+/240+ unlock richer metadata", "#94e2d5"},
 		{"*", "Icons", "ASCII by default; use NTM_ICONS=unicode|nerd only with good fonts", "#f2cdcd"},
 		{"*", "Tmux Keys", "Ctrl+A, D to detach • Ctrl+A, [ to scroll", "#f9e2af"},
-		{"*", "Interrupt Fast", "`ntm interrupt myproject` stops all agents", "#f38ba8"},
+		{"*", "Interrupt Fast", "`herdctl interrupt myproject` stops all agents", "#f38ba8"},
 	}
 
 	for i, t := range tips {
@@ -656,10 +656,10 @@ func (m Model) renderCompleteSlide(tick int) string {
 		b.WriteString(centerTextWidth(nextTitle, m.effectiveWidth()) + "\n\n")
 
 		steps := []string{
-			"1. Run `ntm deps -v` to verify your setup",
-			"2. Create your first project with `ntm quick myproject`",
-			"3. Spawn some agents with `ntm spawn myproject --cc=2`",
-			"4. Open the palette with `ntm palette myproject`",
+			"1. Run `herdctl deps -v` to verify your setup",
+			"2. Create your first project with `herdctl quick myproject`",
+			"3. Spawn some agents with `herdctl spawn myproject --cc=2`",
+			"4. Open the palette with `herdctl palette myproject`",
 		}
 
 		for i, step := range steps {
@@ -674,7 +674,7 @@ func (m Model) renderCompleteSlide(tick int) string {
 	// Resources
 	if tick > 100 {
 		b.WriteString("\n")
-		resources := styles.GradientText("  Need help? Run `ntm --help` or visit the docs", "#6c7086", "#45475a")
+		resources := styles.GradientText("  Need help? Run `herdctl --help` or visit the docs", "#6c7086", "#45475a")
 		b.WriteString(centerTextWidth(resources, m.effectiveWidth()))
 	}
 

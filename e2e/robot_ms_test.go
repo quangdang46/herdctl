@@ -108,7 +108,7 @@ func TestE2E_RobotMS_MissingBinary(t *testing.T) {
 	suite := NewTestSuite(t, "robot_ms_missing")
 	defer suite.Teardown()
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found on PATH")
 	}
@@ -144,7 +144,7 @@ func TestE2E_RobotMS_SearchShow(t *testing.T) {
 	suite := NewTestSuite(t, "robot_ms_live")
 	defer suite.Teardown()
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found on PATH")
 	}

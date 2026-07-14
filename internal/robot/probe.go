@@ -578,8 +578,17 @@ func GetProbe(opts ProbeOptions) (*ProbeOutput, error) {
 		return output, nil
 	}
 
-	// Build target string for tmux commands
-	target := fmt.Sprintf("%s:%d.%d", opts.Session, targetPane.WindowIndex, opts.Pane)
+	// Prefer pane.ID (herdr wN:pM / tmux %N). Fall back to session:win.pane only
+	// under tmux when ID is empty — that form is invalid for herdr.
+	target, targetErr := backendPaneTarget(opts.Session, *targetPane)
+	if targetErr != nil {
+		output.RobotResponse = NewErrorResponse(
+			targetErr,
+			ErrCodePaneNotFound,
+			"Herdr panes require a pane ID (wN:pM); re-list panes or re-spawn the agent",
+		)
+		return output, nil
+	}
 	timeout := time.Duration(opts.Flags.TimeoutMs) * time.Millisecond
 
 	// Execute probe based on method
@@ -659,7 +668,7 @@ func GetProbeSession(opts ProbeSessionOptions) (*ProbeSessionOutput, int) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session name: ntm --robot-probe=myproject",
+			"Provide a session name: herdctl --robot-probe=myproject",
 		)
 		return output, 1
 	}

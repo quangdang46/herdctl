@@ -64,7 +64,7 @@ func resolveCodexPane(session string, pane, lines int) (*tmux.Pane, string, erro
 		return nil, "", robot.RobotError(
 			fmt.Errorf("session is required"),
 			robot.ErrCodeInvalidFlag,
-			"Pass the session positionally or via --session; use 'ntm list' to see sessions",
+			"Pass the session positionally or via --session; use 'herdctl list' to see sessions",
 		)
 	}
 	if pane < 0 {
@@ -78,7 +78,7 @@ func resolveCodexPane(session string, pane, lines int) (*tmux.Pane, string, erro
 		return nil, "", robot.RobotError(
 			fmt.Errorf("session '%s' not found", session),
 			robot.ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 	}
 	panes, err := tmux.GetPanes(session)
@@ -96,7 +96,7 @@ func resolveCodexPane(session string, pane, lines int) (*tmux.Pane, string, erro
 		return nil, "", robot.RobotError(
 			fmt.Errorf("pane %d not found in session '%s'", pane, session),
 			robot.ErrCodePaneNotFound,
-			"Use 'ntm status <session>' to see available pane indices",
+			"Use 'herdctl status <session>' to see available pane indices",
 		)
 	}
 	var content string
@@ -118,7 +118,7 @@ func resolveCodexPaneSelector(session, selector string, lines int) (*tmux.Pane, 
 		return nil, "", robot.RobotError(
 			fmt.Errorf("session is required"),
 			robot.ErrCodeInvalidFlag,
-			"Pass the session positionally or via --session; use 'ntm list' to see sessions",
+			"Pass the session positionally or via --session; use 'herdctl list' to see sessions",
 		)
 	}
 	if strings.TrimSpace(selector) == "" {
@@ -132,7 +132,7 @@ func resolveCodexPaneSelector(session, selector string, lines int) (*tmux.Pane, 
 		return nil, "", robot.RobotError(
 			fmt.Errorf("session '%s' not found", session),
 			robot.ErrCodeSessionNotFound,
-			"Use 'ntm list' to see available sessions",
+			"Use 'herdctl list' to see available sessions",
 		)
 	}
 	panes, err := tmux.GetPanes(session)
@@ -141,7 +141,7 @@ func resolveCodexPaneSelector(session, selector string, lines int) (*tmux.Pane, 
 	}
 	selected, err := resolveShellSendSelectors(panes, []string{selector}, true)
 	if err != nil {
-		return nil, "", robot.RobotError(err, robot.ErrCodePaneNotFound, "Use 'ntm status <session>' to see canonical pane addresses")
+		return nil, "", robot.RobotError(err, robot.ErrCodePaneNotFound, "Use 'herdctl status <session>' to see canonical pane addresses")
 	}
 	target := &selected[0]
 	var content string
@@ -249,7 +249,7 @@ Examples:
 				return robot.RobotError(
 					fmt.Errorf("session is required"),
 					robot.ErrCodeInvalidFlag,
-					"Pass the session positionally ('ntm codex preflight <session>') or via --session; use 'ntm list' to see sessions",
+					"Pass the session positionally ('ntm codex preflight <session>') or via --session; use 'herdctl list' to see sessions",
 				)
 			}
 			if pane < 0 {
@@ -406,7 +406,7 @@ Examples:
 				return robot.RobotError(
 					fmt.Errorf("--session is required"),
 					robot.ErrCodeInvalidFlag,
-					"Pass --session <name>; use 'ntm list' to see available sessions",
+					"Pass --session <name>; use 'herdctl list' to see available sessions",
 				)
 			}
 			if pane < 0 {
@@ -421,7 +421,7 @@ Examples:
 				return robot.RobotError(
 					fmt.Errorf("session '%s' not found", session),
 					robot.ErrCodeSessionNotFound,
-					"Use 'ntm list' to see available sessions",
+					"Use 'herdctl list' to see available sessions",
 				)
 			}
 
@@ -441,7 +441,7 @@ Examples:
 				return robot.RobotError(
 					fmt.Errorf("pane %d not found in session '%s'", pane, session),
 					robot.ErrCodePaneNotFound,
-					"Use 'ntm status <session>' to see available pane indices",
+					"Use 'herdctl status <session>' to see available pane indices",
 				)
 			}
 

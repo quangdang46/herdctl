@@ -120,7 +120,7 @@ func TestReplay_DetectsTamperedSuccessFixture_MissingTimestamp(t *testing.T) {
 		SchemaVersion: 1,
 		Fixtures: []Fixture{{
 			Name:    "tampered",
-			Command: "ntm x",
+			Command: "herdctl x",
 			Mode:    FixtureModeSuccess,
 			Stdout:  json.RawMessage(`{"success":true,"sessions":[]}`),
 		}},
@@ -149,7 +149,7 @@ func TestReplay_DetectsFailureFixtureMissingErrorCode(t *testing.T) {
 		SchemaVersion: 1,
 		Fixtures: []Fixture{{
 			Name:     "tampered_failure",
-			Command:  "ntm x",
+			Command:  "herdctl x",
 			Mode:     FixtureModeFailure,
 			ExitCode: 1,
 			Stdout:   json.RawMessage(`{"success":false,"timestamp":"2026-05-08T12:00:00Z","error":"boom"}`),
@@ -177,7 +177,7 @@ func TestReplay_DetectsExitCodeContractViolation(t *testing.T) {
 		SchemaVersion: 1,
 		Fixtures: []Fixture{{
 			Name:     "tampered_exit",
-			Command:  "ntm x",
+			Command:  "herdctl x",
 			Mode:     FixtureModeFailure,
 			ExitCode: 0,
 			Stdout:   json.RawMessage(`{"success":false,"timestamp":"2026-05-08T12:00:00Z","error":"boom","error_code":"X"}`),
@@ -204,7 +204,7 @@ func TestReplay_DetectsMissingCriticalArray(t *testing.T) {
 		SchemaVersion: 1,
 		Fixtures: []Fixture{{
 			Name:           "missing_array",
-			Command:        "ntm --robot-status",
+			Command:        "herdctl --robot-status",
 			Mode:           FixtureModeSuccess,
 			ExitCode:       0,
 			CriticalArrays: []string{"sessions", "panes"},
@@ -233,7 +233,7 @@ func TestReplay_FailForwardsFirstFinding(t *testing.T) {
 		SchemaVersion: 1,
 		Fixtures: []Fixture{{
 			Name:    "broken",
-			Command: "ntm x",
+			Command: "herdctl x",
 			Mode:    FixtureModeSuccess,
 			Stdout:  json.RawMessage(`{"success":true}`),
 		}},
@@ -255,7 +255,7 @@ func TestReplay_StdoutWithLeadingProseIsRejected(t *testing.T) {
 		SchemaVersion: 1,
 		Fixtures: []Fixture{{
 			Name:    "with_prose",
-			Command: "ntm x",
+			Command: "herdctl x",
 			Mode:    FixtureModeSuccess,
 			Stdout:  json.RawMessage(`{"success":true,"timestamp":"2026-05-08T12:00:00Z"}`),
 		}},

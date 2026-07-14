@@ -56,7 +56,7 @@ type WebhookTestSuite struct {
 func NewWebhookTestSuite(t *testing.T, scenario string) *WebhookTestSuite {
 	logger := NewTestLogger(t, scenario)
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm binary not found in PATH")
 	}

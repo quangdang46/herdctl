@@ -342,7 +342,7 @@ func TestPrintSuccessFooter_NonTerminalBuffer(t *testing.T) {
 	// and output is written (non-color path)
 	var buf bytes.Buffer
 	PrintSuccessFooter(&buf, Suggestion{
-		Command:     "ntm status myproj",
+		Command:     "herdctl status myproj",
 		Description: "Check status",
 	})
 
@@ -350,7 +350,7 @@ func TestPrintSuccessFooter_NonTerminalBuffer(t *testing.T) {
 	if !strings.Contains(out, "What's next?") {
 		t.Errorf("expected 'What's next?' header, got %q", out)
 	}
-	if !strings.Contains(out, "ntm status myproj") {
+	if !strings.Contains(out, "herdctl status myproj") {
 		t.Errorf("expected command in output, got %q", out)
 	}
 	if !strings.Contains(out, "# Check status") {
@@ -428,7 +428,7 @@ func TestFormatCLIError_AllFields(t *testing.T) {
 	e := NewCLIError("auth failed").
 		WithCode("E401").
 		WithCause("token expired").
-		WithHint("refresh token with 'ntm auth refresh'")
+		WithHint("refresh token with 'herdctl auth refresh'")
 	out := FormatCLIError(e)
 
 	if !strings.Contains(out, "Error: auth failed") {

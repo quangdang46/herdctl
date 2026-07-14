@@ -20,7 +20,7 @@ const (
 	SourceReplay  Source = "replay"
 )
 
-// HistoryEntry represents a single prompt sent via ntm send.
+// HistoryEntry represents a single prompt sent via herdctl send.
 type HistoryEntry struct {
 	ID         string    `json:"id"`                    // Unique ID (timestamp-random)
 	Timestamp  time.Time `json:"ts"`                    // When sent

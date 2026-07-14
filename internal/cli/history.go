@@ -31,7 +31,7 @@ func newHistoryCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "history",
 		Short: "View prompt history",
-		Long: `View and manage prompt history from ntm send.
+		Long: `View and manage prompt history from herdctl send.
 
 Examples:
   ntm history                          # Show recent prompts

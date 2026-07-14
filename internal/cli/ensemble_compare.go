@@ -62,9 +62,9 @@ Formats:
   --format=text (default) - Human-readable report
   --format=json           - Machine-readable JSON
   --format=yaml           - YAML format`,
-		Example: `  ntm ensemble compare session1 session2
-  ntm ensemble compare run-20240101 run-20240102 --format=json
-  ntm ensemble compare mysession-v1 mysession-v2 --verbose`,
+		Example: `  herdctl ensemble compare session1 session2
+  herdctl ensemble compare run-20240101 run-20240102 --format=json
+  herdctl ensemble compare mysession-v1 mysession-v2 --verbose`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEnsembleCompare(cmd.OutOrStdout(), args[0], args[1], opts)

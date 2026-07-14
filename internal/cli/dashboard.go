@@ -54,11 +54,11 @@ Environment:
   NTM_TUI_DEBUG=1   Enables debug mode
 
 Examples:
-  ntm dashboard myproject
+  herdctl dashboard myproject
   ntm dash                  # Auto-detect session
-  ntm dashboard --no-tui    # Plain text output for scripting
-  ntm dashboard --json      # JSON output for automation
-  CI=1 ntm dashboard        # Auto-detects plain mode in CI`,
+  herdctl dashboard --no-tui    # Plain text output for scripting
+  herdctl dashboard --json      # JSON output for automation
+  CI=1 herdctl dashboard        # Auto-detects plain mode in CI`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string
@@ -451,7 +451,7 @@ func runDashboard(w io.Writer, errW io.Writer, session string, debug bool, popup
 		if _, err := os.Stat(projectDir); os.IsNotExist(err) {
 			fmt.Fprintf(errW, "Warning: project directory does not exist: %s\n", projectDir)
 			fmt.Fprintf(errW, "Some features (beads, file tracking) may not work correctly.\n")
-			fmt.Fprintf(errW, "Check your projects_base setting in config: ntm config show\n\n")
+			fmt.Fprintf(errW, "Check your projects_base setting in config: herdctl config show\n\n")
 		}
 	}
 

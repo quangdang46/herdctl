@@ -1,7 +1,9 @@
-# NTM - Named Tmux Manager
+# herdctl - dual-backend agent orchestrator (tmux + herdr)
 # https://github.com/Dicklesworthstone/ntm
+# Compat: `ntm` remains a symlink/alias to herdctl.
 
-BINARY_NAME := ntm
+BINARY_NAME := herdctl
+COMPAT_NAME := ntm
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "none")
 BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -25,6 +27,7 @@ all: build
 ## Build for current platform
 build:
 	$(GO) build $(GOFLAGS) $(LDFLAGS) -o $(BINARY_NAME) ./cmd/herdctl
+	@ln -sfn $(BINARY_NAME) $(COMPAT_NAME)
 
 ## Build for all platforms
 build-all: clean
@@ -38,24 +41,26 @@ build-all: clean
 ## Install to /usr/local/bin
 install: build
 	install -m 755 $(BINARY_NAME) /usr/local/bin/$(BINARY_NAME)
-	@echo "Installed $(BINARY_NAME) to /usr/local/bin/"
+	ln -sfn $(BINARY_NAME) /usr/local/bin/$(COMPAT_NAME)
+	@echo "Installed $(BINARY_NAME) to /usr/local/bin/ (compat symlink: $(COMPAT_NAME))"
 	@echo ""
 	@echo "Add to your shell rc file:"
-	@echo '  eval "$$(ntm shell zsh)"   # for zsh'
-	@echo '  eval "$$(ntm shell bash)"  # for bash'
+	@echo '  eval "$$(herdctl shell zsh)"   # for zsh'
+	@echo '  eval "$$(herdctl shell bash)"  # for bash'
 
 ## Install to user bin directory
 install-user: build
 	@mkdir -p $(HOME)/.local/bin
 	install -m 755 $(BINARY_NAME) $(HOME)/.local/bin/$(BINARY_NAME)
-	@echo "Installed $(BINARY_NAME) to ~/.local/bin/"
+	ln -sfn $(BINARY_NAME) $(HOME)/.local/bin/$(COMPAT_NAME)
+	@echo "Installed $(BINARY_NAME) to ~/.local/bin/ (compat symlink: $(COMPAT_NAME))"
 	@echo "Make sure ~/.local/bin is in your PATH"
 
 ## Uninstall
 uninstall:
-	rm -f /usr/local/bin/$(BINARY_NAME)
-	rm -f $(HOME)/.local/bin/$(BINARY_NAME)
-	@echo "Uninstalled $(BINARY_NAME)"
+	rm -f /usr/local/bin/$(BINARY_NAME) /usr/local/bin/$(COMPAT_NAME)
+	rm -f $(HOME)/.local/bin/$(BINARY_NAME) $(HOME)/.local/bin/$(COMPAT_NAME)
+	@echo "Uninstalled $(BINARY_NAME) (and $(COMPAT_NAME) symlink)"
 
 ## Run tests (fast, skips E2E)
 test:
@@ -107,7 +112,7 @@ fmt:
 
 ## Clean build artifacts
 clean:
-	rm -f $(BINARY_NAME)
+	rm -f $(BINARY_NAME) $(COMPAT_NAME)
 	rm -rf $(DIST)
 	rm -f coverage.out coverage.html
 
@@ -119,9 +124,9 @@ deps:
 ## Generate completions
 completions:
 	@mkdir -p $(DIST)/completions
-	./$(BINARY_NAME) completion bash > $(DIST)/completions/ntm.bash
-	./$(BINARY_NAME) completion zsh > $(DIST)/completions/_ntm
-	./$(BINARY_NAME) completion fish > $(DIST)/completions/ntm.fish
+	./$(BINARY_NAME) completion bash > $(DIST)/completions/herdctl.bash
+	./$(BINARY_NAME) completion zsh > $(DIST)/completions/_herdctl
+	./$(BINARY_NAME) completion fish > $(DIST)/completions/herdctl.fish
 	@echo "Generated completions in $(DIST)/completions/"
 
 ## Show version
@@ -130,7 +135,8 @@ version:
 
 ## Show help
 help:
-	@echo "NTM - Named Tmux Manager"
+	@echo "herdctl - dual-backend agent orchestrator (tmux + herdr)"
+	@echo "compat alias: ntm"
 	@echo ""
 	@echo "Usage: make <target>"
 	@echo ""
@@ -138,9 +144,9 @@ help:
 	@grep -E '^## ' $(MAKEFILE_LIST) | sed 's/## /  /'
 	@echo ""
 	@echo "Build targets:"
-	@echo "  build       Build for current platform"
-	@echo "  build-all   Build for all platforms"
-	@echo "  install     Install to /usr/local/bin"
+	@echo "  build        Build herdctl (+ ntm symlink) for current platform"
+	@echo "  build-all    Build for all platforms"
+	@echo "  install      Install to /usr/local/bin"
 	@echo "  install-user Install to ~/.local/bin"
 	@echo ""
 	@echo "Development:"

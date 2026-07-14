@@ -17,19 +17,19 @@ func TestIsBindingLine(t *testing.T) {
 	}{
 		{
 			name:     "bind-key F12",
-			line:     `bind-key -n F12 display-popup -E "ntm dashboard"`,
+			line:     `bind-key -n F12 display-popup -E "herdctl dashboard"`,
 			key:      "F12",
 			expected: true,
 		},
 		{
 			name:     "bind F12",
-			line:     `bind -n F12 display-popup -E "ntm dashboard"`,
+			line:     `bind -n F12 display-popup -E "herdctl dashboard"`,
 			key:      "F12",
 			expected: true,
 		},
 		{
 			name:     "bind-key F6 not F12",
-			line:     `bind-key -n F6 display-popup -E "ntm palette"`,
+			line:     `bind-key -n F6 display-popup -E "herdctl palette"`,
 			key:      "F12",
 			expected: false,
 		},
@@ -115,7 +115,7 @@ func TestIsOverlayKeyBound(t *testing.T) {
 			name: "F12 bound with current (--inferred) ntm overlay",
 			confLines: []string{
 				"set -g status on",
-				`bind-key -n F12 display-popup -E "NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}"`,
+				`bind-key -n F12 display-popup -E "NTM_POPUP=1 herdctl dashboard --popup --inferred #{session_name}"`,
 				"set -g mouse on",
 			},
 			key:       "F12",
@@ -124,7 +124,7 @@ func TestIsOverlayKeyBound(t *testing.T) {
 		{
 			name: "F12 bound with stale pre-#201 overlay (no --inferred) → not current, needs migration",
 			confLines: []string{
-				`bind-key -n F12 display-popup -E "NTM_POPUP=1 ntm dashboard --popup #{session_name}"`,
+				`bind-key -n F12 display-popup -E "NTM_POPUP=1 herdctl dashboard --popup #{session_name}"`,
 			},
 			key:       "F12",
 			wantBound: false,
@@ -141,7 +141,7 @@ func TestIsOverlayKeyBound(t *testing.T) {
 		{
 			name: "F12 bound to palette instead of overlay",
 			confLines: []string{
-				`bind-key -n F12 display-popup -E "ntm palette"`,
+				`bind-key -n F12 display-popup -E "herdctl palette"`,
 			},
 			key:       "F12",
 			wantBound: false,
@@ -149,7 +149,7 @@ func TestIsOverlayKeyBound(t *testing.T) {
 		{
 			name: "F6 bound, checking F12",
 			confLines: []string{
-				`bind-key -n F6 run-shell "ntm palette #{session_name}"`,
+				`bind-key -n F6 run-shell "herdctl palette #{session_name}"`,
 			},
 			key:       "F12",
 			wantBound: false,
@@ -163,7 +163,7 @@ func TestIsOverlayKeyBound(t *testing.T) {
 		{
 			name: "commented out binding",
 			confLines: []string{
-				`# bind-key -n F12 display-popup -E "ntm dashboard"`,
+				`# bind-key -n F12 display-popup -E "herdctl dashboard"`,
 			},
 			key:       "F12",
 			wantBound: false,
@@ -204,25 +204,25 @@ func TestIsOverlayBindingLine(t *testing.T) {
 	}{
 		{
 			name: "current overlay binding (with --inferred)",
-			line: `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}"`,
+			line: `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 herdctl dashboard --popup --inferred #{session_name}"`,
 			key:  "F12",
 			want: true,
 		},
 		{
 			name: "stale overlay binding without --inferred is not current",
-			line: `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 ntm dashboard --popup #{session_name}"`,
+			line: `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 herdctl dashboard --popup #{session_name}"`,
 			key:  "F12",
 			want: false,
 		},
 		{
 			name: "palette binding is not overlay",
-			line: `bind-key -n F12 display-popup -E "ntm palette"`,
+			line: `bind-key -n F12 display-popup -E "herdctl palette"`,
 			key:  "F12",
 			want: false,
 		},
 		{
 			name: "dashboard without popup is not overlay",
-			line: `bind-key -n F12 run-shell "ntm dashboard proj"`,
+			line: `bind-key -n F12 run-shell "herdctl dashboard proj"`,
 			key:  "F12",
 			want: false,
 		},
@@ -454,7 +454,7 @@ func TestOverlayBindingCommand(t *testing.T) {
 	// Test the bind command format for tmux
 	key := "F12"
 	// The expected format from setupOverlayBinding
-	bindCmd := `bind-key -n ` + key + ` display-popup -E -w 95% -h 95% "NTM_POPUP=1 ntm dashboard --popup #{session_name}"`
+	bindCmd := `bind-key -n ` + key + ` display-popup -E -w 95% -h 95% "NTM_POPUP=1 herdctl dashboard --popup #{session_name}"`
 
 	// Verify structure
 	if !strings.HasPrefix(bindCmd, "bind-key -n "+key) {
@@ -603,7 +603,7 @@ func TestSetupOverlayBindingWithWriter_ReplacesExistingBindingInPlace(t *testing
 	existing := strings.Join([]string{
 		"# keep me",
 		`bind-key -n F12 display-popup -E "htop"`,
-		`bind-key -n F6 display-popup -E "ntm palette"`,
+		`bind-key -n F6 display-popup -E "herdctl palette"`,
 	}, "\n")
 	if err := os.WriteFile(confPath, []byte(existing), 0644); err != nil {
 		t.Fatalf("write tmux.conf: %v", err)
@@ -630,7 +630,7 @@ func TestSetupOverlayBindingWithWriter_ReplacesExistingBindingInPlace(t *testing
 	if strings.Contains(got, `"htop"`) {
 		t.Fatalf("stale F12 binding survived replacement:\n%s", got)
 	}
-	if !strings.Contains(got, `bind-key -n F6 display-popup -E "ntm palette"`) {
+	if !strings.Contains(got, `bind-key -n F6 display-popup -E "herdctl palette"`) {
 		t.Fatalf("unrelated binding should remain untouched:\n%s", got)
 	}
 	if !strings.Contains(got, "# keep me") {
@@ -773,7 +773,7 @@ func TestOverlayBindingLineVariations(t *testing.T) {
 	}{
 		{
 			name:      "full_overlay_binding",
-			line:      `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}"`,
+			line:      `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 herdctl dashboard --popup --inferred #{session_name}"`,
 			key:       "F12",
 			wantMatch: true,
 			matchType: "overlay",
@@ -781,7 +781,7 @@ func TestOverlayBindingLineVariations(t *testing.T) {
 		},
 		{
 			name:      "stale_overlay_no_inferred",
-			line:      `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 ntm dashboard --popup #{session_name}"`,
+			line:      `bind-key -n F12 display-popup -E -w 95% -h 95% "NTM_POPUP=1 herdctl dashboard --popup #{session_name}"`,
 			key:       "F12",
 			wantMatch: false,
 			matchType: "binding",
@@ -789,7 +789,7 @@ func TestOverlayBindingLineVariations(t *testing.T) {
 		},
 		{
 			name:      "minimal_overlay_binding",
-			line:      `bind -n F12 display-popup "ntm dashboard --popup --inferred foo"`,
+			line:      `bind -n F12 display-popup "herdctl dashboard --popup --inferred foo"`,
 			key:       "F12",
 			wantMatch: true,
 			matchType: "overlay",
@@ -797,7 +797,7 @@ func TestOverlayBindingLineVariations(t *testing.T) {
 		},
 		{
 			name:      "palette_binding",
-			line:      `bind-key -n F6 display-popup -E "ntm palette"`,
+			line:      `bind-key -n F6 display-popup -E "herdctl palette"`,
 			key:       "F6",
 			wantMatch: false,
 			matchType: "binding",
@@ -813,7 +813,7 @@ func TestOverlayBindingLineVariations(t *testing.T) {
 		},
 		{
 			name:      "commented_overlay",
-			line:      `# bind-key -n F12 display-popup -E "ntm dashboard --popup"`,
+			line:      `# bind-key -n F12 display-popup -E "herdctl dashboard --popup"`,
 			key:       "F12",
 			wantMatch: false,
 			matchType: "none",
@@ -821,7 +821,7 @@ func TestOverlayBindingLineVariations(t *testing.T) {
 		},
 		{
 			name:      "trailing_whitespace",
-			line:      `bind-key -n F12 display-popup -E "ntm dashboard --popup --inferred foo"   `,
+			line:      `bind-key -n F12 display-popup -E "herdctl dashboard --popup --inferred foo"   `,
 			key:       "F12",
 			wantMatch: true,
 			matchType: "overlay",

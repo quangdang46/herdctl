@@ -132,7 +132,7 @@ func TestCASSAdapter_HealthWithoutHealthyAndStatusFailsClosed(t *testing.T) {
 // derived lexical index is stale, but the canonical archive DB is intact and
 // lexical search still works (cass's own "degraded-derived-assets" class). ntm
 // must treat this as a healthy-with-note degradation, not a hard failure that
-// surfaces a scary ⚠ in `ntm deps`.
+// surfaces a scary ⚠ in `herdctl deps`.
 func TestCASSAdapter_HealthStaleDerivedIndexIsDegradedNotUnhealthy(t *testing.T) {
 	// Shape mirrors the real `cass status/health --json` on a stale index:
 	// index exists + stale, DB exists + opened, the only error is "index stale".

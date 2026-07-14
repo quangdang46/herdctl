@@ -916,8 +916,8 @@ func TestPrintHelp_UsesCurrentAttentionLoopFlags(t *testing.T) {
 
 	for _, want := range []string{
 		"--robot-events         Raw event replay (--since-cursor=N, --events-limit=50)",
-		"ntm --robot-attention --attention-cursor=<cursor>",
-		"ntm --robot-attention --attention-cursor=42",
+		"herdctl --robot-attention --attention-cursor=<cursor>",
+		"herdctl --robot-attention --attention-cursor=42",
 	} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("help output missing %q:\n%s", want, output)
@@ -926,8 +926,8 @@ func TestPrintHelp_UsesCurrentAttentionLoopFlags(t *testing.T) {
 
 	for _, stale := range []string{
 		"--robot-events         Raw event replay (--since-cursor=N, --limit=50)",
-		"ntm --robot-attention --since-cursor=<cursor>",
-		"ntm --robot-attention --since-cursor=42",
+		"herdctl --robot-attention --since-cursor=<cursor>",
+		"herdctl --robot-attention --since-cursor=42",
 	} {
 		if strings.Contains(output, stale) {
 			t.Fatalf("help output still contains stale attention-loop text %q:\n%s", stale, output)
@@ -1552,8 +1552,8 @@ func TestPrintSnapshot(t *testing.T) {
 	if result.ReplayWindow.RetentionPeriod != (30 * time.Minute).String() {
 		t.Errorf("ReplayWindow.RetentionPeriod = %q, want %q", result.ReplayWindow.RetentionPeriod, (30 * time.Minute).String())
 	}
-	if result.ReplayWindow.ResyncCommand != "ntm --robot-snapshot" {
-		t.Errorf("ReplayWindow.ResyncCommand = %q, want %q", result.ReplayWindow.ResyncCommand, "ntm --robot-snapshot")
+	if result.ReplayWindow.ResyncCommand != "herdctl --robot-snapshot" {
+		t.Errorf("ReplayWindow.ResyncCommand = %q, want %q", result.ReplayWindow.ResyncCommand, "herdctl --robot-snapshot")
 	}
 	t.Logf("empty snapshot cursor handoff oldest=%d latest=%d resync=%q",
 		result.ReplayWindow.OldestCursor,
@@ -1621,8 +1621,8 @@ func TestGetSnapshotIncludesReplayWindowMetadata(t *testing.T) {
 	if result.ReplayWindow.RetentionPeriod != time.Hour.String() {
 		t.Errorf("ReplayWindow.RetentionPeriod = %q, want %q", result.ReplayWindow.RetentionPeriod, time.Hour.String())
 	}
-	if result.ReplayWindow.ResyncCommand != "ntm --robot-snapshot" {
-		t.Errorf("ReplayWindow.ResyncCommand = %q, want %q", result.ReplayWindow.ResyncCommand, "ntm --robot-snapshot")
+	if result.ReplayWindow.ResyncCommand != "herdctl --robot-snapshot" {
+		t.Errorf("ReplayWindow.ResyncCommand = %q, want %q", result.ReplayWindow.ResyncCommand, "herdctl --robot-snapshot")
 	}
 	// New fields for bootstrap contract
 	if result.ReplayWindow.Reason != "ready" {
@@ -1969,8 +1969,8 @@ func TestPlanOutputStructure(t *testing.T) {
 		GeneratedAt:    time.Now().UTC(),
 		Recommendation: "Create a session",
 		Actions: []PlanAction{
-			{Priority: 1, Command: "ntm spawn", Description: "Create session", Args: []string{"spawn", "test"}},
-			{Priority: 2, Command: "ntm attach", Description: "Attach to session"},
+			{Priority: 1, Command: "herdctl spawn", Description: "Create session", Args: []string{"spawn", "test"}},
+			{Priority: 2, Command: "herdctl attach", Description: "Attach to session"},
 		},
 		Warnings: []string{"tmux not configured optimally"},
 	}
@@ -2057,7 +2057,7 @@ func TestSnapshotOutputStructure(t *testing.T) {
 			OldestCursor:    21,
 			LatestCursor:    42,
 			RetentionPeriod: time.Hour.String(),
-			ResyncCommand:   "ntm --robot-snapshot",
+			ResyncCommand:   "herdctl --robot-snapshot",
 		},
 		Sessions: []SnapshotSession{
 			{
@@ -2186,8 +2186,8 @@ func TestSnapshotOutputStructure(t *testing.T) {
 	if result.ReplayWindow.RetentionPeriod != time.Hour.String() {
 		t.Errorf("ReplayWindow.RetentionPeriod = %q, want %q", result.ReplayWindow.RetentionPeriod, time.Hour.String())
 	}
-	if result.ReplayWindow.ResyncCommand != "ntm --robot-snapshot" {
-		t.Errorf("ReplayWindow.ResyncCommand = %q, want %q", result.ReplayWindow.ResyncCommand, "ntm --robot-snapshot")
+	if result.ReplayWindow.ResyncCommand != "herdctl --robot-snapshot" {
+		t.Errorf("ReplayWindow.ResyncCommand = %q, want %q", result.ReplayWindow.ResyncCommand, "herdctl --robot-snapshot")
 	}
 	if len(result.Sessions) != 1 {
 		t.Errorf("Sessions count = %d, want 1", len(result.Sessions))
@@ -2634,7 +2634,7 @@ func TestPlanOutputWithBeadActions(t *testing.T) {
 		GeneratedAt:    time.Now().UTC(),
 		Recommendation: "Work on high-impact bead",
 		Actions: []PlanAction{
-			{Priority: 1, Command: "ntm spawn test", Description: "Spawn test session"},
+			{Priority: 1, Command: "herdctl spawn test", Description: "Spawn test session"},
 		},
 		BeadActions: []BeadAction{
 			{BeadID: "ntm-123", Title: "Test task", Priority: 1, Impact: 0.9, IsReady: true},
@@ -4942,9 +4942,9 @@ func TestGenerateHistoryHints_UsesCanonicalWorkingFlags(t *testing.T) {
 
 	joined := strings.Join(hints.SuggestedCommands, "\n")
 	for _, expected := range []string{
-		"ntm --robot-history=proj --stats",
-		"ntm --robot-history=proj --last=10",
-		"ntm --robot-history=proj --since=1h",
+		"herdctl --robot-history=proj --stats",
+		"herdctl --robot-history=proj --last=10",
+		"herdctl --robot-history=proj --since=1h",
 	} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("expected history hints to include %q, got %q", expected, joined)

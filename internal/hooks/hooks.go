@@ -19,7 +19,8 @@ var (
 	ErrNotGitRepo       = errors.New("not a git repository")
 	ErrHookExists       = errors.New("hook already exists (use --force to overwrite)")
 	ErrHookNotInstalled = errors.New("hook not installed")
-	ErrNTMNotFound      = errors.New("ntm binary not found in PATH")
+	// ErrNTMNotFound is returned when neither herdctl nor the ntm compat alias is on PATH.
+	ErrNTMNotFound = errors.New("herdctl binary not found in PATH (ntm alias also missing)")
 )
 
 // HookType represents the type of git hook.
@@ -129,7 +130,7 @@ func (m *Manager) Uninstall(hookType HookType, restore bool) error {
 
 	// Verify it's an NTM hook
 	if !isNTMHook(string(content)) {
-		return fmt.Errorf("hook exists but is not managed by ntm")
+		return fmt.Errorf("hook exists but is not managed by herdctl")
 	}
 
 	// Remove the hook
@@ -268,21 +269,33 @@ func writeHookFile(path, content string) error {
 	return nil
 }
 
-// isNTMHook checks if a hook script is managed by NTM.
+// isNTMHook checks if a hook script is managed by herdctl (or legacy NTM marker).
 func isNTMHook(content string) bool {
-	return strings.Contains(content, "NTM_MANAGED_HOOK")
+	return strings.Contains(content, "NTM_MANAGED_HOOK") ||
+		strings.Contains(content, "HERDCTL_MANAGED_HOOK")
+}
+
+// lookPathCLI finds the herdctl binary, falling back to the ntm compat alias.
+func lookPathCLI() (string, error) {
+	if p, err := exec.LookPath("herdctl"); err == nil {
+		return p, nil
+	}
+	if p, err := exec.LookPath("ntm"); err == nil {
+		return p, nil
+	}
+	return "", ErrNTMNotFound
 }
 
 // generateHookScript generates the hook script content.
 func generateHookScript(hookType HookType, repoRoot string) (string, error) {
 	switch hookType {
 	case HookPreCommit:
-		// Ensure ntm is available (pre-commit invokes ntm hooks)
-		ntmPath, err := exec.LookPath("ntm")
+		// Prefer herdctl; accept ntm symlink/alias for older installs.
+		cliPath, err := lookPathCLI()
 		if err != nil {
-			return "", ErrNTMNotFound
+			return "", err
 		}
-		return generatePreCommitScript(ntmPath, repoRoot), nil
+		return generatePreCommitScript(cliPath, repoRoot), nil
 	case HookPostCheckout:
 		return generatePostCheckoutScript(repoRoot), nil
 	default:
@@ -291,15 +304,15 @@ func generateHookScript(hookType HookType, repoRoot string) (string, error) {
 }
 
 // generatePreCommitScript generates the pre-commit hook script.
-func generatePreCommitScript(ntmPath, repoRoot string) string {
+func generatePreCommitScript(cliPath, repoRoot string) string {
 	// Sanitize repoRoot to prevent injection via newlines
 	safeRepoRoot := strings.ReplaceAll(repoRoot, "\n", " ")
 	safeRepoRoot = strings.ReplaceAll(safeRepoRoot, "\r", " ")
 	repoRootQuoted := quoteShell(repoRoot)
 
 	return fmt.Sprintf(`#!/bin/bash
-# NTM_MANAGED_HOOK - Do not edit manually
-# Installed by: ntm hooks install pre-commit
+# HERDCTL_MANAGED_HOOK / NTM_MANAGED_HOOK - Do not edit manually
+# Installed by: herdctl hooks install pre-commit
 # Repository: %s
 
 set -e
@@ -313,7 +326,7 @@ if command -v br &> /dev/null; then
         (cd "$REPO_ROOT" && br sync --flush-only)
     fi
 else
-    echo "[ntm] br not installed - skipping beads sync" >&2
+    echo "[herdctl] br not installed - skipping beads sync" >&2
 fi
 
 # Run UBS scan on staged files
@@ -334,7 +347,7 @@ elif [ $UBS_EXIT -ne 0 ]; then
 fi
 
 exit 0
-`, safeRepoRoot, repoRootQuoted, quoteShell(ntmPath))
+`, safeRepoRoot, repoRootQuoted, quoteShell(cliPath))
 }
 
 // quoteShell quotes a string for safe use in a shell script.
@@ -354,8 +367,8 @@ func generatePostCheckoutScript(repoRoot string) string {
 	repoRootQuoted := quoteShell(repoRoot)
 
 	return fmt.Sprintf(`#!/bin/bash
-# NTM_MANAGED_HOOK - Do not edit manually
-# Installed by: ntm hooks install post-checkout
+# HERDCTL_MANAGED_HOOK / NTM_MANAGED_HOOK - Do not edit manually
+# Installed by: herdctl hooks install post-checkout
 # Repository: %s
 
 set -e
@@ -366,7 +379,7 @@ REPO_ROOT=%s
 # Warn on uncommitted beads changes
 if [ -d "$REPO_ROOT/.beads" ]; then
     if git -C "$REPO_ROOT" status --porcelain .beads | grep -q .; then
-        echo "[ntm] Warning: .beads has uncommitted changes. Run: br sync --flush-only and commit .beads/"
+        echo "[herdctl] Warning: .beads has uncommitted changes. Run: br sync --flush-only and commit .beads/"
     fi
 fi
 

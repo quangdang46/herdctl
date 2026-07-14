@@ -32,8 +32,8 @@ func findRepoRoot(start string) (string, error) {
 	}
 }
 
-// BuildLocalNTM builds the ntm binary from the current workspace and returns its path.
-// It builds only once per test process.
+// BuildLocalNTM builds the herdctl binary from the current workspace and returns its path.
+// It builds only once per test process. The output name is "herdctl" (primary brand).
 func BuildLocalNTM(t *testing.T) string {
 	t.Helper()
 
@@ -49,7 +49,7 @@ func BuildLocalNTM(t *testing.T) string {
 			return
 		}
 
-		dir, err := os.MkdirTemp("", "ntm-bin-*")
+		dir, err := os.MkdirTemp("", "herdctl-bin-*")
 		if err != nil {
 			buildErr = err
 			return
@@ -59,7 +59,7 @@ func BuildLocalNTM(t *testing.T) string {
 		if runtime.GOOS == "windows" {
 			exeSuffix = ".exe"
 		}
-		binaryPath = filepath.Join(dir, "ntm"+exeSuffix)
+		binaryPath = filepath.Join(dir, "herdctl"+exeSuffix)
 
 		cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/herdctl")
 		cmd.Dir = repoRoot
@@ -72,7 +72,18 @@ func BuildLocalNTM(t *testing.T) string {
 	})
 
 	if buildErr != nil {
-		t.Fatalf("failed to build local ntm binary: %v", buildErr)
+		t.Fatalf("failed to build local herdctl binary: %v", buildErr)
 	}
 	return binaryPath
+}
+
+// LookPathCLI finds herdctl on PATH, falling back to the ntm compat alias.
+func LookPathCLI() (string, error) {
+	if p, err := exec.LookPath("herdctl"); err == nil {
+		return p, nil
+	}
+	if p, err := exec.LookPath("ntm"); err == nil {
+		return p, nil
+	}
+	return "", errors.New("herdctl/ntm binary not found in PATH")
 }

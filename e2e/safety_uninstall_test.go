@@ -26,7 +26,7 @@ func (s *SafetyTestSuite) runSafetyUninstall() (*SafetyUninstallResponse, string
 	args := []string{"safety", "uninstall", "--json"}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 

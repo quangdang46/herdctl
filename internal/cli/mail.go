@@ -37,8 +37,8 @@ in Agent Mail. Messages sent this way:
 This is the CLI equivalent of the Agent Mail web UI at /mail/{project}/overseer/compose
 
 Examples:
-  ntm mail send myproject --to GreenCastle "Please review the API changes"
-  ntm mail send myproject --all "Checkpoint: sync and report status"`,
+  herdctl mail send myproject --to GreenCastle "Please review the API changes"
+  herdctl mail send myproject --all "Checkpoint: sync and report status"`,
 	}
 
 	cmd.AddCommand(newMailSendCmd())
@@ -77,16 +77,16 @@ If no message body is provided, opens $EDITOR for composition.
 
 For token-bearing payloads, use the prepare/send handle pattern:
   handle=$(SENDER_TOKEN=secret ntm redact prepare-mail --sender-token-env=SENDER_TOKEN --json | jq -r .handle)
-  ntm mail send <session> --to <agent> --prepared-redaction "$handle" --subject "deploy token"
+  herdctl mail send <session> --to <agent> --prepared-redaction "$handle" --subject "deploy token"
 The raw token never enters the command line, env, or logs. An
 explicit --subject is required so the auto-derivation path can never
 truncate the raw token into the subject line. See ntm#126.
 
 Examples:
-  ntm mail send myproject --to GreenCastle "Please review the API changes"
-  ntm mail send myproject --all "Stop current work and checkpoint"
-  ntm mail send myproject --to BlueLake --to RedStone --thread FEAT-123 "Status update"
-  ntm mail send myproject --all --file ./instructions.md`,
+  herdctl mail send myproject --to GreenCastle "Please review the API changes"
+  herdctl mail send myproject --all "Stop current work and checkpoint"
+  herdctl mail send myproject --to BlueLake --to RedStone --thread FEAT-123 "Status update"
+  herdctl mail send myproject --all --file ./instructions.md`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session := args[0]

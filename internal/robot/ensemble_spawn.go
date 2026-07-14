@@ -87,7 +87,7 @@ func GetEnsembleSpawn(opts EnsembleSpawnOptions, cfg *config.Config) (*EnsembleS
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session name: ntm --robot-ensemble-spawn=myproject",
+			"Provide a session name: herdctl --robot-ensemble-spawn=myproject",
 		)
 		return output, nil
 	}

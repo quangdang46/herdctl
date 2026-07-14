@@ -135,7 +135,7 @@ func buildCausalityOutput(opts CausalityOptions, loaders causalityLoaders) Causa
 			RobotResponse: NewErrorResponse(
 				fmt.Errorf("session is required"),
 				ErrCodeInvalidFlag,
-				"Provide a session name: ntm --robot-causality=myproject",
+				"Provide a session name: herdctl --robot-causality=myproject",
 			),
 			Events:  []CausalityEvent{},
 			Sources: []CausalitySourceStatus{},

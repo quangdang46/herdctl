@@ -138,7 +138,7 @@ func TestE2E_RobotJFP_MissingBinary(t *testing.T) {
 	suite := NewTestSuite(t, "robot_jfp_missing")
 	defer suite.Teardown()
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found on PATH")
 	}
@@ -174,7 +174,7 @@ func TestE2E_RobotJFP_ListSearchShowInstalled(t *testing.T) {
 	suite := NewTestSuite(t, "robot_jfp_live")
 	defer suite.Teardown()
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found on PATH")
 	}
@@ -273,7 +273,7 @@ func TestE2E_RobotJFP_ListSearchShowInstalled(t *testing.T) {
 func TestE2E_RobotJFP_InstallFlagUnsupported(t *testing.T) {
 	CommonE2EPrerequisites(t)
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found on PATH")
 	}

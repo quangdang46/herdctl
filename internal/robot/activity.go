@@ -835,7 +835,7 @@ func isRateLimitPatternMatch(matches []PatternMatch) bool {
 // Callers in the assign/dispatch path use this to honor live pane state
 // when deciding whether a pane is safe to dispatch to: legacy idle/working
 // scrollback parsers can miss in-flight work that came from another driver
-// (`ntm send`, an external orchestrator, manual operator) because the
+// (`herdctl send`, an external orchestrator, manual operator) because the
 // internal assignment ledger has no record of it. The live-window check
 // closes that gap by reading the same surface that `--robot-activity` uses.
 func IsLiveBusy(scrollback string, agentType string) bool {

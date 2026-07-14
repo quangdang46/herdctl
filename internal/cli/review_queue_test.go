@@ -481,7 +481,7 @@ func TestPrintReviewQueueReport_IdleButNoSuggestions(t *testing.T) {
 
 // Regression for ntm#134. The bug had two symptoms:
 //
-//  1. `ntm review-queue <s> --json` (global --json flag) fell through to
+//  1. `herdctl review-queue <s> --json` (global --json flag) fell through to
 //     the human-readable report path because runReviewQueue only checked
 //     `formatOut == "json"`, so stdout was prose instead of JSON.
 //  2. Even with `--format json`, slog.Info telemetry could appear ahead of

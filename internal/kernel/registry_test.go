@@ -13,7 +13,7 @@ func testCommand(name string) Command {
 		Examples: []Example{
 			{
 				Name:    "basic",
-				Command: "ntm test",
+				Command: "herdctl test",
 			},
 		},
 	}

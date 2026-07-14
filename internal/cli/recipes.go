@@ -216,7 +216,7 @@ func runRecipesShow(name string) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("%sUsage: ntm spawn <session> --recipe=%s%s\n", "\033[2m", r.Name, "\033[0m")
+	fmt.Printf("%sUsage: herdctl spawn <session> --recipe=%s%s\n", "\033[2m", r.Name, "\033[0m")
 
 	return nil
 }

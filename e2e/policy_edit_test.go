@@ -44,7 +44,7 @@ func (s *PolicyEditSuite) runPolicyEdit() (string, string, error) {
 	args := []string{"policy", "edit"}
 	s.logger.Log("[E2E-POLICY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir, "EDITOR=true")
 	cmd.Dir = s.tempDir
 

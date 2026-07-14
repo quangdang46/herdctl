@@ -130,7 +130,7 @@ func (s *DoctorTestSuite) TempDir() string {
 // RunDoctor executes ntm doctor and returns the raw output
 func (s *DoctorTestSuite) RunDoctor(args ...string) ([]byte, error) {
 	allArgs := append([]string{"doctor"}, args...)
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	cmd.Dir = s.tempDir
 
 	s.logger.Log("[E2E-DOCTOR] Running: ntm %v", allArgs)

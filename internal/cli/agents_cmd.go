@@ -33,10 +33,10 @@ Subcommands:
   recommend Recommend the best agent for a task
 
 Examples:
-  ntm agents list                           # List all profiles
-  ntm agents show claude                    # Show Claude's profile
-  ntm agents stats                          # Performance stats
-  ntm agents recommend --title "Fix bug"    # Get recommendation`,
+  herdctl agents list                           # List all profiles
+  herdctl agents show claude                    # Show Claude's profile
+  herdctl agents stats                          # Performance stats
+  herdctl agents recommend --title "Fix bug"    # Get recommendation`,
 	}
 
 	cmd.AddCommand(newAgentsListCmd())
@@ -57,9 +57,9 @@ func newAgentsListCmd() *cobra.Command {
 Shows each agent's type, model, context budget, and specializations.
 
 Examples:
-  ntm agents list
-  ntm agents profiles
-  ntm agents list --json`,
+  herdctl agents list
+  herdctl agents profiles
+  herdctl agents list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentsList()
 		},
@@ -79,10 +79,10 @@ Agent types: claude, codex, gemini, antigravity
 Aliases are supported (cc for claude, cod for codex, gmi for gemini, agy for antigravity).
 
 Examples:
-  ntm agents show claude
-  ntm agents show cc
-  ntm agents profile codex
-  ntm agents show gemini --json`,
+  herdctl agents show claude
+  herdctl agents show cc
+  herdctl agents profile codex
+  herdctl agents show gemini --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentsShow(args[0])
@@ -105,8 +105,8 @@ Displays:
   - Last activity timestamp
 
 Examples:
-  ntm agents stats
-  ntm agents stats --json`,
+  herdctl agents stats
+  herdctl agents stats --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentsStats()
 		},
@@ -134,10 +134,10 @@ The recommendation considers:
   - Estimated context size
 
 Examples:
-  ntm agents recommend --title "Fix auth bug"
-  ntm agents recommend --title "Write tests" --type task
-  ntm agents recommend --title "Refactor API" --files "internal/api/*.go"
-  ntm agents recommend --title "Epic" --type epic --tokens 150000`,
+  herdctl agents recommend --title "Fix auth bug"
+  herdctl agents recommend --title "Write tests" --type task
+  herdctl agents recommend --title "Refactor API" --files "internal/api/*.go"
+  herdctl agents recommend --title "Epic" --type epic --tokens 150000`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			task := agents.TaskInfo{
 				Title:           title,
@@ -165,7 +165,7 @@ Examples:
 // `cfg.Models.GetModelName(type, "")` chain the spawn launcher uses). It falls
 // back to the profile's baked-in default only when config resolution yields
 // nothing (e.g. an unmapped agent type or no loaded config). Without this,
-// `ntm agents show`/`list` print the static constant and misreport which model
+// `herdctl agents show`/`list` print the static constant and misreport which model
 // the next spawn uses. See ntm#192.
 func effectiveAgentModel(profile *agents.AgentProfile) string {
 	if profile == nil {
@@ -183,7 +183,7 @@ func runAgentsList() error {
 	profiles := pm.AllProfiles()
 
 	// Reflect the config-resolved spawn model rather than the baked-in default
-	// so the listing matches what `ntm spawn` actually launches (ntm#192).
+	// so the listing matches what `herdctl spawn` actually launches (ntm#192).
 	for _, p := range profiles {
 		p.Model = effectiveAgentModel(p)
 	}
@@ -224,7 +224,7 @@ func runAgentsShow(agentName string) error {
 	}
 
 	// Reflect the config-resolved spawn model rather than the baked-in default
-	// so the displayed Model matches what `ntm spawn` actually launches and
+	// so the displayed Model matches what `herdctl spawn` actually launches and
 	// what Agent Mail registers (ntm#192). GetProfileByName returns a copy, so
 	// overwriting Model here does not mutate shared matcher state.
 	profile.Model = effectiveAgentModel(profile)

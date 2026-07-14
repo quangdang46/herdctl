@@ -423,7 +423,7 @@ func (h *HeadroomGuard) Remediation() string {
 		}
 	}
 
-	sb.WriteString("4. Kill unused tmux sessions: ntm kill <session>\n")
+	sb.WriteString("4. Kill unused tmux sessions: herdctl kill <session>\n")
 	sb.WriteString("5. Check for zombie processes: ps aux | grep defunct\n")
 
 	return sb.String()

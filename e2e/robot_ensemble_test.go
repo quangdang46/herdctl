@@ -198,7 +198,7 @@ func parseRobotJSON(t *testing.T, suite *TestSuite, label string, output []byte,
 }
 
 func supportsRobotFlag(flag string) bool {
-	cmd := exec.Command("ntm", "--help")
+	cmd := exec.Command(mustE2EBin(), "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false

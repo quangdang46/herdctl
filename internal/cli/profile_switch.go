@@ -63,13 +63,13 @@ This command:
 4. Updates the pane title to reflect the new profile
 
 Examples:
-  ntm profiles switch cc_1 reviewer          # Switch cc_1 to reviewer profile
-  ntm profiles switch cod_2 architect        # Switch cod_2 to architect profile
-  ntm profiles switch cursor_1 reviewer      # Switch cursor_1 to reviewer profile
-  ntm profiles switch ollama_1 local-mentor  # Switch ollama_1 to local-mentor
-  ntm profiles switch cc_1 reviewer --session myproject
-  ntm profiles switch cc_1 reviewer --no-prompt  # Skip transition prompt
-  ntm profiles switch cc_1 reviewer --dry-run    # Preview without applying`,
+  herdctl profiles switch cc_1 reviewer          # Switch cc_1 to reviewer profile
+  herdctl profiles switch cod_2 architect        # Switch cod_2 to architect profile
+  herdctl profiles switch cursor_1 reviewer      # Switch cursor_1 to reviewer profile
+  herdctl profiles switch ollama_1 local-mentor  # Switch ollama_1 to local-mentor
+  herdctl profiles switch cc_1 reviewer --session myproject
+  herdctl profiles switch cc_1 reviewer --no-prompt  # Skip transition prompt
+  herdctl profiles switch cc_1 reviewer --dry-run    # Preview without applying`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runProfileSwitch(args[0], args[1], session, transitionPrompt, noPrompt, dryRun)

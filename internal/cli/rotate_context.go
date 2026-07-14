@@ -22,13 +22,13 @@ Context rotation automatically replaces agents when their context window
 approaches capacity, preserving work in progress.
 
 Examples:
-  ntm rotate context history              # View recent rotations
-  ntm rotate context history --last=20    # View last 20 rotations
-  ntm rotate context history myproject    # Rotations for a session
-  ntm rotate context history --failed     # Only failed rotations
-  ntm rotate context stats                # Rotation statistics
-  ntm rotate context pending              # View pending rotation confirmations
-  ntm rotate context confirm <agent>      # Confirm a pending rotation`,
+  herdctl rotate context history              # View recent rotations
+  herdctl rotate context history --last=20    # View last 20 rotations
+  herdctl rotate context history myproject    # Rotations for a session
+  herdctl rotate context history --failed     # Only failed rotations
+  herdctl rotate context stats                # Rotation statistics
+  herdctl rotate context pending              # View pending rotation confirmations
+  herdctl rotate context confirm <agent>      # Confirm a pending rotation`,
 	}
 
 	cmd.AddCommand(newRotateContextHistoryCmd())
@@ -52,10 +52,10 @@ func newRotateContextHistoryCmd() *cobra.Command {
 		Long: `View the history of context window rotations.
 
 Examples:
-  ntm rotate context history              # All recent rotations
-  ntm rotate context history --last=20    # Last 20 rotations
-  ntm rotate context history myproject    # Rotations for a session
-  ntm rotate context history --failed     # Only failed rotations`,
+  herdctl rotate context history              # All recent rotations
+  herdctl rotate context history --last=20    # Last 20 rotations
+  herdctl rotate context history myproject    # Rotations for a session
+  herdctl rotate context history --failed     # Only failed rotations`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runContextRotationHistory(args, limit, failed)
@@ -321,8 +321,8 @@ When context rotation is configured with require_confirmation=true, rotations
 are queued as pending until confirmed via this CLI or dashboard.
 
 Examples:
-  ntm rotate context pending              # All pending rotations
-  ntm rotate context pending myproject    # Pending for a specific session`,
+  herdctl rotate context pending              # All pending rotations
+  herdctl rotate context pending myproject    # Pending for a specific session`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -379,7 +379,7 @@ func (r *PendingRotationsResult) Text(w io.Writer) error {
 		fmt.Fprintf(w, "  Created: %s\n", p.CreatedAt)
 	}
 
-	fmt.Fprintf(w, "\n%sUse 'ntm rotate context confirm <agent> --action=<action>' to confirm%s\n",
+	fmt.Fprintf(w, "\n%sUse 'herdctl rotate context confirm <agent> --action=<action>' to confirm%s\n",
 		colorize(t.Surface1), colorize(t.Text))
 	fmt.Fprintf(w, "Actions: rotate, compact, ignore, postpone\n")
 
@@ -445,10 +445,10 @@ Actions:
   postpone  - Delay the rotation (use --minutes to specify duration)
 
 Examples:
-  ntm rotate context confirm myproject__cc_1 --action=rotate
-  ntm rotate context confirm myproject__cc_1 --action=compact
-  ntm rotate context confirm myproject__cc_1 --action=ignore
-  ntm rotate context confirm myproject__cc_1 --action=postpone --minutes=30`,
+  herdctl rotate context confirm myproject__cc_1 --action=rotate
+  herdctl rotate context confirm myproject__cc_1 --action=compact
+  herdctl rotate context confirm myproject__cc_1 --action=ignore
+  herdctl rotate context confirm myproject__cc_1 --action=postpone --minutes=30`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runContextRotationConfirm(args[0], action, postponeMinutes)
@@ -519,7 +519,7 @@ func runContextRotationConfirm(agentID, action string, postponeMinutes int) erro
 			return encErr
 		}
 		// bd-usgfy: signal non-zero exit after writing the success:false envelope so
-		// `ntm rotate-context --json` automation can gate on $? (parity with #125).
+		// `herdctl rotate-context --json` automation can gate on $? (parity with #125).
 		return jsonFailureExit()
 	}
 

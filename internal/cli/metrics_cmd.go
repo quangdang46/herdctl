@@ -87,7 +87,7 @@ func newMetricsCompareCmd() *cobra.Command {
 		Short: "Compare metrics against baseline or snapshot",
 		Long: `Compare current metrics against a saved snapshot.
 
-Use 'ntm metrics snapshot save <name>' to create snapshots.
+Use 'herdctl metrics snapshot save <name>' to create snapshots.
 The special name 'baseline' compares against Tier 0 baselines.
 
 Examples:

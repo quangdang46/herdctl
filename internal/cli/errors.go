@@ -199,12 +199,12 @@ Searches pane output for error patterns including:
 - Rate limit and context errors
 
 Examples:
-  ntm errors myproject                   # Show all errors
-  ntm errors myproject --since 5m        # Errors in last 5 minutes
-  ntm errors myproject --cc              # Only Claude pane errors
-  ntm errors myproject --panes 1,2,3     # Specific panes only
-  ntm errors myproject -C 5              # 5 lines context
-  ntm errors myproject --follow          # Stream new errors`,
+  herdctl errors myproject                   # Show all errors
+  herdctl errors myproject --since 5m        # Errors in last 5 minutes
+  herdctl errors myproject --cc              # Only Claude pane errors
+  herdctl errors myproject --panes 1,2,3     # Specific panes only
+  herdctl errors myproject -C 5              # 5 lines context
+  herdctl errors myproject --follow          # Stream new errors`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string

@@ -78,7 +78,7 @@ func resolveAddAgentCommandTemplate(agentType AgentType, pluginMap map[string]pl
 		return cfg.Agents.Aider, nil, nil
 	case AgentTypeOpencode:
 		// Falls back to the model-aware default when [agents] oc is unset, so
-		// `ntm spawn --oc=N` and `ntm add --oc=N` behave identically and a
+		// `herdctl spawn --oc=N` and `herdctl add --oc=N` behave identically and a
 		// model override is honored. See ntm#193.
 		return opencodeCommandOrDefault(cfg.Agents.Opencode), nil, nil
 	default:
@@ -106,17 +106,17 @@ func newAddCmd() *cobra.Command {
 		Long: `Add additional AI agents to an existing tmux session.
 
 		You can specify agent counts and optional model variants:
-	  ntm add myproject --cc=2           # Add 2 Claude agents (default model)
-	  ntm add myproject --cc=1:opus      # Add 1 Claude Opus agent
-	  ntm add myproject --cod=1 --gmi=1  # Add 1 Codex, 1 Gemini
+	  herdctl add myproject --cc=2           # Add 2 Claude agents (default model)
+	  herdctl add myproject --cc=1:opus      # Add 1 Claude Opus agent
+	  herdctl add myproject --cod=1 --gmi=1  # Add 1 Codex, 1 Gemini
 
 		With --label, target a labeled session:
-	  ntm add myproject --label frontend --cc=1  # Add to myproject--frontend
+	  herdctl add myproject --label frontend --cc=1  # Add to myproject--frontend
 
 		Persona mode:
 	  Use --persona to add agents with predefined roles and system prompts.
 	  Built-in personas: architect, implementer, reviewer, tester, documenter
-	  ntm add myproject --persona=reviewer  # Add 1 reviewer agent
+	  herdctl add myproject --persona=reviewer  # Add 1 reviewer agent
 
 		CASS Context Injection:
 	  Automatically finds relevant past sessions and injects context into new agents.
@@ -297,7 +297,7 @@ func runAdd(opts AddOptions) error {
 	opts.Session = session
 
 	if !muxSessionExists(session) {
-		return outputError(fmt.Errorf("session '%s' does not exist (use 'ntm spawn' to create)", session))
+		return outputError(fmt.Errorf("session '%s' does not exist (use 'herdctl spawn' to create)", session))
 	}
 
 	if totalAgents == 0 {

@@ -149,7 +149,7 @@ func TestPersonaNotFoundError(t *testing.T) {
 	if !strings.Contains(err.Error(), "mypersona") {
 		t.Errorf("Message should contain persona name: %q", err.Error())
 	}
-	if !strings.Contains(err.Hint, "ntm personas") {
+	if !strings.Contains(err.Hint, "herdctl personas") {
 		t.Errorf("Hint should suggest listing personas: %q", err.Hint)
 	}
 }

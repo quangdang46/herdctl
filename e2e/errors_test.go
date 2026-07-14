@@ -68,7 +68,7 @@ func TestE2E_ErrorsCaptureBasic(t *testing.T) {
 
 	// Run ntm errors
 	suite.Logger().Log("[E2E-ERRORS] Running ntm errors on session: %s", session)
-	cmd := exec.Command("ntm", "errors", session)
+	cmd := exec.Command(mustE2EBin(), "errors", session)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		suite.Logger().Log("[E2E-ERRORS] ntm errors returned: %v output=%s", err, string(output))
@@ -118,7 +118,7 @@ func TestE2E_ErrorsRobotJSON(t *testing.T) {
 
 	// Run robot mode
 	suite.Logger().Log("[E2E-ERRORS] Running ntm --robot-errors=%s", session)
-	cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", session))
+	cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", session))
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		suite.Logger().Log("[E2E-ERRORS] Robot command error: %v", err)
@@ -186,7 +186,7 @@ func TestE2E_ErrorsPaneFilter(t *testing.T) {
 
 	// Run with --panes=0 filter
 	suite.Logger().Log("[E2E-ERRORS] Running ntm --robot-errors with --panes=0")
-	cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", session), "--panes=0")
+	cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", session), "--panes=0")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		suite.Logger().Log("[E2E-ERRORS] Command error: %v", err)
@@ -253,7 +253,7 @@ func TestE2E_ErrorsPatternDetection(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 
 			// Check for error
-			cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", session))
+			cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", session))
 			output, _ := cmd.CombinedOutput()
 
 			var result ErrorsResponse
@@ -297,7 +297,7 @@ func TestE2E_ErrorsNonExistentSession(t *testing.T) {
 	nonExistentSession := "e2e_nonexistent_errors_xyz123"
 
 	suite.Logger().Log("[E2E-ERRORS] Running ntm errors on non-existent session: %s", nonExistentSession)
-	cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", nonExistentSession))
+	cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", nonExistentSession))
 	output, err := cmd.CombinedOutput()
 
 	outputStr := string(output)
@@ -347,7 +347,7 @@ func TestE2E_ErrorsSinceDuration(t *testing.T) {
 		t.Run("since_"+since, func(t *testing.T) {
 			suite.Logger().Log("[E2E-ERRORS] Testing --errors-since=%s", since)
 
-			cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", session),
+			cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", session),
 				fmt.Sprintf("--errors-since=%s", since))
 			output, err := cmd.CombinedOutput()
 			if err != nil {
@@ -389,7 +389,7 @@ func TestE2E_ErrorsLinesLimit(t *testing.T) {
 
 	// Test with --lines=50
 	suite.Logger().Log("[E2E-ERRORS] Testing --lines=50")
-	cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", session), "--lines=50")
+	cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", session), "--lines=50")
 	output, _ := cmd.CombinedOutput()
 
 	var result ErrorsResponse
@@ -427,7 +427,7 @@ func TestE2E_ErrorsCleanSession(t *testing.T) {
 	exec.Command(tmux.BinaryPath(), "send-keys", "-t", paneTarget, "echo 'INFO: All systems normal'", "Enter").Run()
 	time.Sleep(500 * time.Millisecond)
 
-	cmd := exec.Command("ntm", fmt.Sprintf("--robot-errors=%s", session))
+	cmd := exec.Command(mustE2EBin(), fmt.Sprintf("--robot-errors=%s", session))
 	output, _ := cmd.CombinedOutput()
 
 	var result ErrorsResponse

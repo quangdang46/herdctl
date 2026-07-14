@@ -21,7 +21,7 @@ import (
 func runRobotVerbosityCmd(t *testing.T, args ...string) []byte {
 	t.Helper()
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("[E2E-ROBOT-TERSE] command failed: %v output=%s", err, string(output))
@@ -31,7 +31,7 @@ func runRobotVerbosityCmd(t *testing.T, args ...string) []byte {
 
 func supportsRobotVerbosityFlag(t *testing.T) bool {
 	t.Helper()
-	out, err := exec.Command("ntm", "--help").CombinedOutput()
+	out, err := exec.Command(mustE2EBin(), "--help").CombinedOutput()
 	if err != nil {
 		return false
 	}
@@ -40,7 +40,7 @@ func supportsRobotVerbosityFlag(t *testing.T) bool {
 
 func supportsRobotFormatFlag(t *testing.T) bool {
 	t.Helper()
-	out, err := exec.Command("ntm", "--help").CombinedOutput()
+	out, err := exec.Command(mustE2EBin(), "--help").CombinedOutput()
 	if err != nil {
 		return false
 	}

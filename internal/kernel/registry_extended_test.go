@@ -430,9 +430,9 @@ func TestRegistryMultipleExamples(t *testing.T) {
 		Description: "test multiple examples",
 		Category:    "test",
 		Examples: []Example{
-			{Name: "basic", Command: "ntm test basic"},
-			{Name: "advanced", Command: "ntm test --flag=value", Description: "with options"},
-			{Name: "full", Command: "ntm test --all", Input: `{"full": true}`, Output: `{"ok": true}`},
+			{Name: "basic", Command: "herdctl test basic"},
+			{Name: "advanced", Command: "herdctl test --flag=value", Description: "with options"},
+			{Name: "full", Command: "herdctl test --all", Input: `{"full": true}`, Output: `{"ok": true}`},
 		},
 	}
 

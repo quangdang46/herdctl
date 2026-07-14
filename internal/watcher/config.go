@@ -43,7 +43,7 @@ func NewFileReservationWatcherFromConfig(
 	}
 
 	// Default resolver: read the canonical pane-identity file written by
-	// ntm spawn (the same contract documented in pane_identity.go and
+	// herdctl spawn (the same contract documented in pane_identity.go and
 	// mirrored by the mcp-agent-mail Rust reference implementation). If the
 	// file does not exist yet — for example because the pane has not yet
 	// finished registering with Agent Mail — the resolver returns "" and

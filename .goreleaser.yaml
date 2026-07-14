@@ -1,8 +1,13 @@
-# GoReleaser configuration for NTM
+# GoReleaser configuration for herdctl
 # https://goreleaser.com
+#
+# Brand: binary inside archives is `herdctl`.
+# Compat: project_name / archive filenames stay `ntm_*` (upgrade + install asset contract).
 
 version: 2
 
+# Archive/download filenames (upgrade contract). Do not rename without
+# updating internal/cli/upgrade.go + install.sh ASSET_NAME.
 project_name: ntm
 
 before:
@@ -11,9 +16,9 @@ before:
     - go generate ./...
 
 builds:
-  - id: ntm
+  - id: herdctl
     main: ./cmd/herdctl
-    binary: ntm
+    binary: herdctl
     env:
       - CGO_ENABLED=0
     goos:
@@ -49,11 +54,11 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 universal_binaries:
-  - id: ntm-universal
+  - id: herdctl-universal
     ids:
-      - ntm
+      - herdctl
     replace: true
-    name_template: ntm
+    name_template: herdctl
 
 # IMPORTANT: The archive name_template is part of the upgrade naming contract.
 # If you change this, you MUST also update:
@@ -80,6 +85,7 @@ archives:
           - zip
 
   # Also create raw binaries for curl-based install
+  # Download name stays ntm_OS_ARCH; content binary is herdctl (see builds.binary).
   - id: binary
     formats:
       - binary

@@ -82,7 +82,7 @@ type InitTestSuite struct {
 func NewInitTestSuite(t *testing.T, scenario string) *InitTestSuite {
 	logger := NewTestLogger(t, scenario)
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm binary not found in PATH")
 	}

@@ -80,11 +80,11 @@ Handoffs capture session state (goal, now, decisions, blockers, next steps)
 and can be used to bootstrap new sessions or inject context into existing ones.
 
 Examples:
-  ntm resume myproject              # Display latest handoff for session
-  ntm resume --from path/to/file    # Display specific handoff file
-  ntm resume myproject --spawn --cc=2  # Resume and spawn 2 Claude agents
-  ntm resume myproject --inject     # Inject context into existing session
-  ntm resume myproject --dry-run    # Show what would be resumed`,
+  herdctl resume myproject              # Display latest handoff for session
+  herdctl resume --from path/to/file    # Display specific handoff file
+  herdctl resume myproject --spawn --cc=2  # Resume and spawn 2 Claude agents
+  herdctl resume myproject --inject     # Inject context into existing session
+  herdctl resume myproject --dry-run    # Show what would be resumed`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sessionName := ""
@@ -751,7 +751,7 @@ func outputResumeJSON(cmd *cobra.Command, result *ResumeResult) error {
 		return err
 	}
 	// bd-oqwmf: signal non-zero exit when the resume envelope reports
-	// failure, so `ntm resume --json` automation gating on `$?` no longer
+	// failure, so `herdctl resume --json` automation gating on `$?` no longer
 	// silently misses "no handoff found" / validation errors.
 	if result != nil && !result.Success {
 		return jsonFailureExit()

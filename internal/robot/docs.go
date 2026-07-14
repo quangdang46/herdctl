@@ -141,12 +141,12 @@ This separation enables reliable parsing while providing useful context for debu
 			},
 			{
 				Heading: "First Steps",
-				Body: `1. Check system state: ntm --robot-status
-2. Create a session: ntm --robot-spawn=myproject --spawn-cc=2
-3. Send a prompt: ntm --robot-send=myproject --msg="implement auth"
-4. Monitor progress: ntm --robot-is-working=myproject
-5. Capture output: ntm --robot-tail=myproject --lines=100
-6. Track one bead: ntm --robot-watch-bead=myproject --bead=bd-123`,
+				Body: `1. Check system state: herdctl --robot-status
+2. Create a session: herdctl --robot-spawn=myproject --spawn-cc=2
+3. Send a prompt: herdctl --robot-send=myproject --msg="implement auth"
+4. Monitor progress: herdctl --robot-is-working=myproject
+5. Capture output: herdctl --robot-tail=myproject --lines=100
+6. Track one bead: herdctl --robot-watch-bead=myproject --bead=bd-123`,
 			},
 			{
 				Heading: "Discovery",

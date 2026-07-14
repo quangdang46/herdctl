@@ -27,10 +27,10 @@ The safety system blocks or warns about dangerous commands like:
   - git push --force (overwrites remote history)
   - rm -rf / (catastrophic deletion)
 
-Use 'ntm safety status' to see current protection status.
-Use 'ntm safety blocked' to view blocked command history.
-Use 'ntm safety check <command>' to test a command against the policy.
-Use 'ntm safety simulate <command>' to dry-run a multi-step plan.`,
+Use 'herdctl safety status' to see current protection status.
+Use 'herdctl safety blocked' to view blocked command history.
+Use 'herdctl safety check <command>' to test a command against the policy.
+Use 'herdctl safety simulate <command>' to dry-run a multi-step plan.`,
 	}
 
 	cmd.AddCommand(
@@ -729,10 +729,10 @@ if [ -z "$REAL_GIT" ]; then
 fi
 
 # Check command against policy (include "git" in the command string)
-check_result=$(ntm safety check "git $*" --json 2>&1)
+check_result=$(herdctl safety check "git $*" --json 2>&1)
 exit_code=$?
 
-# ntm safety check exits 0 for allow, 1 for block/approve
+# herdctl safety check exits 0 for allow, 1 for block/approve
 if [ $exit_code -ne 0 ]; then
     action=$(echo "$check_result" | jq -r '.action // "block"' 2>/dev/null)
     reason=$(echo "$check_result" | jq -r '.reason // "Policy violation"' 2>/dev/null)
@@ -741,7 +741,7 @@ if [ $exit_code -ne 0 ]; then
         echo "NTM Safety: Command requires approval" >&2
         echo "  Reason: $reason" >&2
         echo "  Command: git $*" >&2
-        echo "  Run 'ntm approve list' to see pending requests." >&2
+        echo "  Run 'herdctl approve list' to see pending requests." >&2
     else
         echo "NTM Safety: Command blocked" >&2
         echo "  Reason: $reason" >&2
@@ -778,10 +778,10 @@ if [ -z "$REAL_RM" ]; then
 fi
 
 # Check command against policy
-check_result=$(ntm safety check "rm $*" --json 2>&1)
+check_result=$(herdctl safety check "rm $*" --json 2>&1)
 exit_code=$?
 
-# ntm safety check exits 0 for allow, 1 for block/approve
+# herdctl safety check exits 0 for allow, 1 for block/approve
 if [ $exit_code -ne 0 ]; then
     action=$(echo "$check_result" | jq -r '.action // "block"' 2>/dev/null)
     reason=$(echo "$check_result" | jq -r '.reason // "Policy violation"' 2>/dev/null)
@@ -790,7 +790,7 @@ if [ $exit_code -ne 0 ]; then
         echo "NTM Safety: Command requires approval" >&2
         echo "  Reason: $reason" >&2
         echo "  Command: rm $*" >&2
-        echo "  Run 'ntm approve list' to see pending requests." >&2
+        echo "  Run 'herdctl approve list' to see pending requests." >&2
     else
         echo "NTM Safety: Command blocked" >&2
         echo "  Reason: $reason" >&2
@@ -849,10 +849,10 @@ if [ -z "$COMMAND" ]; then
 fi
 
 # Check against policy
-check_result=$(ntm safety check "$COMMAND" --json 2>&1)
+check_result=$(herdctl safety check "$COMMAND" --json 2>&1)
 exit_code=$?
 
-# ntm safety check exits 0 for allow, 1 for block/approve
+# herdctl safety check exits 0 for allow, 1 for block/approve
 if [ $exit_code -ne 0 ]; then
     action=$(echo "$check_result" | jq -r '.action // "block"' 2>/dev/null)
     reason=$(echo "$check_result" | jq -r '.reason // "Policy violation"' 2>/dev/null)
@@ -877,7 +877,7 @@ if [ $exit_code -ne 0 ]; then
     # Return error to Claude Code
     if [ "$action" = "approve" ]; then
         echo "APPROVAL REQUIRED: $reason" >&2
-        echo "Run 'ntm approve list' to see pending requests." >&2
+        echo "Run 'herdctl approve list' to see pending requests." >&2
     else
         echo "BLOCKED: $reason" >&2
     fi

@@ -14,7 +14,7 @@ func TestSuggestNextCommand(t *testing.T) {
 		{
 			name:     "no sessions",
 			state:    State{SessionCount: 0},
-			wantCmd:  "ntm spawn",
+			wantCmd:  "herdctl spawn",
 			wantDesc: "Start a new session",
 		},
 		{
@@ -26,13 +26,13 @@ func TestSuggestNextCommand(t *testing.T) {
 		{
 			name:     "many sessions",
 			state:    State{SessionCount: 5},
-			wantCmd:  "ntm dashboard",
+			wantCmd:  "herdctl dashboard",
 			wantDesc: "View all sessions",
 		},
 		{
 			name:     "busy session",
 			state:    State{SessionCount: 1, CurrentSession: "proj", BusyAgents: 2, IdleAgents: 0},
-			wantCmd:  "ntm dashboard",
+			wantCmd:  "herdctl dashboard",
 			wantDesc: "Monitor progress",
 		},
 		{
@@ -44,13 +44,13 @@ func TestSuggestNextCommand(t *testing.T) {
 		{
 			name:     "idle session no beads",
 			state:    State{SessionCount: 1, CurrentSession: "proj", BusyAgents: 0, IdleAgents: 2, HasBeads: false},
-			wantCmd:  "ntm send",
+			wantCmd:  "herdctl send",
 			wantDesc: "Send prompt",
 		},
 		{
 			name:     "fallback attach",
 			state:    State{SessionCount: 1, ActiveSessions: []string{"proj"}},
-			wantCmd:  "ntm attach",
+			wantCmd:  "herdctl attach",
 			wantDesc: "Connect to session",
 		},
 	}

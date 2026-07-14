@@ -67,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             const terminal = vscode.window.createTerminal({ name: `NTM Palette: ${chosen}` });
             terminal.show(true);
-            terminal.sendText(`ntm palette ${chosen}`, true);
+            terminal.sendText(`herdctl palette ${chosen}`, true);
         } catch (e) {
             vscode.window.showErrorMessage(`NTM palette error: ${e}`);
         }
@@ -165,7 +165,7 @@ export function activate(context: vscode.ExtensionContext) {
 
             const terminal = vscode.window.createTerminal({ name: `NTM: ${chosenSession}` });
             terminal.show(true);
-            terminal.sendText(`ntm attach ${chosenSession}`, true);
+            terminal.sendText(`herdctl attach ${chosenSession}`, true);
         } catch (e) {
             vscode.window.showErrorMessage(`Failed to open terminal: ${e}`);
         }

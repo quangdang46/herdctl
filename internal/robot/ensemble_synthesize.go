@@ -77,7 +77,7 @@ func GetEnsembleSynthesize(opts EnsembleSynthesizeOptions) (*EnsembleSynthesizeO
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session name: ntm --robot-ensemble-synthesize=myproject",
+			"Provide a session name: herdctl --robot-ensemble-synthesize=myproject",
 		)
 		return output, nil
 	}
@@ -98,7 +98,7 @@ func GetEnsembleSynthesize(opts EnsembleSynthesizeOptions) (*EnsembleSynthesizeO
 			output.RobotResponse = NewErrorResponse(
 				fmt.Errorf("ensemble state not found for session '%s'", opts.Session),
 				ErrCodeEnsembleNotFound,
-				"Spawn an ensemble first: ntm ensemble <preset> <question>",
+				"Spawn an ensemble first: herdctl ensemble <preset> <question>",
 			)
 			return output, nil
 		}

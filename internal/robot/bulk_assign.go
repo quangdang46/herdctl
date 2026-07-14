@@ -168,7 +168,7 @@ func GetBulkAssign(opts BulkAssignOptions) (*BulkAssignOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide session name: ntm --robot-bulk-assign=myproject",
+			"Provide session name: herdctl --robot-bulk-assign=myproject",
 		)
 		return output, nil
 	}
@@ -1515,7 +1515,7 @@ func buildBulkAssignPrompt(template string, deps BulkAssignDependencies, assignm
 //
 // This lets a project pin its dispatch contract (e.g. "Read SKILL.md" or
 // "Set gc.outcome when done") via .ntm/config.toml without wrapping every
-// `ntm --robot-bulk-assign` call in --bulk-assign-template (#153).
+// `herdctl --robot-bulk-assign` call in --bulk-assign-template (#153).
 func loadBulkAssignTemplate(opts BulkAssignOptions, deps BulkAssignDependencies) (string, error) {
 	// 1. Explicit per-invocation override.
 	if opts.PromptTemplatePath != "" {

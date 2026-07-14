@@ -112,7 +112,7 @@ func (s *LockTestSuite) SessionName() string {
 // RunLock executes ntm lock and returns the output
 func (s *LockTestSuite) RunLock(args ...string) ([]byte, error) {
 	allArgs := append([]string{"lock"}, args...)
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	cmd.Dir = s.tempDir
 
 	s.logger.Log("[E2E-LOCK] Running: ntm %v", allArgs)
@@ -142,7 +142,7 @@ func (s *LockTestSuite) RunLockJSON(args ...string) (*LockResult, []byte, error)
 // RunUnlock executes ntm unlock and returns the output
 func (s *LockTestSuite) RunUnlock(args ...string) ([]byte, error) {
 	allArgs := append([]string{"unlock"}, args...)
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	cmd.Dir = s.tempDir
 
 	s.logger.Log("[E2E-LOCK] Running: ntm %v", allArgs)

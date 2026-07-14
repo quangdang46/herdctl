@@ -780,7 +780,7 @@ type SpawnOptions struct {
 	UseWorktrees bool // Enable git worktree isolation for agents
 	// WorktreeName, when set, overrides the auto-derived worktree directory
 	// name (the default is `<agent-type>_<index>`, e.g., `cc_1`). External
-	// orchestrators that drive ntm spawn for multiple labels but share an
+	// orchestrators that drive herdctl spawn for multiple labels but share an
 	// agent slot (`--cc=1` across `--label foo|bar|baz`) get matching
 	// `cc_1` directory names and silently share a single worktree — see
 	// ntm#145. Passing `--worktree-name foo` per spawn keeps the paths
@@ -1005,17 +1005,17 @@ By default, the first pane is reserved for the user. Agent panes are created
 and titled with their type (e.g., myproject__cc_1, myproject__cod_1).
 
 You can use a recipe to quickly spawn a predefined set of agents:
-  ntm spawn myproject -r full-stack    # Use the 'full-stack' recipe
+  herdctl spawn myproject -r full-stack    # Use the 'full-stack' recipe
 
 Or use a workflow template for coordination patterns:
-  ntm spawn myproject -t red-green     # Use the 'red-green' TDD template
+  herdctl spawn myproject -t red-green     # Use the 'red-green' TDD template
 
 Agent count syntax: N or N:model where N is count and model is optional.
 Multiple flags of the same type accumulate.
 
 Built-in recipes: quick-claude, full-stack, minimal, codex-heavy, balanced, review-team
 Built-in templates: red-green, review-pipeline, specialist-team, parallel-explore
-Use 'ntm recipes list' or 'ntm workflows list' to see all available options.
+Use 'herdctl recipes list' or 'ntm workflows list' to see all available options.
 
 Auto-restart mode (--auto-restart):
   Monitors agent health and automatically restarts crashed agents.
@@ -1029,10 +1029,10 @@ Assignment mode (--assign):
   Optional init prompt is sent only after agents are ready.
 
   Examples:
-    ntm spawn myproject --cc=4 --assign
-    ntm spawn myproject --cc=2 --cod=2 --assign --strategy=dependency
-    ntm spawn myproject --cc=4 --assign --init-prompt='Read AGENTS.md first'
-    ntm spawn myproject --cc=4 --assign --limit=8
+    herdctl spawn myproject --cc=4 --assign
+    herdctl spawn myproject --cc=2 --cod=2 --assign --strategy=dependency
+    herdctl spawn myproject --cc=4 --assign --init-prompt='Read AGENTS.md first'
+    herdctl spawn myproject --cc=4 --assign --limit=8
 
 Persona mode:
   Use --persona to spawn agents with predefined roles and system prompts.
@@ -1062,7 +1062,7 @@ Worktree isolation (--worktrees):
   Reduces conflicts and isolates destructive operations to individual worktrees.
 
   Examples:
-    ntm spawn myproject --cc=3 --worktrees
+    herdctl spawn myproject --cc=3 --worktrees
     ntm worktrees list                    # View created worktrees
     ntm worktrees merge claude_1          # Merge agent's work back to main
 
@@ -1074,28 +1074,28 @@ Local fallback (--local-fallback):
 For running multiple agent swarms on the same project with different goals,
 use --label:
 
-  ntm spawn myproject --label frontend --cc=3
-  ntm spawn myproject --label backend --cc=2
+  herdctl spawn myproject --label frontend --cc=3
+  herdctl spawn myproject --label backend --cc=2
 
 This creates separate sessions (myproject--frontend, myproject--backend) that
-share the same project directory. Use ntm list --project myproject to see all.
+share the same project directory. Use herdctl list --project myproject to see all.
 
 Examples:
-  ntm spawn myproject --cc=2 --cod=2           # 2 Claude, 2 Codex + user pane
-  ntm spawn myproject --cc=3 --cod=3 --agy=1   # 3 Claude, 3 Codex, 1 Antigravity
-  ntm spawn myproject --cc=3 --cod=3 --gmi=1   # legacy: Gemini CLI instead of Antigravity
-  ntm spawn myproject --cc=4 --no-user         # 4 Claude, no user pane
-  ntm spawn myproject -r full-stack            # Use full-stack recipe
-  ntm spawn myproject -t red-green             # Use red-green workflow template
-  ntm spawn myproject -t parallel-explore --cc=4  # Template with count override
-  ntm spawn myproject --cc=2:opus --cc=1:sonnet  # 2 Opus + 1 Sonnet
-  ntm spawn myproject --cc=2 --auto-restart    # With auto-restart enabled
-  ntm spawn myproject --persona=architect --persona=implementer:2  # Using personas
-  ntm spawn myproject --cc=1 --prompt="fix auth" # Inject context about auth
-  ntm spawn myproject --cc=3 --stagger --prompt="find bugs"  # Staggered prompts (legacy)
-  ntm spawn myproject --cc=5 --stagger-mode=smart  # Adaptive rate limit avoidance
-  ntm spawn myproject --cc=4 --stagger-mode=fixed --stagger-delay=20s  # Fixed 20s delay
-  ntm spawn myproject --local=2 --local-fallback --local-fallback-provider=cod`,
+  herdctl spawn myproject --cc=2 --cod=2           # 2 Claude, 2 Codex + user pane
+  herdctl spawn myproject --cc=3 --cod=3 --agy=1   # 3 Claude, 3 Codex, 1 Antigravity
+  herdctl spawn myproject --cc=3 --cod=3 --gmi=1   # legacy: Gemini CLI instead of Antigravity
+  herdctl spawn myproject --cc=4 --no-user         # 4 Claude, no user pane
+  herdctl spawn myproject -r full-stack            # Use full-stack recipe
+  herdctl spawn myproject -t red-green             # Use red-green workflow template
+  herdctl spawn myproject -t parallel-explore --cc=4  # Template with count override
+  herdctl spawn myproject --cc=2:opus --cc=1:sonnet  # 2 Opus + 1 Sonnet
+  herdctl spawn myproject --cc=2 --auto-restart    # With auto-restart enabled
+  herdctl spawn myproject --persona=architect --persona=implementer:2  # Using personas
+  herdctl spawn myproject --cc=1 --prompt="fix auth" # Inject context about auth
+  herdctl spawn myproject --cc=3 --stagger --prompt="find bugs"  # Staggered prompts (legacy)
+  herdctl spawn myproject --cc=5 --stagger-mode=smart  # Adaptive rate limit avoidance
+  herdctl spawn myproject --cc=4 --stagger-mode=fixed --stagger-delay=20s  # Fixed 20s delay
+  herdctl spawn myproject --local=2 --local-fallback --local-fallback-provider=cod`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sessionName := args[0]
@@ -1539,7 +1539,7 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 
 	// Safety check: fail if session already exists (when --safety is enabled)
 	if opts.Safety && muxSessionExists(opts.Session) {
-		return outputError(fmt.Errorf("session '%s' already exists (--safety mode prevents reuse; use 'ntm kill %s' first)", opts.Session, opts.Session))
+		return outputError(fmt.Errorf("session '%s' already exists (--safety mode prevents reuse; use 'herdctl kill %s' first)", opts.Session, opts.Session))
 	}
 
 	// Codex/ChatGPT preflight: when spawning an explicit `gpt-*-codex` Codex
@@ -2536,7 +2536,7 @@ func spawnSessionLogic(opts SpawnOptions) (err error) {
 					}
 				}
 
-				// Detach from terminal so it survives when ntm spawn exits
+				// Detach from terminal so it survives when herdctl spawn exits
 				setDetachedProcess(cmd)
 				if err := cmd.Start(); err != nil {
 					if !IsJSONOutput() {
@@ -3753,7 +3753,7 @@ func fetchRecoveryInbox(ctx context.Context, client recoveryMailClient, projectK
 	// #108: on a fresh project with no registered agents yet, every
 	// candidate resolves to "agent not found" — which is the expected
 	// empty-inbox state, not a warning-worthy failure. Treat it as an
-	// empty inbox so `ntm spawn` doesn't print an alarming "Recovery
+	// empty inbox so `herdctl spawn` doesn't print an alarming "Recovery
 	// context: agent mail: fetch inbox: ... Agent '...' not found" line
 	// on first-run. Real fetch failures (network, auth, server error)
 	// still surface normally.
@@ -3776,7 +3776,7 @@ func isRecoveryEmptyInboxError(err error) bool {
 	// "agent not registered" / "not found" JSON-RPC responses through
 	// these sentinels. In the recovery context both mean "there's no
 	// prior state to restore", which is an expected silent empty-state,
-	// not a warning — `ntm spawn` still proceeds normally.
+	// not a warning — `herdctl spawn` still proceeds normally.
 	if errors.Is(err, agentmail.ErrAgentNotRegistered) ||
 		errors.Is(err, agentmail.ErrNotFound) {
 		return true

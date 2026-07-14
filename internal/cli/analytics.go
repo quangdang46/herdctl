@@ -74,12 +74,12 @@ Output Formats:
   --format prometheus  Prometheus exposition format
 
 Examples:
-  ntm analytics                           # Last 30 days summary
-  ntm analytics --days 7                  # Last 7 days
-  ntm analytics --since 2025-01-01        # Since specific date
-  ntm analytics --format json             # JSON output
-  ntm analytics --format prometheus       # Prometheus output
-  ntm analytics --sessions               # Include per-session details`,
+  herdctl analytics                           # Last 30 days summary
+  herdctl analytics --days 7                  # Last 7 days
+  herdctl analytics --since 2025-01-01        # Since specific date
+  herdctl analytics --format json             # JSON output
+  herdctl analytics --format prometheus       # Prometheus output
+  herdctl analytics --sessions               # Include per-session details`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAnalytics(days, since, format, showSessions)
 		},

@@ -243,7 +243,7 @@ func PrintPipelineRun(opts PipelineRunOptions) int {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("workflow file is required"),
 			ErrCodeInvalidFlag,
-			"Provide a workflow file: ntm --robot-pipeline-run=workflow.yaml",
+			"Provide a workflow file: herdctl --robot-pipeline-run=workflow.yaml",
 		)
 		outputJSON(output)
 		return 1
@@ -253,7 +253,7 @@ func PrintPipelineRun(opts PipelineRunOptions) int {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session: ntm --robot-pipeline-run=workflow.yaml --session=mysession",
+			"Provide a session: herdctl --robot-pipeline-run=workflow.yaml --session=mysession",
 		)
 		outputJSON(output)
 		return 1
@@ -365,8 +365,8 @@ func PrintPipelineRun(opts PipelineRunOptions) int {
 		output.Progress = exec.Progress
 		output.AgentHints = &PipelineHints{
 			Summary:   fmt.Sprintf("Started pipeline '%s' in background", workflow.Name),
-			StatusCmd: fmt.Sprintf("ntm --robot-pipeline=%s", exec.RunID),
-			CancelCmd: fmt.Sprintf("ntm --robot-pipeline-cancel=%s", exec.RunID),
+			StatusCmd: fmt.Sprintf("herdctl --robot-pipeline=%s", exec.RunID),
+			CancelCmd: fmt.Sprintf("herdctl --robot-pipeline-cancel=%s", exec.RunID),
 		}
 
 		outputJSON(output)
@@ -426,7 +426,7 @@ func PrintPipelineStatus(runID string) int {
 		output.RobotResponse = NewErrorResponse(
 			errors.New(errMsg),
 			ErrCodeInvalidFlag,
-			"Provide a run ID: ntm --robot-pipeline=run-20241230-123456-abcd",
+			"Provide a run ID: herdctl --robot-pipeline=run-20241230-123456-abcd",
 		)
 		// Set outer Error field to avoid shadowing from embedded RobotResponse
 		output.Error = errMsg
@@ -440,7 +440,7 @@ func PrintPipelineStatus(runID string) int {
 		output.RobotResponse = NewErrorResponse(
 			errors.New(errMsg),
 			ErrCodeSessionNotFound,
-			"Use 'ntm --robot-pipeline-list' to see tracked pipelines. Completed runs are read from .ntm/pipelines/<run-id>.json (searched upward from the current directory), so run this from the project the pipeline executed in.",
+			"Use 'herdctl --robot-pipeline-list' to see tracked pipelines. Completed runs are read from .ntm/pipelines/<run-id>.json (searched upward from the current directory), so run this from the project the pipeline executed in.",
 		)
 		// Set outer Error field to avoid shadowing from embedded RobotResponse
 		output.Error = errMsg
@@ -474,7 +474,7 @@ func PrintPipelineStatus(runID string) int {
 	}
 
 	if exec.Status == "running" {
-		output.AgentHints.CancelCmd = fmt.Sprintf("ntm --robot-pipeline-cancel=%s", runID)
+		output.AgentHints.CancelCmd = fmt.Sprintf("herdctl --robot-pipeline-cancel=%s", runID)
 		output.AgentHints.Suggestions = append(output.AgentHints.Suggestions, "Wait for completion or cancel")
 	}
 
@@ -526,7 +526,7 @@ func PrintPipelineList() int {
 
 	if running == 0 && len(output.Pipelines) == 0 {
 		output.AgentHints.Suggestions = append(output.AgentHints.Suggestions,
-			"Start a pipeline with: ntm --robot-pipeline-run=workflow.yaml --session=mysession")
+			"Start a pipeline with: herdctl --robot-pipeline-run=workflow.yaml --session=mysession")
 	}
 
 	outputJSON(output)
@@ -541,7 +541,7 @@ func PrintPipelineCancel(runID string) int {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("run_id is required"),
 			ErrCodeInvalidFlag,
-			"Provide a run ID: ntm --robot-pipeline-cancel=run-20241230-123456-abcd",
+			"Provide a run ID: herdctl --robot-pipeline-cancel=run-20241230-123456-abcd",
 		)
 		outputJSON(output)
 		return 1
@@ -552,7 +552,7 @@ func PrintPipelineCancel(runID string) int {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("pipeline not found: %s", runID),
 			ErrCodeSessionNotFound,
-			"Use 'ntm --robot-pipeline-list' to see available pipelines",
+			"Use 'herdctl --robot-pipeline-list' to see available pipelines",
 		)
 		outputJSON(output)
 		return 1

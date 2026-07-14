@@ -207,14 +207,10 @@ func defaultMonitorPaneIndices(panes []tmux.Pane) []int {
 }
 
 func (m *Monitor) checkPane(ctx context.Context, pane tmux.Pane) error {
-	// Build target
-	target := pane.ID
-	if target == "" {
-		firstWin, err := tmux.GetFirstWindow(m.config.Session)
-		if err != nil {
-			return err
-		}
-		target = fmt.Sprintf("%s:%d.%d", m.config.Session, firstWin, pane.Index)
+	// Prefer pane.ID. Under herdr never call tmux.GetFirstWindow — require ID or skip.
+	target, err := backendPaneTarget(m.config.Session, pane)
+	if err != nil {
+		return err
 	}
 
 	// Capture output

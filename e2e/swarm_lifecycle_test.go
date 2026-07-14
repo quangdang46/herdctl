@@ -136,7 +136,7 @@ func (s *SwarmTestSuite) RunSwarmDryRun(scanDir string, extraArgs ...string) (*S
 
 	s.logger.Log("[E2E-SWARM] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.CombinedOutput()
 
 	s.logger.Log("[E2E-SWARM] Command output (%d bytes): %s", len(output), string(output))
@@ -551,7 +551,7 @@ func TestE2E_SwarmPlanOutputFile(t *testing.T) {
 	suite.logger.Log("[E2E-SWARM] Test: Writing plan to output file")
 
 	// Run with --output flag
-	cmd := exec.Command("ntm", "swarm",
+	cmd := exec.Command(mustE2EBin(), "swarm",
 		"--scan-dir="+suite.testDir,
 		"--dry-run",
 		"--output="+outputPath)

@@ -480,7 +480,7 @@ func (r *AccountRotator) PinnedAccounts() map[string]string {
 }
 
 // accountPinsFile is the on-disk location for shared account pins, relative to a
-// data directory. The CLI (ntm rotate lock/unlock/status) and the running
+// data directory. The CLI (herdctl rotate lock/unlock/status) and the running
 // rotator both read/write this file so a pin set in one process is honored by
 // the long-lived auto-rotation loop in another.
 func accountPinsPath(dataDir string) string {
@@ -1086,7 +1086,7 @@ func (r *AccountRotator) rotatePaneLocal(event LimitHitEvent, provider, currentA
 		r.logger().Warn("[AccountRotator] rotation_blocked",
 			"provider", provider, "reason", "account_pinned:"+pinned,
 			"live_panes", 1, "caam_command", caamCommand, "from", currentAccount, "to", "")
-		return nil, fmt.Errorf("%w: %s is pinned to %q; unpin (ntm rotate unlock) or pass --force-global-auth-clobber to override",
+		return nil, fmt.Errorf("%w: %s is pinned to %q; unpin (herdctl rotate unlock) or pass --force-global-auth-clobber to override",
 			ErrRotationBlocked, provider, pinned)
 	}
 
@@ -1252,7 +1252,7 @@ func (r *AccountRotator) guardAutoRotation(provider, from, caamCommand string) e
 	// provider, not just Codex. Force overrides.
 	if isPinned && !force {
 		logBlocked("account_pinned:"+pinned, 0)
-		return fmt.Errorf("%w: %s is pinned to %q; unpin (ntm rotate unlock) or pass --force-global-auth-clobber to override",
+		return fmt.Errorf("%w: %s is pinned to %q; unpin (herdctl rotate unlock) or pass --force-global-auth-clobber to override",
 			ErrRotationBlocked, provider, pinned)
 	}
 

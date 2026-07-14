@@ -44,14 +44,14 @@ By default, captures the last 1000 lines from the selected pane.
 Use filters to target specific agent types.
 
 Examples:
-  ntm copy myproject            # Copy from current/selected pane
-  ntm copy myproject --all      # Copy from all panes
-  ntm copy myproject --cc       # Copy from Claude panes only
-  ntm copy myproject -l 500     # Copy last 500 lines
-  ntm copy myproject --code     # Copy only code blocks
-  ntm copy myproject --pattern "ERROR" # Copy lines matching regex
-  ntm copy myproject:1 --last 50       # Copy specific pane by index
-  ntm copy myproject --output out.txt  # Save to file instead of clipboard`,
+  herdctl copy myproject            # Copy from current/selected pane
+  herdctl copy myproject --all      # Copy from all panes
+  herdctl copy myproject --cc       # Copy from Claude panes only
+  herdctl copy myproject -l 500     # Copy last 500 lines
+  herdctl copy myproject --code     # Copy only code blocks
+  herdctl copy myproject --pattern "ERROR" # Copy lines matching regex
+  herdctl copy myproject:1 --last 50       # Copy specific pane by index
+  herdctl copy myproject --output out.txt  # Save to file instead of clipboard`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string

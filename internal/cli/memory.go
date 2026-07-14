@@ -37,7 +37,7 @@ func newMemoryServeCmd() *cobra.Command {
 		Use:   "serve",
 		Short: "Start CM HTTP server (manual)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("Use 'ntm spawn' to auto-start the memory daemon via supervisor.")
+			fmt.Println("Use 'herdctl spawn' to auto-start the memory daemon via supervisor.")
 			fmt.Println("To run manually: cm serve --port", port)
 			return nil
 		},

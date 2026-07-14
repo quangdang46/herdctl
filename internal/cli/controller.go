@@ -56,23 +56,23 @@ Key responsibilities:
 Available coordination commands (prefer --robot-* for structured state; avoid interactive TUIs):
 
 State inspection (read-only, safe to call in a loop; note the flag forms vary):
-- ntm --robot-snapshot                                     - JSON snapshot of all sessions, agents, work, and health
-- ntm --robot-status                                       - Tmux sessions, panes, and agent states (start here)
-- ntm --robot-activity={{.Session}}                        - Per-agent activity states (idle/busy/error) for this session
-- ntm --robot-tail={{.Session}} --panes=N --lines=50       - Capture recent output from pane N
-- ntm --robot-attention --attention-session={{.Session}}   - Block until an agent needs attention (drives monitor loop)
-- ntm mail inbox {{.Session}} --json                       - Check Agent Mail inbox for pending messages
+- herdctl --robot-snapshot                                     - JSON snapshot of all sessions, agents, work, and health
+- herdctl --robot-status                                       - Tmux sessions, panes, and agent states (start here)
+- herdctl --robot-activity={{.Session}}                        - Per-agent activity states (idle/busy/error) for this session
+- herdctl --robot-tail={{.Session}} --panes=N --lines=50       - Capture recent output from pane N
+- herdctl --robot-attention --attention-session={{.Session}}   - Block until an agent needs attention (drives monitor loop)
+- herdctl mail inbox {{.Session}} --json                       - Check Agent Mail inbox for pending messages
 
 Actions (mutating; use deliberately):
-- ntm send {{.Session}} --pane W.P "message"               - Send to one exact pane (also accepts %pane_id; bare N is topology-dependent)
-- ntm send {{.Session}} --panes=W.P,%N "message"            - Send to exact panes without window-local index collisions
-- ntm --robot-send={{.Session}} --panes=N --msg="..."      - Robot equivalent with structured JSON response
-- ntm --robot-interrupt={{.Session}} --panes=N             - Interrupt a pane without killing it
+- herdctl send {{.Session}} --pane W.P "message"               - Send to one exact pane (also accepts %pane_id; bare N is topology-dependent)
+- herdctl send {{.Session}} --panes=W.P,%N "message"            - Send to exact panes without window-local index collisions
+- herdctl --robot-send={{.Session}} --panes=N --msg="..."      - Robot equivalent with structured JSON response
+- herdctl --robot-interrupt={{.Session}} --panes=N             - Interrupt a pane without killing it
 
-Do NOT use 'ntm view' from controller context — it changes the human operator's visual layout
+Do NOT use 'herdctl view' from controller context — it changes the human operator's visual layout
 and does not return output to you. Use --robot-tail or --robot-snapshot for inspection.
 
-Start by calling ntm --robot-snapshot to survey the current state, then ntm --robot-attention
+Start by calling herdctl --robot-snapshot to survey the current state, then herdctl --robot-attention
 to wait for the first event that needs coordination.`
 
 func init() {
@@ -99,17 +99,17 @@ func init() {
 			{
 				Name:        "controller-default",
 				Description: "Launch controller with default prompt",
-				Command:     "ntm controller myproject",
+				Command:     "herdctl controller myproject",
 			},
 			{
 				Name:        "controller-custom",
 				Description: "Launch controller with custom prompt",
-				Command:     "ntm controller myproject --prompt=controller.txt",
+				Command:     "herdctl controller myproject --prompt=controller.txt",
 			},
 			{
 				Name:        "controller-codex",
 				Description: "Launch controller using Codex agent",
-				Command:     "ntm controller myproject --agent-type=cod",
+				Command:     "herdctl controller myproject --agent-type=cod",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -149,9 +149,9 @@ By default, a Claude agent is launched with a coordination-focused prompt.
 You can customize the agent type and prompt as needed.
 
 Examples:
-  ntm controller myproject                    # Default Claude controller
-  ntm controller myproject --agent-type=cod   # Use Codex as controller
-  ntm controller myproject --prompt=ctrl.txt  # Custom prompt from file
+  herdctl controller myproject                    # Default Claude controller
+  herdctl controller myproject --agent-type=cod   # Use Codex as controller
+  herdctl controller myproject --prompt=ctrl.txt  # Custom prompt from file
 
 The default prompt includes:
   - Session name and agent list

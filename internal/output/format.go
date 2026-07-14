@@ -119,7 +119,7 @@ func DetectFormat(jsonFlag bool) Format {
 	}
 
 	// 3. Auto-detect: if stdout is not a terminal, use JSON
-	// This makes piping work better: ntm status myproj | jq .
+	// This makes piping work better: herdctl status myproj | jq .
 	if !IsTerminal() {
 		return FormatJSON
 	}

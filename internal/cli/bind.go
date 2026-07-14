@@ -37,14 +37,14 @@ With --overlay, binds F12 to toggle the dashboard overlay above agent panes.
 Bindings are added to both the current tmux server and ~/.tmux.conf.
 
 Examples:
-  ntm bind                  # Bind F6 for palette (default)
-  ntm bind --overlay        # Bind F12 for dashboard overlay
-  ntm bind --key=F5         # Bind F5 for palette
-  ntm bind --overlay -k F11 # Bind F11 for overlay
-  ntm bind --show           # Show current binding
-  ntm bind --unbind         # Remove the binding`,
+  herdctl bind                  # Bind F6 for palette (default)
+  herdctl bind --overlay        # Bind F12 for dashboard overlay
+  herdctl bind --key=F5         # Bind F5 for palette
+  herdctl bind --overlay -k F11 # Bind F11 for overlay
+  herdctl bind --show           # Show current binding
+  herdctl bind --unbind         # Remove the binding`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Herdr: ntm bind only mutates tmux.conf / live tmux server — N/A.
+			// Herdr: herdctl bind only mutates tmux.conf / live tmux server — N/A.
 			if backend.IsHerdr() {
 				return printHerdrUISubstitute("bind", "")
 			}
@@ -87,12 +87,12 @@ func setupBinding(key string) error {
 	// The binding command. The palette is a compact dialog (content-sized list +
 	// short target/agent pickers), so it uses a smaller popup than the full
 	// dashboard overlay to avoid blocking most of the screen behind it (#204).
-	bindCmd := fmt.Sprintf(`bind-key -n %s display-popup -E -w 80%% -h 70%% "ntm palette"`, key)
+	bindCmd := fmt.Sprintf(`bind-key -n %s display-popup -E -w 80%% -h 70%% "herdctl palette"`, key)
 
 	// Apply to current tmux server (if running)
 	inTmux := os.Getenv("TMUX") != ""
 	if inTmux {
-		cmd := exec.Command(tmux.BinaryPath(), "bind-key", "-n", key, "display-popup", "-E", "-w", "80%", "-h", "70%", "ntm palette")
+		cmd := exec.Command(tmux.BinaryPath(), "bind-key", "-n", key, "display-popup", "-E", "-w", "80%", "-h", "70%", "herdctl palette")
 		if err := cmd.Run(); err != nil {
 			fmt.Printf("%s⚠%s Could not bind in current session: %v\n", colorize(t.Warning), colorize(t.Text), err)
 		} else {
@@ -139,7 +139,7 @@ func setupBinding(key string) error {
 		defer func() { _ = f.Close() }()
 
 		// Add comment and binding
-		addition := fmt.Sprintf("\n# NTM Command Palette (added by 'ntm bind')\n%s\n", bindCmd)
+		addition := fmt.Sprintf("\n# NTM Command Palette (added by 'herdctl bind')\n%s\n", bindCmd)
 		if _, err := f.WriteString(addition); err != nil {
 			return fmt.Errorf("failed to write tmux.conf: %w", err)
 		}
@@ -171,7 +171,7 @@ func setupOverlayBindingQuiet(key string) error {
 func setupOverlayBindingWithWriter(key string, out io.Writer) error {
 	t := theme.Current()
 
-	// The binding: launch ntm dashboard in popup mode for the current session.
+	// The binding: launch herdctl dashboard in popup mode for the current session.
 	// #{session_name} is expanded by tmux at trigger time.
 	bindCmd := overlayBindingCommand(key)
 
@@ -221,7 +221,7 @@ func setupOverlayBindingWithWriter(key string, out io.Writer) error {
 		}
 		defer func() { _ = f.Close() }()
 
-		addition := fmt.Sprintf("\n# NTM Dashboard Overlay (added by 'ntm bind --overlay')\n%s\n", bindCmd)
+		addition := fmt.Sprintf("\n# NTM Dashboard Overlay (added by 'herdctl bind --overlay')\n%s\n", bindCmd)
 		if _, err := f.WriteString(addition); err != nil {
 			return fmt.Errorf("failed to write tmux.conf: %w", err)
 		}
@@ -246,7 +246,7 @@ func setupOverlayBindingWithWriter(key string, out io.Writer) error {
 }
 
 func overlayBindingCommand(key string) string {
-	return fmt.Sprintf(`bind-key -n %s display-popup -E -w 95%% -h 95%% "NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}"`, key)
+	return fmt.Sprintf(`bind-key -n %s display-popup -E -w 95%% -h 95%% "NTM_POPUP=1 herdctl dashboard --popup --inferred #{session_name}"`, key)
 }
 
 func overlayBindingArgs(key string) []string {
@@ -256,7 +256,7 @@ func overlayBindingArgs(key string) []string {
 		// --inferred keeps the lenient current-session resolution: #{session_name}
 		// is always the session the key was pressed in, so the overlay is a
 		// current-session view and must not fail closed for unregistered sessions.
-		"NTM_POPUP=1 ntm dashboard --popup --inferred #{session_name}",
+		"NTM_POPUP=1 herdctl dashboard --popup --inferred #{session_name}",
 	}
 }
 
@@ -356,7 +356,7 @@ func showBinding(key string) error {
 
 	if !found {
 		fmt.Printf("%s→%s No %s binding found in tmux.conf\n", colorize(t.Info), colorize(t.Text), key)
-		fmt.Printf("\n  Run %sntm bind%s to set it up.\n", colorize(t.Primary), colorize(t.Text))
+		fmt.Printf("\n  Run %sherdctl bind%s to set it up.\n", colorize(t.Primary), colorize(t.Text))
 	}
 
 	return nil
@@ -381,7 +381,7 @@ func isOverlayKeyBound(key string) bool {
 	return false
 }
 
-// isOverlayBindingLine reports whether line is an ntm overlay binding for key in
+// isOverlayBindingLine reports whether line is a herdctl overlay binding for key in
 // its CURRENT form. It requires the "--inferred" marker so a stale pre-#201
 // overlay binding (which lacks it) is reported as NOT current — that makes
 // isOverlayKeyBound return false and triggers setupOverlayBinding to replace the

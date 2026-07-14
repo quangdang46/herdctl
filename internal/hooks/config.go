@@ -270,7 +270,7 @@ func LoadCommandHooksFromTOML(content string) (*CommandHooksConfig, error) {
 	return parseCommandHooksConfig([]byte(content), "parsing hooks TOML")
 }
 
-// LoadCommandHooksFromMainConfig extracts hooks from the main ntm config.
+// LoadCommandHooksFromMainConfig extracts hooks from the main herdctl config.
 // This supports hooks defined inline in config.toml under [[command_hooks]]
 func LoadCommandHooksFromMainConfig(mainConfigPath string) (*CommandHooksConfig, error) {
 	if mainConfigPath == "" {

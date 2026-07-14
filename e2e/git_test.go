@@ -197,7 +197,7 @@ func (s *GitTestSuite) RunGitStatus(flags ...string) (*GitStatusResult, error) {
 	args := []string{"git", "status", "--json"}
 	args = append(args, flags...)
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Dir = s.repoPath
 	output, err := cmd.CombinedOutput()
 
@@ -222,7 +222,7 @@ func (s *GitTestSuite) RunGitSync(flags ...string) (*GitSyncResult, error) {
 	args := []string{"git", "sync", "--json"}
 	args = append(args, flags...)
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Dir = s.repoPath
 	output, err := cmd.CombinedOutput()
 
@@ -520,7 +520,7 @@ func TestGitStatusNonGitRepo(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cmd := exec.Command("ntm", "git", "status", "--json")
+	cmd := exec.Command(mustE2EBin(), "git", "status", "--json")
 	cmd.Dir = tempDir
 	output, err := cmd.CombinedOutput()
 

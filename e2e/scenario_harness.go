@@ -827,7 +827,7 @@ func (h *ScenarioHarness) RunCommand(name string, args ...string) *CommandResult
 // RunRobot executes an ntm robot command and captures the result.
 func (h *ScenarioHarness) RunRobot(args ...string) *CommandResult {
 	h.t.Helper()
-	return h.RunCommand("ntm", args...)
+	return h.RunCommand(mustE2EBin(), args...)
 }
 
 // RunRobotStatus runs --robot-status.

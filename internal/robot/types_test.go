@@ -94,7 +94,7 @@ func TestNewRobotResponseWithMeta(t *testing.T) {
 
 func TestNewErrorResponse(t *testing.T) {
 	err := errors.New("session not found")
-	resp := NewErrorResponse(err, ErrCodeSessionNotFound, "Use 'ntm list' to see sessions")
+	resp := NewErrorResponse(err, ErrCodeSessionNotFound, "Use 'herdctl list' to see sessions")
 
 	if resp.Success {
 		t.Error("expected Success to be false")
@@ -105,7 +105,7 @@ func TestNewErrorResponse(t *testing.T) {
 	if resp.ErrorCode != ErrCodeSessionNotFound {
 		t.Errorf("expected ErrorCode %q, got %q", ErrCodeSessionNotFound, resp.ErrorCode)
 	}
-	if resp.Hint != "Use 'ntm list' to see sessions" {
+	if resp.Hint != "Use 'herdctl list' to see sessions" {
 		t.Errorf("unexpected Hint: %q", resp.Hint)
 	}
 }

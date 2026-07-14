@@ -45,7 +45,7 @@ type cleanupResponse struct {
 
 func runCleanupJSON(t *testing.T, logger *TestLogger, args ...string) (cleanupResponse, []byte, error) {
 	allArgs := append([]string{"cleanup", "--json"}, args...)
-	cmd := exec.Command("ntm", allArgs...)
+	cmd := exec.Command(mustE2EBin(), allArgs...)
 	output, err := cmd.CombinedOutput()
 
 	logger.Log("[E2E-CLEANUP] Running: ntm %v", allArgs)

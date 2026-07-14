@@ -70,7 +70,7 @@ func (s *PrivacyTestSuite) killSession() {
 func (s *PrivacyTestSuite) runNTM(args ...string) (string, string, error) {
 	s.logger.Log("[E2E-PRIVACY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(),
 		"HOME="+s.tempDir,
 		"XDG_CONFIG_HOME="+filepath.Join(s.tempDir, ".config"),

@@ -118,6 +118,24 @@ func muxGetPanesContext(ctx context.Context, session string) ([]tmux.Pane, error
 	return herdrPanesToTmux(panes), nil
 }
 
+// muxGetPanesWithActivityContext returns panes plus last-activity timestamps.
+// Under herdr there is no native pane-activity clock, so LastActivity is zero;
+// callers that need idle/working should classify via capture / agent_status.
+func muxGetPanesWithActivityContext(ctx context.Context, session string) ([]tmux.PaneActivity, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetPanesWithActivityContext(ctx, session)
+	}
+	panes, err := muxGetPanesContext(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tmux.PaneActivity, 0, len(panes))
+	for _, p := range panes {
+		out = append(out, tmux.PaneActivity{Pane: p})
+	}
+	return out, nil
+}
+
 func muxGetAllPanes() (map[string][]tmux.Pane, error) {
 	if !backend.IsHerdr() {
 		return tmux.GetAllPanes()
@@ -424,7 +442,7 @@ func muxWaitAgentStatusContext(ctx context.Context, target, status string, timeo
 	return fmt.Errorf("tmux backend: native agent-status wait not supported (use poll+capture)")
 }
 
-// herdrStatusToWaitCondition maps herdr agent_status values onto ntm wait
+// herdrStatusToWaitCondition maps herdr agent_status values onto herdctl wait
 // conditions so the herdr-native wait path can short-circuit when possible.
 func herdrStatusMatchesCondition(agentStatus string, condition WaitCondition) bool {
 	switch strings.ToLower(strings.TrimSpace(agentStatus)) {
@@ -443,7 +461,7 @@ func herdrStatusMatchesCondition(agentStatus string, condition WaitCondition) bo
 }
 
 // mapWaitConditionToHerdrStatus picks the herdr --status value that best
-// matches a single ntm wait condition. Empty means "no native mapping".
+// matches a single herdctl wait condition. Empty means "no native mapping".
 func mapWaitConditionToHerdrStatus(condition WaitCondition) string {
 	switch condition {
 	case ConditionIdle, ConditionComplete:

@@ -118,7 +118,7 @@ func Definitions() map[InvariantID]Invariant {
 				"Event Log enables replay for crash recovery. " +
 				"tmux sessions survive NTM process death.",
 			Examples: []string{
-				"ntm attach works after NTM crash",
+				"herdctl attach works after NTM crash",
 				"session state survives process restart",
 				"agents continue working without NTM orchestrator",
 			},
@@ -285,13 +285,15 @@ func (c *Checker) checkNoSilentDataLoss(ctx context.Context) CheckResult {
 			details = append(details, "pre-commit hook exists but unreadable")
 		} else if strings.Contains(string(content), "ntm-precommit-guard") ||
 			strings.Contains(string(content), "ntm guard") ||
-			strings.Contains(string(content), "ntm safety") {
+			strings.Contains(string(content), "herdctl guard") ||
+			strings.Contains(string(content), "ntm safety") ||
+			strings.Contains(string(content), "herdctl safety") {
 			details = append(details, "pre-commit guard installed")
 		} else {
-			details = append(details, "pre-commit hook exists but no ntm guard")
+			details = append(details, "pre-commit hook exists but no herdctl guard")
 		}
 	} else {
-		details = append(details, "no pre-commit hook (run ntm guards install)")
+		details = append(details, "no pre-commit hook (run herdctl guards install)")
 	}
 
 	// Overall: pass if basic protections are in place

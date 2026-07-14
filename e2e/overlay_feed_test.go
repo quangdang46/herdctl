@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 package e2e
 
 import (
@@ -76,9 +79,9 @@ func overlayNTMBin(t *testing.T) string {
 		return path
 	}
 
-	path, err := exec.LookPath("ntm")
+	path, err := lookPathCLI()
 	if err != nil {
-		t.Skip("ntm binary not found in PATH; set E2E_NTM_BIN to run overlay-feed e2e")
+		t.Skip("herdctl/ntm binary not found in PATH; set E2E_NTM_BIN to run overlay-feed e2e")
 	}
 	return path
 }

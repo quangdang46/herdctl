@@ -86,7 +86,7 @@ func GetRoute(opts RouteOptions) (*RouteOutput, int) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session name: ntm --robot-route=mysession",
+			"Provide a session name: herdctl --robot-route=mysession",
 		)
 		return output, 1
 	}

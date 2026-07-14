@@ -27,7 +27,7 @@ func (c *captureT) Fatalf(format string, args ...any) {
 // the documented envelope fields populated.
 func TestParseEnvelope_ValidJSON(t *testing.T) {
 	out := &Outcome{
-		Command: "ntm --robot-status",
+		Command: "herdctl --robot-status",
 		Stdout: []byte(`{
   "success": true,
   "timestamp": "2026-05-08T05:00:00Z",
@@ -52,14 +52,14 @@ func TestParseEnvelope_ValidJSON(t *testing.T) {
 }
 
 func TestParseEnvelope_EmptyStdoutReturnsError(t *testing.T) {
-	out := &Outcome{Command: "ntm --robot-x", Stdout: nil, ExitCode: 1}
+	out := &Outcome{Command: "herdctl --robot-x", Stdout: nil, ExitCode: 1}
 	if _, err := ParseEnvelope(out); err == nil {
 		t.Fatal("expected error for empty stdout")
 	}
 }
 
 func TestParseEnvelope_NonJSONStdoutReturnsError(t *testing.T) {
-	out := &Outcome{Command: "ntm --robot-x", Stdout: []byte("Error: tmux not installed\n"), ExitCode: 1}
+	out := &Outcome{Command: "herdctl --robot-x", Stdout: []byte("Error: tmux not installed\n"), ExitCode: 1}
 	_, err := ParseEnvelope(out)
 	if err == nil {
 		t.Fatal("expected error for prose stdout")
@@ -73,7 +73,7 @@ func TestParseEnvelope_NonJSONStdoutReturnsError(t *testing.T) {
 // envelope is well-formed and the exit code agrees.
 func TestAssertSuccessEnvelope_Happy(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-status",
+		Command:  "herdctl --robot-status",
 		Stdout:   []byte(`{"success":true,"timestamp":"2026-05-08T05:00:00Z","sessions":[]}`),
 		ExitCode: 0,
 	}
@@ -90,7 +90,7 @@ func TestAssertSuccessEnvelope_Happy(t *testing.T) {
 // the response as a failure.
 func TestAssertSuccessEnvelope_RejectsLeakedFailureFields(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-x",
+		Command:  "herdctl --robot-x",
 		Stdout:   []byte(`{"success":true,"timestamp":"2026-05-08T05:00:00Z","error":"stale leak","error_code":"WHOOPS"}`),
 		ExitCode: 0,
 	}
@@ -108,7 +108,7 @@ func TestAssertSuccessEnvelope_RejectsLeakedFailureFields(t *testing.T) {
 // well-formed failure envelope with non-zero exit code.
 func TestAssertFailureEnvelope_Happy(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-tail=missing",
+		Command:  "herdctl --robot-tail=missing",
 		Stdout:   []byte(`{"success":false,"timestamp":"2026-05-08T05:00:00Z","error":"session not found","error_code":"SESSION_NOT_FOUND"}`),
 		ExitCode: 1,
 	}
@@ -124,7 +124,7 @@ func TestAssertFailureEnvelope_Happy(t *testing.T) {
 // `set -e` shells) silently miss failures otherwise.
 func TestAssertFailureEnvelope_RejectsZeroExitOnFailure(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-tail=missing",
+		Command:  "herdctl --robot-tail=missing",
 		Stdout:   []byte(`{"success":false,"timestamp":"2026-05-08T05:00:00Z","error":"session not found","error_code":"SESSION_NOT_FOUND"}`),
 		ExitCode: 0, // bug: failure envelope but exit 0
 		Err:      nil,
@@ -163,7 +163,7 @@ func TestAssertFailureEnvelope_AcceptsErrJSONFailure(t *testing.T) {
 // Without it, agents have no programmatic handle to switch on.
 func TestAssertFailureEnvelope_RequiresErrorCode(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-x",
+		Command:  "herdctl --robot-x",
 		Stdout:   []byte(`{"success":false,"timestamp":"2026-05-08T05:00:00Z","error":"something broke"}`),
 		ExitCode: 1,
 	}
@@ -179,7 +179,7 @@ func TestAssertFailureEnvelope_RequiresErrorCode(t *testing.T) {
 // regression flag.
 func TestAssertFailureEnvelope_PinsSpecificErrorCode(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-x",
+		Command:  "herdctl --robot-x",
 		Stdout:   []byte(`{"success":false,"timestamp":"2026-05-08T05:00:00Z","error":"e","error_code":"ACTUAL"}`),
 		ExitCode: 1,
 	}
@@ -195,7 +195,7 @@ func TestAssertFailureEnvelope_PinsSpecificErrorCode(t *testing.T) {
 
 func TestAssertCriticalArrayPresent_AcceptsEmptyArray(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-status",
+		Command:  "herdctl --robot-status",
 		Stdout:   []byte(`{"success":true,"timestamp":"2026-05-08T05:00:00Z","sessions":[]}`),
 		ExitCode: 0,
 	}
@@ -208,7 +208,7 @@ func TestAssertCriticalArrayPresent_AcceptsEmptyArray(t *testing.T) {
 
 func TestAssertCriticalArrayPresent_RejectsAbsent(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-status",
+		Command:  "herdctl --robot-status",
 		Stdout:   []byte(`{"success":true,"timestamp":"2026-05-08T05:00:00Z"}`),
 		ExitCode: 0,
 	}
@@ -225,7 +225,7 @@ func TestAssertCriticalArrayPresent_RejectsAbsent(t *testing.T) {
 
 func TestAssertCriticalArrayPresent_RejectsNull(t *testing.T) {
 	out := &Outcome{
-		Command:  "ntm --robot-status",
+		Command:  "herdctl --robot-status",
 		Stdout:   []byte(`{"success":true,"timestamp":"2026-05-08T05:00:00Z","sessions":null}`),
 		ExitCode: 0,
 	}

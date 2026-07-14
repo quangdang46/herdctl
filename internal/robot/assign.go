@@ -210,7 +210,7 @@ func GetAssign(opts AssignOptions) (*AssignOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide session name: ntm --robot-assign=myproject",
+			"Provide session name: herdctl --robot-assign=myproject",
 		)
 		return output, nil
 	}

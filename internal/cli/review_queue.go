@@ -75,12 +75,12 @@ Review Sources:
   - Recent git commits in the project directory
 
 Examples:
-  ntm review-queue myproject                   # Show review suggestions
-  ntm review-queue myproject --send            # Send after confirmation
-  ntm review-queue myproject --filter cc       # Only Claude agents
-  ntm review-queue myproject --idle-threshold 5m
-  ntm review-queue myproject --format json     # Robot mode JSON output
-  ntm review-queue myproject --commits 10      # Include last 10 commits`,
+  herdctl review-queue myproject                   # Show review suggestions
+  herdctl review-queue myproject --send            # Send after confirmation
+  herdctl review-queue myproject --filter cc       # Only Claude agents
+  herdctl review-queue myproject --idle-threshold 5m
+  herdctl review-queue myproject --format json     # Robot mode JSON output
+  herdctl review-queue myproject --commits 10      # Include last 10 commits`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session := ""
@@ -114,7 +114,7 @@ Examples:
 
 func runReviewQueue(session, filter string, idleThreshold time.Duration, send bool, formatOut string, commitLimit int) error {
 	// Honor both the command-local `--format json` and the global `--json`
-	// flag. Before this fix, `ntm review-queue --json` fell through to
+	// flag. Before this fix, `herdctl review-queue --json` fell through to
 	// the human-readable report path, contaminating stdout with prose
 	// when downstream tools (flywheel L85) tried to `jq` the output.
 	isJSON := strings.EqualFold(formatOut, "json") || IsJSONOutput()

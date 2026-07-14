@@ -56,7 +56,7 @@ func (s *PolicyAutomationSuite) runPolicyAutomation(args ...string) (*PolicyAuto
 
 	s.logger.Log("[E2E-POLICY] Running: ntm %s", strings.Join(baseArgs, " "))
 
-	cmd := exec.Command("ntm", baseArgs...)
+	cmd := exec.Command(mustE2EBin(), baseArgs...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 

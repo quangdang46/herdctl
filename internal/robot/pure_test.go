@@ -420,7 +420,7 @@ func TestBuildEnsembleSuggestHints(t *testing.T) {
 			TopPick: &EnsembleSuggestion{
 				PresetName:  "research",
 				DisplayName: "Research Mode",
-				SpawnCmd:    "ntm ensemble spawn research",
+				SpawnCmd:    "herdctl ensemble spawn research",
 			},
 			Suggestions: []EnsembleSuggestion{
 				{PresetName: "research", DisplayName: "Research Mode"},
@@ -433,8 +433,8 @@ func TestBuildEnsembleSuggestHints(t *testing.T) {
 		if got.Summary != "Best match: Research Mode" {
 			t.Errorf("Summary = %q, want %q", got.Summary, "Best match: Research Mode")
 		}
-		if got.SpawnCommand != "ntm ensemble spawn research" {
-			t.Errorf("SpawnCommand = %q, want %q", got.SpawnCommand, "ntm ensemble spawn research")
+		if got.SpawnCommand != "herdctl ensemble spawn research" {
+			t.Errorf("SpawnCommand = %q, want %q", got.SpawnCommand, "herdctl ensemble spawn research")
 		}
 		if len(got.SuggestedActions) != 1 {
 			t.Fatalf("SuggestedActions length = %d, want 1", len(got.SuggestedActions))
@@ -449,7 +449,7 @@ func TestBuildEnsembleSuggestHints(t *testing.T) {
 			TopPick: &EnsembleSuggestion{
 				PresetName:  "research",
 				DisplayName: "Research Mode",
-				SpawnCmd:    "ntm ensemble spawn research",
+				SpawnCmd:    "herdctl ensemble spawn research",
 			},
 			Suggestions: []EnsembleSuggestion{
 				{PresetName: "research", DisplayName: "Research Mode"},

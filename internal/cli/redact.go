@@ -62,7 +62,7 @@ These commands NEVER print raw matched secrets. Output is always safe-redacted.`
 // material is read from an env var or file by `prepare-mail` itself,
 // scanned for redaction findings, and stashed in a per-user store keyed
 // by a random handle. The caller then invokes
-// `ntm mail send … --prepared-redaction <handle>` (a *separate* process)
+// `herdctl mail send … --prepared-redaction <handle>` (a *separate* process)
 // and the raw bytes never leave the redaction surface (no wrapper logs,
 // no prompt packets, no dry-run output carry the token text).
 //
@@ -158,7 +158,7 @@ func sweepExpiredPreparedRedactions(dir string) {
 // to a per-user handle file (mode 0600) under
 // `$XDG_RUNTIME_DIR/ntm/redaction-handles/`. Sweeps expired entries
 // opportunistically. Returns the handle the caller passes to
-// `ntm mail send --prepared-redaction`.
+// `herdctl mail send --prepared-redaction`.
 func stashPreparedRedaction(raw, redactedBody string, findings []RedactPreviewFinding) (string, error) {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -240,7 +240,7 @@ func consumePreparedRedaction(handle string) (raw, redacted string, findings []R
 
 // RedactPrepareMailResponse is the JSON envelope returned by
 // `ntm redact prepare-mail`. The raw token never appears; callers
-// receive a handle they can pass to `ntm mail send --prepared-redaction`.
+// receive a handle they can pass to `herdctl mail send --prepared-redaction`.
 type RedactPrepareMailResponse struct {
 	output.TimestampedResponse
 
@@ -268,7 +268,7 @@ file in the per-user runtime store; they are never echoed to stdout,
 never logged, and never serialized into the command's JSON envelope.
 The caller then passes the handle to:
 
-  ntm mail send <session> --prepared-redaction <handle> --subject "token payload"
+  herdctl mail send <session> --prepared-redaction <handle> --subject "token payload"
 
 …which consumes the handle exactly once. Handles expire after 10
 minutes if not consumed.
@@ -359,7 +359,7 @@ Examples:
 				fmt.Printf("- %s %s\n", f.Category, f.Redacted)
 			}
 			fmt.Println()
-			fmt.Println("Pass the handle to: ntm mail send <session> --prepared-redaction <handle> --subject \"token payload\"")
+			fmt.Println("Pass the handle to: herdctl mail send <session> --prepared-redaction <handle> --subject \"token payload\"")
 			return nil
 		},
 	}

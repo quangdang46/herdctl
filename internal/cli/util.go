@@ -210,9 +210,9 @@ func ResolveSessionWithOptions(session string, w io.Writer, opts SessionResolveO
 	}
 	if len(sessionList) == 0 {
 		if backend.IsHerdr() {
-			return SessionResolution{}, fmt.Errorf("no herdr-backed sessions found. Create one with: NTM_BACKEND=herdr ntm spawn <name>")
+			return SessionResolution{}, fmt.Errorf("no herdr-backed sessions found. Create one with: NTM_BACKEND=herdr herdctl spawn <name>")
 		}
-		return SessionResolution{}, fmt.Errorf("no tmux sessions found. Create one with: ntm spawn <name>")
+		return SessionResolution{}, fmt.Errorf("no tmux sessions found. Create one with: herdctl spawn <name>")
 	}
 
 	if inferred, reason := inferSessionFromCWD(sessionList); inferred != "" {

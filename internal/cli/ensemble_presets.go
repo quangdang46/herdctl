@@ -101,7 +101,7 @@ type ensemblePresetsOutput struct {
 
 // newEnsemblePresetsCmd creates the ensemble presets command.
 // This command lists available ensemble presets (built-in + user-defined).
-// Alias: ntm ensemble list
+// Alias: herdctl ensemble list
 func newEnsemblePresetsCmd() *cobra.Command {
 	opts := ensemblePresetsOptions{
 		Format: "table",
@@ -130,12 +130,12 @@ Use --verbose to include full preset configurations including mode details,
 synthesis settings, and budget limits.
 
 Use --imported to show only presets imported from external files.`,
-		Example: `  ntm ensemble presets                     # List all presets
-  ntm ensemble presets --format=json       # JSON output
-  ntm ensemble presets --verbose           # Full configuration details
-  ntm ensemble presets --imported          # Only imported presets
-  ntm ensemble presets --tag=analysis      # Filter by tag
-  ntm ensemble list                        # Alias for presets`,
+		Example: `  herdctl ensemble presets                     # List all presets
+  herdctl ensemble presets --format=json       # JSON output
+  herdctl ensemble presets --verbose           # Full configuration details
+  herdctl ensemble presets --imported          # Only imported presets
+  herdctl ensemble presets --tag=analysis      # Filter by tag
+  herdctl ensemble list                        # Alias for presets`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runEnsemblePresets(cmd.OutOrStdout(), opts)
 		},

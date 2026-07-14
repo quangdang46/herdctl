@@ -74,14 +74,14 @@ func CreateTestSession(t *testing.T, logger *TestLogger, config SessionConfig) s
 
 	// Create command with NTM_PROJECTS_BASE properly set
 	// We need to filter out any existing NTM_PROJECTS_BASE and add our own
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(BuildLocalNTM(t), args...)
 	env := filterEnv(os.Environ(), "NTM_PROJECTS_BASE")
 	env = append(env, "NTM_PROJECTS_BASE="+projectsBase)
 	cmd.Env = env
 
 	// Create the session
 	out, err := cmd.CombinedOutput()
-	logger.Log("EXEC: ntm %s", strings.Join(args, " "))
+	logger.Log("EXEC: herdctl %s", strings.Join(args, " "))
 	logger.Log("OUTPUT: %s", string(out))
 	if err != nil {
 		logger.Log("EXIT: error: %v", err)
@@ -123,12 +123,17 @@ func CreateTestSessionSimple(t *testing.T, logger *TestLogger, agents map[string
 	return CreateTestSession(t, logger, config)
 }
 
-// killSession forcefully kills an ntm session.
+// killSession forcefully kills a herdctl/ntm session.
 func killSession(logger *TestLogger, name string) {
-	// Try ntm kill first
-	out, err := exec.Command("ntm", "kill", "-f", name).CombinedOutput()
+	// Prefer herdctl, then ntm compat alias
+	cliBin, err := LookPathCLI()
 	if err != nil {
-		logger.Log("ntm kill failed: %v, output: %s", err, string(out))
+		// Last resort: local build name not on PATH during cleanup
+		cliBin = "herdctl"
+	}
+	out, err := exec.Command(cliBin, "kill", "-f", name).CombinedOutput()
+	if err != nil {
+		logger.Log("%s kill failed: %v, output: %s", cliBin, err, string(out))
 		// Fallback to tmux kill-session
 		exec.Command(tmux.BinaryPath(), "kill-session", "-t", name).Run()
 	} else {

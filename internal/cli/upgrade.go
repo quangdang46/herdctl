@@ -565,7 +565,7 @@ func runUpgrade(checkOnly, force, yes, strict, verbose bool) error {
 				currentVersion,
 				successStyle.Render(latestVersion))
 			fmt.Println()
-			fmt.Println(dimStyle.Render("  Run 'ntm upgrade' to install"))
+			fmt.Println(dimStyle.Render("  Run 'herdctl upgrade' to install"))
 		}
 		return nil
 	}

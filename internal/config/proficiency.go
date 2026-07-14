@@ -409,7 +409,7 @@ func (c *ProficiencyConfig) CheckPromotion(sessionID string) (bool, string) {
 	c.Suggestion.TimesShown++
 	_ = c.saveUnlocked()
 
-	msg := fmt.Sprintf("Tip: You've been using NTM like a pro! Run 'ntm level %s' to unlock more features.",
+	msg := fmt.Sprintf("Tip: You've been using NTM like a pro! Run 'herdctl level %s' to unlock more features.",
 		nextTier.String())
 	return true, msg
 }

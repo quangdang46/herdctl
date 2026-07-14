@@ -80,7 +80,7 @@ func ensureE2ENTMBin() (string, error) {
 			return
 		}
 
-		binName := "ntm"
+		binName := "herdctl"
 		if runtime.GOOS == "windows" {
 			binName += ".exe"
 		}
@@ -97,6 +97,28 @@ func ensureE2ENTMBin() (string, error) {
 	})
 
 	return e2eNTMBinPath, e2eNTMBinErr
+}
+
+func lookPathCLI() (string, error) {
+	if p, err := exec.LookPath("herdctl"); err == nil {
+		return p, nil
+	}
+	if p, err := lookPathCLI(); err == nil {
+		return p, nil
+	}
+	return "", fmt.Errorf("herdctl/ntm binary not found in PATH")
+}
+
+func mustE2EBin() string {
+	path, err := ensureE2ENTMBin()
+	if err != nil {
+		// Best-effort fallback for call sites that can't surface the error.
+		if p, err2 := lookPathCLI(); err2 == nil {
+			return p
+		}
+		return "herdctl"
+	}
+	return path
 }
 
 func findRepoRoot(startDir string) (string, error) {
@@ -241,10 +263,10 @@ func (s *TestSuite) Setup() error {
 	}
 
 	// Check if ntm is available
-	if ntmPath, err := exec.LookPath("ntm"); err != nil {
-		return fmt.Errorf("ntm not found: %w", err)
+	if ntmPath, err := lookPathCLI(); err != nil {
+		return fmt.Errorf("herdctl/ntm not found: %w", err)
 	} else {
-		s.logger.Log("[E2E-SETUP] Using ntm binary: %s", ntmPath)
+		s.logger.Log("[E2E-SETUP] Using CLI binary: %s", ntmPath)
 	}
 
 	if err := s.harness.SetupTmuxSession(TmuxSessionOptions{
@@ -304,7 +326,7 @@ func (s *TestSuite) SendPrompt(pane int, prompt string) error {
 	s.logger.Log("[E2E-SEND] Sending prompt to pane %d: %s", pane, truncateString(prompt, 50))
 
 	// Use ntm --robot-send for consistent behavior
-	cmd := exec.Command("ntm",
+	cmd := exec.Command(mustE2EBin(),
 		fmt.Sprintf("--robot-send=%s", s.session),
 		fmt.Sprintf("--panes=%d", pane),
 		fmt.Sprintf("--msg=%s", prompt))
@@ -323,7 +345,7 @@ func (s *TestSuite) SendPrompt(pane int, prompt string) error {
 func (s *TestSuite) CaptureOutput(pane int, lines int) (string, error) {
 	s.logger.Log("[E2E-CAPTURE] Capturing %d lines from pane %d", lines, pane)
 
-	cmd := exec.Command("ntm",
+	cmd := exec.Command(mustE2EBin(),
 		fmt.Sprintf("--robot-tail=%s", s.session),
 		fmt.Sprintf("--panes=%d", pane),
 		fmt.Sprintf("--lines=%d", lines))
@@ -383,7 +405,7 @@ func (s *TestSuite) CallIsWorking(panes []int) (*IsWorkingResult, error) {
 		args = append(args, fmt.Sprintf("--panes=%s", strings.Join(paneStrs, ",")))
 	}
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.Output()
 	if err != nil {
 		s.logger.Log("[E2E-IS-WORKING] Command failed: %v", err)
@@ -449,7 +471,7 @@ func (s *TestSuite) CallSmartRestart(panes []int, force bool, dryRun bool) (*Sma
 		args = append(args, "--dry-run")
 	}
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.Output()
 	if err != nil {
 		s.logger.Log("[E2E-SMART-RESTART] Command failed: %v", err)
@@ -508,7 +530,7 @@ func (s *TestSuite) CallAgentHealth(panes []int) (*AgentHealthResult, error) {
 		args = append(args, fmt.Sprintf("--panes=%s", strings.Join(paneStrs, ",")))
 	}
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	output, err := cmd.Output()
 	if err != nil {
 		s.logger.Log("[E2E-AGENT-HEALTH] Command failed: %v", err)

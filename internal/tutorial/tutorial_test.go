@@ -1082,8 +1082,8 @@ func TestRenderCommandFlowDiagram(t *testing.T) {
 	got := RenderCommandFlowDiagram(100, 0, 80)
 	stripped := stripANSI(got)
 
-	if !strings.Contains(stripped, "ntm send") {
-		t.Errorf("command flow should contain 'ntm send', got %q", stripped)
+	if !strings.Contains(stripped, "herdctl send") {
+		t.Errorf("command flow should contain 'herdctl send', got %q", stripped)
 	}
 }
 
@@ -1126,9 +1126,9 @@ func TestRenderCommandCode(t *testing.T) {
 
 	commands := []string{
 		"# Create project",
-		"$ ntm quick myproject --template=go",
+		"$ herdctl quick myproject --template=go",
 		"",
-		"$ ntm status myproject",
+		"$ herdctl status myproject",
 	}
 
 	// Non-typewriter mode: all visible immediately
@@ -1161,7 +1161,7 @@ func TestRenderCommandCode_SyntaxHighlighting(t *testing.T) {
 	t.Parallel()
 
 	commands := []string{
-		"$ ntm spawn myproject --cc=3 \"Build API\"",
+		"$ herdctl spawn myproject --cc=3 \"Build API\"",
 	}
 
 	got := RenderCommandCode(commands, 1000, false)

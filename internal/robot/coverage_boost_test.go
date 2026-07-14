@@ -406,7 +406,7 @@ func TestDiagnoseOutput_MixedStates(t *testing.T) {
 			{Pane: 7, Status: "unresponsive", Action: "interrupt", Reason: "Stalled", AutoFixable: true},
 		},
 		AutoFixAvail:   true,
-		AutoFixCommand: "ntm --robot-diagnose=production --fix",
+		AutoFixCommand: "herdctl --robot-diagnose=production --fix",
 	}
 
 	data, err := json.Marshal(output)
@@ -435,7 +435,7 @@ func TestDiagnoseOutput_MixedStates(t *testing.T) {
 	if decoded["auto_fix_available"].(bool) != true {
 		t.Error("auto_fix_available should be true")
 	}
-	if decoded["auto_fix_command"].(string) != "ntm --robot-diagnose=production --fix" {
+	if decoded["auto_fix_command"].(string) != "herdctl --robot-diagnose=production --fix" {
 		t.Errorf("auto_fix_command = %v", decoded["auto_fix_command"])
 	}
 }

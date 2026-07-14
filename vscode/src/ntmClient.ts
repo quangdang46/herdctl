@@ -108,7 +108,7 @@ export class NtmClient {
 
     constructor() {
         const config = vscode.workspace.getConfiguration('ntm');
-        this.binaryPath = config.get<string>('binaryPath', 'ntm');
+        this.binaryPath = config.get<string>('binaryPath', 'herdctl');
     }
 
     private async run(args: string[]): Promise<string> {
@@ -116,7 +116,7 @@ export class NtmClient {
             cp.execFile(this.binaryPath, args, (err, stdout, stderr) => {
                 if (err) {
                     const detail = stderr ? `: ${stderr}` : '';
-                    reject(new Error(`ntm ${args.join(' ')} failed${detail}`));
+                    reject(new Error(`herdctl ${args.join(' ')} failed${detail}`));
                     return;
                 }
                 resolve(stdout);

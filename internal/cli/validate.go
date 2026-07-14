@@ -80,10 +80,10 @@ Validation types:
   - Executables: Agent commands are valid
 
 Examples:
-  ntm config validate           # Validate applicable configs
-  ntm config validate --all     # Check all config locations
-  ntm config validate --fix     # Auto-fix fixable issues
-  ntm config validate --json    # Output as JSON`,
+  herdctl config validate           # Validate applicable configs
+  herdctl config validate --all     # Check all config locations
+  herdctl config validate --fix     # Auto-fix fixable issues
+  herdctl config validate --json    # Output as JSON`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runValidation(all, fix)
 		},

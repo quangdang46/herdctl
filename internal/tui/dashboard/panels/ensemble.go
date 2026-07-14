@@ -183,7 +183,7 @@ func (p *EnsemblePanel) View() string {
 		content.WriteString(components.RenderEmptyState(components.EmptyStateOptions{
 			Icon:        components.IconWaiting,
 			Title:       "No ensemble running",
-			Description: "Start with `ntm ensemble` to see live status",
+			Description: "Start with `herdctl ensemble` to see live status",
 			Width:       w,
 			Centered:    true,
 		}))

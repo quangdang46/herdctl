@@ -110,3 +110,19 @@ func TestTranslateNamedKey(t *testing.T) {
 		t.Fatal("plain text should not translate")
 	}
 }
+
+func TestPaneIndexFromID(t *testing.T) {
+	if got := paneIndexFromID("w4G:p2"); got != 2 {
+		t.Fatalf("w4G:p2 → %d, want 2", got)
+	}
+	if got := paneIndexFromID("w1:p10"); got != 10 {
+		t.Fatalf("w1:p10 → %d, want 10", got)
+	}
+	if got := paneIndexFromID(""); got != 0 {
+		t.Fatalf("empty → %d, want 0", got)
+	}
+	if got := paneIndexFromID("not-a-pane"); got != 0 {
+		t.Fatalf("bad → %d, want 0", got)
+	}
+}
+

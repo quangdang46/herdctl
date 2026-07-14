@@ -658,14 +658,14 @@ func TestQuickSuggestions(t *testing.T) {
 
 func TestFormatSuggestions(t *testing.T) {
 	suggestions := []Suggestion{
-		{Command: "ntm attach test", Description: "Connect to session"},
-		{Command: "ntm dashboard test", Description: "Live status"},
+		{Command: "herdctl attach test", Description: "Connect to session"},
+		{Command: "herdctl dashboard test", Description: "Live status"},
 	}
 	result := FormatSuggestions(suggestions)
 	if !strings.Contains(result, "What's next?") {
 		t.Error("FormatSuggestions should include 'What's next?' header")
 	}
-	if !strings.Contains(result, "ntm attach test") {
+	if !strings.Contains(result, "herdctl attach test") {
 		t.Error("FormatSuggestions should include commands")
 	}
 	if !strings.Contains(result, "Connect to session") {
@@ -682,7 +682,7 @@ func TestFormatSuggestionsEmpty(t *testing.T) {
 
 func TestNewSuccessWithSuggestions(t *testing.T) {
 	suggestions := []Suggestion{
-		{Command: "ntm status", Description: "Check status"},
+		{Command: "herdctl status", Description: "Check status"},
 	}
 	resp := NewSuccessWithSuggestions("Done!", suggestions)
 	if !resp.Success {
@@ -694,7 +694,7 @@ func TestNewSuccessWithSuggestions(t *testing.T) {
 	if len(resp.Suggestions) != 1 {
 		t.Fatalf("Suggestions count = %d, want 1", len(resp.Suggestions))
 	}
-	if resp.Suggestions[0].Command != "ntm status" {
+	if resp.Suggestions[0].Command != "herdctl status" {
 		t.Errorf("Suggestion command = %q", resp.Suggestions[0].Command)
 	}
 }
@@ -702,7 +702,7 @@ func TestNewSuccessWithSuggestions(t *testing.T) {
 func TestPrintSuccessFooterToBuffer(t *testing.T) {
 	var buf bytes.Buffer
 	suggestions := []Suggestion{
-		{Command: "ntm test", Description: "Test command"},
+		{Command: "herdctl test", Description: "Test command"},
 	}
 	// Buffer is not a terminal, so this should skip output
 	PrintSuccessFooter(&buf, suggestions...)
@@ -721,7 +721,7 @@ func TestPrintSuccessFooterSkipsNonTerminalFile(t *testing.T) {
 	}
 
 	suggestions := []Suggestion{
-		{Command: "ntm attach demo", Description: "Attach to session"},
+		{Command: "herdctl attach demo", Description: "Attach to session"},
 	}
 
 	PrintSuccessFooter(w, suggestions...)

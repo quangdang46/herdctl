@@ -45,7 +45,7 @@ func newEnsembleSpawnCmd() *cobra.Command {
 		Long: `Spawn a reasoning ensemble session.
 
 This command is experimental and requires building with -tags ensemble_experimental.`,
-		Example: `  ntm ensemble spawn mysession --preset project-diagnosis --question "What are the main issues?"`,
+		Example: `  herdctl ensemble spawn mysession --preset project-diagnosis --question "What are the main issues?"`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return ensembleSpawnUnavailable()
 		},

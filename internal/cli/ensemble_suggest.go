@@ -45,10 +45,10 @@ The suggestion engine uses keyword matching and semantic analysis to recommend
 the most appropriate preset for your question.
 
 Examples:
-  ntm ensemble suggest "What security vulnerabilities exist in this codebase?"
-  ntm ensemble suggest "Why did the login flow fail yesterday?"
-  ntm ensemble suggest "What features should we add next?" --json
-  ntm ensemble suggest "Review the architecture" --id-only`,
+  herdctl ensemble suggest "What security vulnerabilities exist in this codebase?"
+  herdctl ensemble suggest "Why did the login flow fail yesterday?"
+  herdctl ensemble suggest "What features should we add next?" --json
+  herdctl ensemble suggest "Review the architecture" --id-only`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			question := strings.TrimSpace(args[0])
@@ -137,7 +137,7 @@ func runEnsembleSuggest(w io.Writer, question, format string, idOnly bool) error
 	if len(out.Suggestions) > 0 {
 		topPick := out.Suggestions[0]
 		out.TopPick = &topPick
-		out.SpawnCmd = "ntm ensemble " + topPick.Name + " \"" + escapeShellQuotes(question) + "\""
+		out.SpawnCmd = "herdctl ensemble " + topPick.Name + " \"" + escapeShellQuotes(question) + "\""
 	}
 
 	return renderEnsembleSuggest(w, out, format, result.NoMatchReason)

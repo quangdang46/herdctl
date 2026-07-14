@@ -141,7 +141,7 @@ Examples:
 			session := sessionFlag
 			if session == "" {
 				// Fall back to the resolver so `--session` is optional
-				// in single-session setups, same as `ntm mail send`.
+				// in single-session setups, same as `herdctl mail send`.
 				res, err := ResolveSessionWithOptions("", cmd.OutOrStdout(), SessionResolveOptions{
 					TreatAsJSON: IsJSONOutput(),
 				})
@@ -863,7 +863,7 @@ func printLocksResult(result LocksResult, allAgents bool) error {
 			fmt.Printf("   Agent: %s\n", result.Agent)
 		}
 		fmt.Printf("   Project: %s\n", result.ProjectKey)
-		fmt.Println("\nTip: Use 'ntm lock <session> <pattern>' to reserve files")
+		fmt.Println("\nTip: Use 'herdctl lock <session> <pattern>' to reserve files")
 		return nil
 	}
 

@@ -1274,7 +1274,7 @@ func TestProbeOutputErrorFields(t *testing.T) {
 			Success:   false,
 			Error:     "session not found",
 			ErrorCode: ErrCodeSessionNotFound,
-			Hint:      "Use 'ntm list' to see available sessions",
+			Hint:      "Use 'herdctl list' to see available sessions",
 		},
 		Session:        "missing-session",
 		Pane:           0,
@@ -1672,4 +1672,48 @@ func (m *MockTmuxClientSequence) CaptureForStatusDetection(target string) (strin
 		return m.Outputs[len(m.Outputs)-1], nil
 	}
 	return "", nil
+}
+
+func TestBackendPaneTargetPrefersID(t *testing.T) {
+	t.Setenv("NTM_BACKEND", "tmux")
+	t.Setenv("HERDCTL_BACKEND", "")
+	t.Setenv("NTM_MUX", "")
+
+	// Prefer non-empty ID on both backends.
+	got, err := backendPaneTarget("sess", tmux.Pane{ID: "%42", WindowIndex: 1, Index: 3})
+	if err != nil || got != "%42" {
+		t.Fatalf("tmux+ID: got %q err=%v, want %%42", got, err)
+	}
+
+	// Empty ID under tmux falls back to session:win.pane.
+	got, err = backendPaneTarget("sess", tmux.Pane{ID: "", WindowIndex: 1, Index: 3})
+	if err != nil || got != "sess:1.3" {
+		t.Fatalf("tmux empty ID: got %q err=%v, want sess:1.3", got, err)
+	}
+
+	t.Setenv("NTM_BACKEND", "herdr")
+	got, err = backendPaneTarget("sess", tmux.Pane{ID: "w0:p2", WindowIndex: 0, Index: 2})
+	if err != nil || got != "w0:p2" {
+		t.Fatalf("herdr+ID: got %q err=%v, want w0:p2", got, err)
+	}
+
+	// Empty ID under herdr must error (session:win.pane is not a herdr target).
+	got, err = backendPaneTarget("sess", tmux.Pane{ID: "", WindowIndex: 0, Index: 2})
+	if err == nil || got != "" {
+		t.Fatalf("herdr empty ID: got %q err=%v, want error", got, err)
+	}
+}
+
+func TestBackendGetPaneActivityHerdrNoop(t *testing.T) {
+	t.Setenv("NTM_BACKEND", "herdr")
+	t.Setenv("HERDCTL_BACKEND", "")
+	t.Setenv("NTM_MUX", "")
+
+	ts, err := backendGetPaneActivity("w0:p1")
+	if err != nil {
+		t.Fatalf("herdr activity should be no-op nil error, got %v", err)
+	}
+	if !ts.IsZero() {
+		t.Fatalf("herdr activity should be zero time, got %v", ts)
+	}
 }

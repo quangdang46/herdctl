@@ -45,21 +45,21 @@ func TestResolveControllerPrompt_DefaultTemplate(t *testing.T) {
 	if !strings.Contains(content, "--robot-activity=myproject") {
 		t.Error("prompt should contain '--robot-activity=myproject'")
 	}
-	if !strings.Contains(content, "ntm send myproject --pane") {
-		t.Error("prompt should contain 'ntm send myproject --pane'")
+	if !strings.Contains(content, "herdctl send myproject --pane") {
+		t.Error("prompt should contain 'herdctl send myproject --pane'")
 	}
 	// Verify stale/disruptive commands are NOT in the prompt
-	if strings.Contains(content, "ntm view myproject") {
-		t.Error("prompt should NOT contain 'ntm view myproject' (changes human layout; use --robot-tail)")
+	if strings.Contains(content, "herdctl view myproject") {
+		t.Error("prompt should NOT contain 'herdctl view myproject' (changes human layout; use --robot-tail)")
 	}
-	// The bug in #109: the `ntm send` SUBCOMMAND does not accept --msg. Only
+	// The bug in #109: the `herdctl send` SUBCOMMAND does not accept --msg. Only
 	// the --robot-send GLOBAL flag does. Walk the rendered prompt line-by-line
 	// and fail if any single line mixes the subcommand with --msg — this
 	// catches the exact regression shape while still allowing the legitimate
-	// `ntm --robot-send=... --msg=...` example on its own line.
+	// `herdctl --robot-send=... --msg=...` example on its own line.
 	for _, line := range strings.Split(content, "\n") {
-		if strings.Contains(line, "ntm send myproject") && strings.Contains(line, "--msg") {
-			t.Errorf("prompt line mixes 'ntm send' subcommand with invalid --msg flag: %q", line)
+		if strings.Contains(line, "herdctl send myproject") && strings.Contains(line, "--msg") {
+			t.Errorf("prompt line mixes 'herdctl send' subcommand with invalid --msg flag: %q", line)
 		}
 	}
 }
@@ -480,20 +480,20 @@ func TestDefaultControllerPromptContent(t *testing.T) {
 	if !strings.Contains(defaultControllerPrompt, "--robot-tail") {
 		t.Error("default prompt should mention --robot-tail for pane output inspection")
 	}
-	if !strings.Contains(defaultControllerPrompt, "ntm send") {
-		t.Error("default prompt should mention ntm send command")
+	if !strings.Contains(defaultControllerPrompt, "herdctl send") {
+		t.Error("default prompt should mention herdctl send command")
 	}
 	// Verify the stale/disruptive examples from issue #109 are NOT present.
-	// The bug: ntm send (subcommand) does not accept --msg. Only --robot-send
-	// (global flag) does. Fail if any line mixes 'ntm send' subcommand with --msg.
+	// The bug: herdctl send (subcommand) does not accept --msg. Only --robot-send
+	// (global flag) does. Fail if any line mixes 'herdctl send' subcommand with --msg.
 	for _, line := range strings.Split(defaultControllerPrompt, "\n") {
-		if strings.Contains(line, "ntm send ") && strings.Contains(line, "--msg") {
-			t.Errorf("default prompt line mixes 'ntm send' subcommand with invalid --msg flag: %q (issue #109)", line)
+		if strings.Contains(line, "herdctl send ") && strings.Contains(line, "--msg") {
+			t.Errorf("default prompt line mixes 'herdctl send' subcommand with invalid --msg flag: %q (issue #109)", line)
 		}
 	}
-	// 'ntm view' changes the human operator's tmux layout; controller agents must not run it
-	if strings.Contains(defaultControllerPrompt, "- ntm view") {
-		t.Error("default prompt must not recommend 'ntm view' to the controller agent (issue #109)")
+	// 'herdctl view' changes the human operator's tmux layout; controller agents must not run it
+	if strings.Contains(defaultControllerPrompt, "- herdctl view") {
+		t.Error("default prompt must not recommend 'herdctl view' to the controller agent (issue #109)")
 	}
 }
 

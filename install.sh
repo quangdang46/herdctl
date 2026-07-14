@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# NTM Install Script
+# herdctl Install Script
 # https://github.com/Dicklesworthstone/ntm
 #
 # Usage:
@@ -15,14 +15,19 @@
 # The script will:
 #   1. Detect your platform (OS and architecture)
 #   2. Download the pre-compiled binary from GitHub releases
-#   3. Install to a directory in your PATH
+#   3. Install as `herdctl` (with `ntm` compat symlink)
 #   4. Optionally set up shell integration
 
 set -euo pipefail
 
 REPO_OWNER="Dicklesworthstone"
 REPO_NAME="ntm"
-BIN_NAME="ntm"
+# Installed CLI name (primary brand)
+BIN_NAME="herdctl"
+# Compat alias kept for scripts/muscle memory
+COMPAT_NAME="ntm"
+# GitHub release assets still ship as ntm_* until the release contract migrates
+ASSET_NAME="ntm"
 
 # Temp directory management
 TMP_DIRS=()
@@ -69,7 +74,7 @@ for arg in "$@"; do
             ;;
         --help|-h)
             cat << 'EOF'
-NTM Install Script
+herdctl Install Script
 
 Usage: curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install.sh | bash
 
@@ -89,6 +94,8 @@ Examples:
 
   # Install to custom directory
   curl -fsSL https://raw.githubusercontent.com/Dicklesworthstone/ntm/main/install.sh | bash -s -- --dir=/opt/bin
+
+Installs `herdctl` and a compat symlink `ntm`.
 EOF
             exit 0
             ;;
@@ -258,8 +265,9 @@ find_asset_name() {
     local release_json="$2"
     local asset_name
 
+    # Release archives are still published as ntm_* (ASSET_NAME); installed binary is herdctl (BIN_NAME).
     if [[ "$platform" == windows_* ]]; then
-        asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${BIN_NAME}_${platform}\\.zip\"" | \
+        asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${ASSET_NAME}_${platform}\\.zip\"" | \
             sed -E 's/.*"name":[[:space:]]*"([^"]+)".*/\1/' | head -1 || true)
         if [ -n "$asset_name" ]; then
             printf '%s\n' "$asset_name"
@@ -267,35 +275,35 @@ find_asset_name() {
         fi
     fi
 
-    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${BIN_NAME}_[^\"]*_${platform}\\.tar\\.gz\"" | \
+    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${ASSET_NAME}_[^\"]*_${platform}\\.tar\\.gz\"" | \
         sed -E 's/.*"name":[[:space:]]*"([^"]+)".*/\1/' | head -1 || true)
     if [ -n "$asset_name" ]; then
         printf '%s\n' "$asset_name"
         return 0
     fi
 
-    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${BIN_NAME}_${platform}\\.tar\\.gz\"" | \
+    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${ASSET_NAME}_${platform}\\.tar\\.gz\"" | \
         sed -E 's/.*"name":[[:space:]]*"([^"]+)".*/\1/' | head -1 || true)
     if [ -n "$asset_name" ]; then
         printf '%s\n' "$asset_name"
         return 0
     fi
 
-    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${BIN_NAME}_[^\"]*_${platform}\\.zip\"" | \
+    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${ASSET_NAME}_[^\"]*_${platform}\\.zip\"" | \
         sed -E 's/.*"name":[[:space:]]*"([^"]+)".*/\1/' | head -1 || true)
     if [ -n "$asset_name" ]; then
         printf '%s\n' "$asset_name"
         return 0
     fi
 
-    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${BIN_NAME}_${platform}\\.zip\"" | \
+    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${ASSET_NAME}_${platform}\\.zip\"" | \
         sed -E 's/.*"name":[[:space:]]*"([^"]+)".*/\1/' | head -1 || true)
     if [ -n "$asset_name" ]; then
         printf '%s\n' "$asset_name"
         return 0
     fi
 
-    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${BIN_NAME}_${platform}\"" | \
+    asset_name=$(printf '%s\n' "$release_json" | grep -o "\"name\":[[:space:]]*\"${ASSET_NAME}_${platform}\"" | \
         sed -E 's/.*"name":[[:space:]]*"([^"]+)".*/\1/' | head -1 || true)
     printf '%s\n' "$asset_name"
 }
@@ -374,13 +382,13 @@ find_downloadable_asset_name() {
     local alt_platform="${platform//_/-}"
     local candidate url
     local -a candidates=(
-        "${BIN_NAME}_${clean_version}_${platform}.tar.gz"
-        "${BIN_NAME}_${version}_${platform}.tar.gz"
-        "${BIN_NAME}_${platform}.tar.gz"
-        "${BIN_NAME}-${clean_version}-${alt_platform}.tar.gz"
-        "${BIN_NAME}_${clean_version}_${platform}.zip"
-        "${BIN_NAME}_${version}_${platform}.zip"
-        "${BIN_NAME}_${platform}.zip"
+        "${ASSET_NAME}_${clean_version}_${platform}.tar.gz"
+        "${ASSET_NAME}_${version}_${platform}.tar.gz"
+        "${ASSET_NAME}_${platform}.tar.gz"
+        "${ASSET_NAME}-${clean_version}-${alt_platform}.tar.gz"
+        "${ASSET_NAME}_${clean_version}_${platform}.zip"
+        "${ASSET_NAME}_${version}_${platform}.zip"
+        "${ASSET_NAME}_${platform}.zip"
     )
 
     for candidate in "${candidates[@]}"; do
@@ -437,8 +445,37 @@ ensure_install_dir() {
     sudo mkdir -p "$dir"
 }
 
+# Resolve binary path inside extracted release (supports herdctl or legacy ntm).
+resolve_extracted_binary() {
+    local tmp_dir="$1"
+    local candidate
+
+    for candidate in \
+        "${tmp_dir}/${BIN_NAME}" \
+        "${tmp_dir}/${BIN_NAME}.exe" \
+        "${tmp_dir}/${COMPAT_NAME}" \
+        "${tmp_dir}/${COMPAT_NAME}.exe" \
+        "${tmp_dir}/${ASSET_NAME}" \
+        "${tmp_dir}/${ASSET_NAME}.exe"
+    do
+        if [ -f "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    # Some archives nest the binary one level deep
+    candidate=$(find "$tmp_dir" -maxdepth 2 -type f \( -name "$BIN_NAME" -o -name "${BIN_NAME}.exe" -o -name "$COMPAT_NAME" -o -name "${COMPAT_NAME}.exe" -o -name "$ASSET_NAME" -o -name "${ASSET_NAME}.exe" \) 2>/dev/null | head -1 || true)
+    if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    return 1
+}
+
 # Main installation function
-install_ntm() {
+install_herdctl() {
     local platform version install_dir tmp_dir asset_name download_url download_path binary_path checksum_url checksum_path
 
     print_info "Installing ${BIN_NAME}..."
@@ -522,7 +559,7 @@ install_ntm() {
 
     if [ -z "$asset_name" ]; then
         print_error "No pre-built binary found for $platform"
-        print_info "You can build this version from source with: git clone --branch ${version} --depth 1 https://github.com/${REPO_OWNER}/${REPO_NAME}.git && cd ${REPO_NAME} && go install ./cmd/${BIN_NAME}"
+        print_info "You can build this version from source with: git clone --branch ${version} --depth 1 https://github.com/${REPO_OWNER}/${REPO_NAME}.git && cd ${REPO_NAME} && make build && install -m 755 herdctl /usr/local/bin/herdctl"
         exit 1
     fi
 
@@ -533,7 +570,6 @@ install_ntm() {
     # Create temp directory
     tmp_dir=$(make_tmp_dir)
     download_path="${tmp_dir}/${asset_name}"
-    binary_path="${tmp_dir}/${BIN_NAME}"
 
     # Download
     if ! download_file "$download_url" "$download_path"; then
@@ -557,12 +593,20 @@ install_ntm() {
         exit 1
     fi
 
-    if [ ! -f "$binary_path" ] && [ -f "${tmp_dir}/${BIN_NAME}.exe" ]; then
-        binary_path="${tmp_dir}/${BIN_NAME}.exe"
+    # Raw binary assets may already be the download path (not an archive)
+    if [ ! -f "${tmp_dir}/${BIN_NAME}" ] && [ ! -f "${tmp_dir}/${COMPAT_NAME}" ] && [ ! -f "${tmp_dir}/${ASSET_NAME}" ]; then
+        case "$asset_name" in
+            *.tar.gz|*.zip) ;;
+            *)
+                # Single-file binary release: rename download into tmp as asset binary
+                cp "$download_path" "${tmp_dir}/${ASSET_NAME}" 2>/dev/null || true
+                chmod +x "${tmp_dir}/${ASSET_NAME}" 2>/dev/null || true
+                ;;
+        esac
     fi
 
-    if [ ! -f "$binary_path" ]; then
-        print_error "Could not find ${BIN_NAME} in downloaded asset"
+    if ! binary_path=$(resolve_extracted_binary "$tmp_dir"); then
+        print_error "Could not find ${BIN_NAME} or ${COMPAT_NAME} binary in downloaded asset"
         exit 1
     fi
 
@@ -575,18 +619,22 @@ install_ntm() {
         exit 1
     fi
 
-    # Install
+    # Install as herdctl + ntm compat symlink
     ensure_install_dir "$install_dir"
     local dest_path="${install_dir}/${BIN_NAME}"
+    local compat_path="${install_dir}/${COMPAT_NAME}"
 
     if [ -w "$install_dir" ]; then
         mv "$binary_path" "$dest_path"
+        ln -sfn "$BIN_NAME" "$compat_path"
     else
         print_info "Installing to $install_dir requires sudo..."
         sudo mv "$binary_path" "$dest_path"
+        sudo ln -sfn "$BIN_NAME" "$compat_path"
     fi
 
     print_success "Installed ${BIN_NAME} ${version} to ${dest_path}"
+    print_info "Compat symlink: ${compat_path} -> ${BIN_NAME}"
 
     # Check PATH
     if ! echo "$PATH" | grep -q "$install_dir"; then
@@ -598,7 +646,7 @@ install_ntm() {
                     if ! grep -F "$install_dir" "$rc" >/dev/null 2>&1; then
                         {
                             echo ""
-                            echo "# Added by ntm installer"
+                            echo "# Added by herdctl installer"
                             echo "export PATH=\"\$PATH:${install_dir}\""
                         } >> "$rc"
                         path_updated=1
@@ -606,7 +654,7 @@ install_ntm() {
                 fi
             done
             if [ "$path_updated" -eq 1 ]; then
-                print_info "PATH updated in shell rc files; restart shell to use ntm"
+                print_info "PATH updated in shell rc files; restart shell to use herdctl"
             fi
         else
             print_warn "${install_dir} is not in your PATH"
@@ -626,25 +674,29 @@ install_ntm() {
     print_success "Installation complete!"
     echo ""
     echo "Quick start:"
-    echo "  ntm spawn myproject --cc=2 --cod=2   # Create session with agents"
-    echo "  ntm attach myproject                  # Attach to session"
-    echo "  ntm palette                           # Open command palette"
-    echo "  ntm tutorial                          # Interactive tutorial"
+    echo "  herdctl spawn myproject --cc=2 --cod=2   # Create session with agents"
+    echo "  herdctl attach myproject                  # Attach to session"
+    echo "  herdctl palette                           # Open command palette"
+    echo "  herdctl tutorial                          # Interactive tutorial"
+    echo ""
+    echo "Compat: \`ntm\` is still installed as a symlink to herdctl."
     echo ""
     echo "Tip: You can also install via Homebrew:"
     echo "  brew install dicklesworthstone/tap/ntm"
     echo ""
-    echo "Run 'ntm --help' for full documentation."
+    echo "Run 'herdctl --help' for full documentation."
 }
 
 # Get the shell integration command for the installed version
-# v1.5.0 and earlier use "ntm init <shell>", v1.6.0+ use "ntm shell <shell>"
+# v1.5.0 and earlier use "ntm init <shell>", v1.6.0+ use "ntm shell <shell>",
+# current brand prefers "herdctl shell <shell>" (ntm remains a compat alias).
 get_shell_cmd() {
     local shell_name="$1"
     local installed_version="$2"
+    local cli_name="$BIN_NAME"
 
     # Determine which command to use based on version
-    # v1.5.0 and earlier use "ntm init", v1.6.0+ use "ntm shell"
+    # v1.5.0 and earlier use "init", v1.6.0+ use "shell"
     local use_init=false
     if [ -n "$installed_version" ]; then
         # Strip 'v' prefix for comparison
@@ -652,9 +704,10 @@ get_shell_cmd() {
         local major minor
         major=$(echo "$ver" | cut -d. -f1)
         minor=$(echo "$ver" | cut -d. -f2)
-        # Use "ntm init" for v1.5.x and earlier
+        # Use "init" for v1.5.x and earlier (legacy ntm only)
         if [ "$major" -eq 1 ] && [ "$minor" -le 5 ] 2>/dev/null; then
             use_init=true
+            cli_name="$COMPAT_NAME"
         fi
     fi
 
@@ -665,15 +718,17 @@ get_shell_cmd() {
 
     case "$shell_name" in
         fish)
-            echo "ntm $cmd_name fish | source"
+            echo "${cli_name} $cmd_name fish | source"
             ;;
         *)
-            echo "eval \"\$(ntm $cmd_name $shell_name)\""
+            echo "eval \"\$(${cli_name} $cmd_name $shell_name)\""
             ;;
     esac
 }
 
-# Update legacy "ntm init" entries to "ntm shell" in a shell rc file
+# Update legacy shell integration entries in a shell rc file:
+#   ntm init  -> herdctl shell
+#   ntm shell -> herdctl shell
 upgrade_shell_integration() {
     local rc_file="$1"
 
@@ -681,25 +736,30 @@ upgrade_shell_integration() {
         return 1
     fi
 
-    # Check if the file has legacy "ntm init" entries
-    if ! grep -q 'ntm init' "$rc_file"; then
+    # Check if the file has legacy ntm entries
+    if ! grep -Eq 'ntm (init|shell)' "$rc_file"; then
         return 1
     fi
 
     # Create a backup
-    local backup_file="${rc_file}.ntm-backup"
+    local backup_file="${rc_file}.herdctl-backup"
     cp "$rc_file" "$backup_file"
 
-    # Replace "ntm init" with "ntm shell" in the file
-    # Handle both eval "$(ntm init bash)" and ntm init fish | source patterns
-    if sed -i.bak 's/ntm init/ntm shell/g' "$rc_file" 2>/dev/null; then
+    # Prefer gnu/bsd sed portability
+    if sed -i.bak \
+        -e 's/ntm init/herdctl shell/g' \
+        -e 's/ntm shell/herdctl shell/g' \
+        "$rc_file" 2>/dev/null; then
         rm -f "${rc_file}.bak"
         print_success "Updated shell integration in ${rc_file}"
         print_info "Backup saved to ${backup_file}"
         return 0
     else
         # macOS sed requires different syntax
-        if sed -i '' 's/ntm init/ntm shell/g' "$rc_file" 2>/dev/null; then
+        if sed -i '' \
+            -e 's/ntm init/herdctl shell/g' \
+            -e 's/ntm shell/herdctl shell/g' \
+            "$rc_file" 2>/dev/null; then
             print_success "Updated shell integration in ${rc_file}"
             print_info "Backup saved to ${backup_file}"
             return 0
@@ -736,45 +796,45 @@ setup_shell_integration() {
     # Get the appropriate shell command for the installed version
     init_cmd=$(get_shell_cmd "$shell_name" "$VERSION")
 
-    # Check if already configured with current "ntm shell" command
-    if [ -f "$rc_file" ] && grep -q "ntm shell" "$rc_file"; then
+    # Check if already configured with current "herdctl shell" command
+    if [ -f "$rc_file" ] && grep -q "herdctl shell" "$rc_file"; then
         print_info "Shell integration already configured in ${rc_file}"
         return
     fi
 
-    # Check for legacy "ntm init" entries that need upgrading
-    if [ -f "$rc_file" ] && grep -q "ntm init" "$rc_file"; then
+    # Check for legacy "ntm init" / "ntm shell" entries that need upgrading
+    if [ -f "$rc_file" ] && grep -Eq 'ntm (init|shell)' "$rc_file"; then
         print_warn "Legacy shell integration detected in ${rc_file}"
-        print_info "The 'ntm init' command was renamed to 'ntm shell' in v1.6.0."
+        print_info "Prefer 'herdctl shell' (ntm remains a compat alias)."
 
         # In easy-mode, auto-upgrade
         if [ "$EASY_MODE" = true ]; then
             if upgrade_shell_integration "$rc_file"; then
                 print_info "Restart your shell or run 'source ${rc_file}' to activate."
             else
-                print_warn "Could not auto-update. Please manually replace 'ntm init' with 'ntm shell'."
+                print_warn "Could not auto-update. Please manually replace 'ntm shell'/'ntm init' with 'herdctl shell'."
             fi
             return
         fi
 
         # Only prompt if interactive
         if [ -t 0 ] && [ -t 1 ]; then
-            printf "Update to 'ntm shell' automatically? [Y/n]: "
+            printf "Update to 'herdctl shell' automatically? [Y/n]: "
             read -r answer
             case "$answer" in
                 n|N|no|NO)
-                    print_info "Please manually replace 'ntm init' with 'ntm shell' in ${rc_file}"
+                    print_info "Please manually replace 'ntm shell'/'ntm init' with 'herdctl shell' in ${rc_file}"
                     ;;
                 *)
                     if upgrade_shell_integration "$rc_file"; then
                         print_info "Restart your shell or run 'source ${rc_file}' to activate."
                     else
-                        print_warn "Could not auto-update. Please manually replace 'ntm init' with 'ntm shell'."
+                        print_warn "Could not auto-update. Please manually replace 'ntm shell'/'ntm init' with 'herdctl shell'."
                     fi
                     ;;
             esac
         else
-            print_info "Run installer with --easy-mode to auto-update, or manually replace 'ntm init' with 'ntm shell'."
+            print_info "Run installer with --easy-mode to auto-update, or manually replace 'ntm shell'/'ntm init' with 'herdctl shell'."
         fi
         return
     fi
@@ -790,7 +850,7 @@ setup_shell_integration() {
     if [ "$EASY_MODE" = true ]; then
         {
             echo ""
-            echo "# NTM - Named Tmux Manager"
+            echo "# herdctl - dual-backend agent orchestrator"
             echo "$init_cmd"
         } >> "$rc_file"
         print_success "Added shell integration to ${rc_file}"
@@ -805,7 +865,7 @@ setup_shell_integration() {
         case "$answer" in
             y|Y|yes|YES)
                 echo "" >> "$rc_file"
-                echo "# NTM - Named Tmux Manager" >> "$rc_file"
+                echo "# herdctl - dual-backend agent orchestrator" >> "$rc_file"
                 echo "$init_cmd" >> "$rc_file"
                 print_success "Added to ${rc_file}"
                 echo ""
@@ -819,4 +879,4 @@ setup_shell_integration() {
 }
 
 # Run installation
-install_ntm
+install_herdctl

@@ -2041,21 +2041,21 @@ Common Modifiers:
 
 Quick Start:
 ------------
-1) Create session:    ntm --robot-spawn=proj --spawn-cc=2 --spawn-wait
-2) Check state:       ntm --robot-status
-3) Send prompt:       ntm --robot-send=proj --msg="implement auth" --track
-4) Monitor progress:  ntm --robot-is-working=proj
-5) Get output:        ntm --robot-tail=proj --lines=100
+1) Create session:    herdctl --robot-spawn=proj --spawn-cc=2 --spawn-wait
+2) Check state:       herdctl --robot-status
+3) Send prompt:       herdctl --robot-send=proj --msg="implement auth" --track
+4) Monitor progress:  herdctl --robot-is-working=proj
+5) Get output:        herdctl --robot-tail=proj --lines=100
 
 Attention Feed (Operator Loop):
 -------------------------------
 The recommended tending loop for operator agents:
 
-  1. Bootstrap:  ntm --robot-snapshot
+  1. Bootstrap:  herdctl --robot-snapshot
      → Get system state + latest_cursor + replay_window
-  2. Attend:     ntm --robot-attention --attention-cursor=<cursor>
+  2. Attend:     herdctl --robot-attention --attention-cursor=<cursor>
      → Sleep until attention needed, wake with digest + reason
-  3. Act:        ntm --robot-send=proj --msg="fix X"
+  3. Act:        herdctl --robot-send=proj --msg="fix X"
      → Execute the suggested action
   4. Loop:       Use cursor from step 2 response as --attention-cursor
      → Repeat from step 2
@@ -2086,12 +2086,12 @@ Unsupported Conditions:
 
 Common Workflows:
 -----------------
-- Single agent: ntm --robot-spawn=proj --spawn-cc=1 --spawn-wait
-- Send+wait:    ntm --robot-send=proj --msg="do X" --track
-- Handoff:      ntm --robot-overlay --overlay-session=proj --overlay-cursor=42 --overlay-no-wait
-- Bootstrap:    ntm --robot-snapshot   # use latest_cursor + replay_window for follow-up
-- Tending:      ntm --robot-attention --attention-cursor=42  # wait-then-digest loop
-- Recover:      ntm --robot-snapshot   # resync after cursor expiration
+- Single agent: herdctl --robot-spawn=proj --spawn-cc=1 --spawn-wait
+- Send+wait:    herdctl --robot-send=proj --msg="do X" --track
+- Handoff:      herdctl --robot-overlay --overlay-session=proj --overlay-cursor=42 --overlay-no-wait
+- Bootstrap:    herdctl --robot-snapshot   # use latest_cursor + replay_window for follow-up
+- Tending:      herdctl --robot-attention --attention-cursor=42  # wait-then-digest loop
+- Recover:      herdctl --robot-snapshot   # resync after cursor expiration
 
 Tips for AI Agents:
 -------------------
@@ -2105,7 +2105,7 @@ Tips for AI Agents:
 - Attention feed is a sensing/actuation surface, not a planner: it does not assign beads, infer intent, or replace beads, bv, or Agent Mail.
 
 For complete API documentation: docs/robot-api-design.md
-For machine-readable schema:    ntm --robot-capabilities
+For machine-readable schema:    herdctl --robot-capabilities
 `)
 	return builder.String()
 }
@@ -5726,7 +5726,7 @@ func buildSwarmSnapshot(cfg *config.Config, sessions []tmux.Session) *SwarmSnaps
 
 	for _, sess := range swarmSessions {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		h, err := health.CheckSession(ctx, sess.name)
+		h, err := health.CheckSessionWithObserver(ctx, sess.name, newRobotSessionObserver(0))
 		cancel()
 		if err != nil {
 			continue

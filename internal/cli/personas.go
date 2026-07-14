@@ -32,10 +32,10 @@ Persona sources (later overrides earlier):
   3. Project: .ntm/personas.toml
 
 Examples:
-  ntm personas list              # List all personas
-  ntm personas list --json       # JSON output
-  ntm personas show architect    # Show persona details
-  ntm personas show architect --json`,
+  herdctl personas list              # List all personas
+  herdctl personas list --json       # JSON output
+  herdctl personas show architect    # Show persona details
+  herdctl personas show architect --json`,
 	}
 
 	cmd.AddCommand(
@@ -456,7 +456,7 @@ func newProfilesCmd() *cobra.Command {
 		Short: "Manage agent profiles (alias for 'personas')",
 		Long: `List and inspect available agent profiles.
 
-This is an alias for 'ntm personas'. Profiles define agent characteristics
+This is an alias for 'herdctl personas'. Profiles define agent characteristics
 including agent type, model, system prompts, and behavioral settings.
 
 Profile sources (later overrides earlier):
@@ -465,10 +465,10 @@ Profile sources (later overrides earlier):
   3. Project: .ntm/personas.toml
 
 Examples:
-  ntm profiles list              # List all profiles
-  ntm profiles list --json       # JSON output
-  ntm profiles show architect    # Show profile details
-  ntm profiles show architect --json`,
+  herdctl profiles list              # List all profiles
+  herdctl profiles list --json       # JSON output
+  herdctl profiles show architect    # Show profile details
+  herdctl profiles show architect --json`,
 	}
 
 	cmd.AddCommand(

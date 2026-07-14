@@ -102,7 +102,7 @@ func (s *PreflightTestSuite) runPreflight(prompt string, strict bool) (*Prefligh
 	s.logger.Log("[E2E-PREFLIGHT] Running: ntm %s", strings.Join(args, " "))
 	s.logger.Log("[E2E-PREFLIGHT] Prompt (truncated): %s", truncateForLog(prompt, 100))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 
 	var stdout, stderr strings.Builder

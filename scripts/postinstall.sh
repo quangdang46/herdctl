@@ -1,10 +1,11 @@
 #!/bin/sh
 echo ""
-echo "NTM installed successfully!"
+echo "herdctl installed successfully!"
 echo ""
 echo "Add to your shell rc file:"
-echo '  eval "$(ntm shell bash)"  # for bash'
-echo '  eval "$(ntm shell zsh)"   # for zsh'
+echo '  eval "$(herdctl shell bash)"  # for bash'
+echo '  eval "$(herdctl shell zsh)"   # for zsh'
 echo ""
-echo "Run 'ntm tutorial' to get started!"
+echo "Compat: the `ntm` command remains available as a symlink."
+echo "Run 'herdctl tutorial' to get started!"
 echo ""

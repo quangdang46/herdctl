@@ -147,12 +147,12 @@ func init() {
 			{
 				Name:        "interrupt",
 				Description: "Send Ctrl+C to all agents",
-				Command:     "ntm interrupt myproject",
+				Command:     "herdctl interrupt myproject",
 			},
 			{
 				Name:        "interrupt-tags",
 				Description: "Interrupt only panes with specific tag",
-				Command:     "ntm interrupt myproject --tag=frontend",
+				Command:     "herdctl interrupt myproject --tag=frontend",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -195,12 +195,12 @@ func init() {
 			{
 				Name:        "kill",
 				Description: "Kill a session (prompts confirmation)",
-				Command:     "ntm kill myproject",
+				Command:     "herdctl kill myproject",
 			},
 			{
 				Name:        "kill-force",
 				Description: "Kill without confirmation",
-				Command:     "ntm kill myproject --force",
+				Command:     "herdctl kill myproject --force",
 			},
 		},
 		SafetyLevel: kernel.SafetyDanger,
@@ -256,7 +256,7 @@ type SendOptions struct {
 	CassCheckDays  int
 
 	// ForceNonInteractive bypasses safe confirmation gates (currently the CASS
-	// duplicate-work prompt) so a recovery/status wrapper can drive `ntm send`
+	// duplicate-work prompt) so a recovery/status wrapper can drive `herdctl send`
 	// without piping `y` through stdin. Destructive or ambiguous confirmation
 	// classes are NOT bypassed by this flag — they fail closed.
 	ForceNonInteractive bool
@@ -598,27 +598,27 @@ func newSendCmd() *cobra.Command {
 		Strategies: least-loaded, round-robin, affinity, sticky, random.
 
 		Examples:
-		  ntm send myproject "fix the linting errors"           # All agents
-		  ntm send myproject --cc "review the changes"          # All Claude agents
-		  ntm send myproject --cc=opus "review the changes"     # Only Claude Opus agents
-		  ntm send myproject --tag=frontend "update ui"         # Agents with 'frontend' tag
-		  ntm send myproject --cod --gmi "run the tests"        # Codex and Gemini
-		  ntm send myproject --all "git status"                 # All panes
-		  ntm send myproject --pane=2 "specific pane"           # Single-window pane index
-		  ntm send myproject --pane=1.0 "specific pane"         # Exact window.pane
-		  ntm send myproject --panes=%7,2.0 "two panes"         # Exact tmux ID + window.pane
-		  ntm send myproject --skip-first "restart"             # Skip first topology-ordered pane
-		  ntm send myproject --json "run tests"                 # JSON output
-		  ntm send myproject --file prompts/review.md           # From file
-		  cat error.log | ntm send myproject --cc               # From stdin
-		  git diff | ntm send myproject --all --prefix "Review these changes:"  # Stdin with prefix
-		  ntm send myproject -c src/auth.py "Refactor this"     # With file context
-		  ntm send myproject -c src/api.go:10-50 "Review lines" # With line range
-		  ntm send myproject -c a.go -c b.go "Compare these"    # Multiple files
-		  ntm send myproject -t code_review --file src/main.go  # Template with file
-		  ntm send myproject -t fix --var issue="null pointer" --file src/app.go  # Template with vars
-		  ntm send myproject --smart "fix auth bug"             # Auto-select best agent
-		  ntm send myproject --smart --route=affinity "auth"    # Use affinity strategy`,
+		  herdctl send myproject "fix the linting errors"           # All agents
+		  herdctl send myproject --cc "review the changes"          # All Claude agents
+		  herdctl send myproject --cc=opus "review the changes"     # Only Claude Opus agents
+		  herdctl send myproject --tag=frontend "update ui"         # Agents with 'frontend' tag
+		  herdctl send myproject --cod --gmi "run the tests"        # Codex and Gemini
+		  herdctl send myproject --all "git status"                 # All panes
+		  herdctl send myproject --pane=2 "specific pane"           # Single-window pane index
+		  herdctl send myproject --pane=1.0 "specific pane"         # Exact window.pane
+		  herdctl send myproject --panes=%7,2.0 "two panes"         # Exact tmux ID + window.pane
+		  herdctl send myproject --skip-first "restart"             # Skip first topology-ordered pane
+		  herdctl send myproject --json "run tests"                 # JSON output
+		  herdctl send myproject --file prompts/review.md           # From file
+		  cat error.log | herdctl send myproject --cc               # From stdin
+		  git diff | herdctl send myproject --all --prefix "Review these changes:"  # Stdin with prefix
+		  herdctl send myproject -c src/auth.py "Refactor this"     # With file context
+		  herdctl send myproject -c src/api.go:10-50 "Review lines" # With line range
+		  herdctl send myproject -c a.go -c b.go "Compare these"    # Multiple files
+		  herdctl send myproject -t code_review --file src/main.go  # Template with file
+		  herdctl send myproject -t fix --var issue="null pointer" --file src/app.go  # Template with vars
+		  herdctl send myproject --smart "fix auth bug"             # Auto-select best agent
+		  herdctl send myproject --smart --route=affinity "auth"    # Use affinity strategy`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			paneSelector = strings.TrimSpace(paneSelector)
@@ -1931,7 +1931,7 @@ func printSendDryRunResult(result SendDryRunResult) error {
 		return json.NewEncoder(os.Stdout).Encode(result)
 	}
 
-	fmt.Printf("Dry Run: ntm send %s\n\n", result.Session)
+	fmt.Printf("Dry Run: herdctl send %s\n\n", result.Session)
 
 	if result.RoutedTo != nil {
 		fmt.Printf("Routing: pane %d (%s) via %s\n\n", result.RoutedTo.PaneIndex, result.RoutedTo.AgentType, result.RoutedTo.Strategy)
@@ -1962,8 +1962,8 @@ func newInterruptCmd() *cobra.Command {
 User panes are not affected.
 
 Examples:
-  ntm interrupt myproject
-  ntm interrupt myproject --tag=frontend`,
+  herdctl interrupt myproject
+  herdctl interrupt myproject --tag=frontend`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInterrupt(args[0], tags)
@@ -2101,11 +2101,11 @@ func newKillCmd() *cobra.Command {
 Use --project to kill all sessions for a base project (requires confirmation).
 
 Examples:
-  ntm kill myproject              # Prompts for confirmation
-  ntm kill myproject --force      # No confirmation
-  ntm kill myproject --tag=ui     # Kill only panes with 'ui' tag
-  ntm kill myproject --summarize  # Generate summary before killing
-  ntm kill --project myproject    # Kill all sessions for the project`,
+  herdctl kill myproject              # Prompts for confirmation
+  herdctl kill myproject --force      # No confirmation
+  herdctl kill myproject --tag=ui     # Kill only panes with 'ui' tag
+  herdctl kill myproject --summarize  # Generate summary before killing
+  herdctl kill --project myproject    # Kill all sessions for the project`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if project != "" && len(args) > 0 {
@@ -3192,7 +3192,7 @@ func shellDispatchRequest(session string, panes, selected []tmux.Pane, prompt st
 	}
 }
 
-// CodexGoalSendResult is the JSON receipt for `ntm send --codex-goal` (#165).
+// CodexGoalSendResult is the JSON receipt for `herdctl send --codex-goal` (#165).
 type CodexGoalSendResult struct {
 	robot.RobotResponse
 
@@ -3312,7 +3312,7 @@ func runCodexGoalSend(session, paneSelector, body string) error {
 		return emit(res,
 			fmt.Errorf("pane not codex-live (preflight=%s)", pf.State),
 			robot.ErrCodeResourceBusy,
-			"Run 'ntm codex preflight' first; only drive a goal when state is codex-live/goal-completed",
+			"Run 'herdctl codex preflight' first; only drive a goal when state is codex-live/goal-completed",
 		)
 	}
 
@@ -3379,7 +3379,7 @@ func runCodexGoalSend(session, paneSelector, body string) error {
 	res.Submitted = true
 	res.State = "submitted"
 	res.Success = true
-	res.Reason = "typed /goal, palette engaged, injected objective, and submitted. Use 'ntm codex wait-goal-engaged' to confirm engagement."
+	res.Reason = "typed /goal, palette engaged, injected objective, and submitted. Use 'herdctl codex wait-goal-engaged' to confirm engagement."
 
 	addTimelinePromptMarker(session, *target, "/goal "+objective)
 	return emit(res, nil, "", "")

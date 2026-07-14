@@ -1342,7 +1342,7 @@ func TestResolveEnsembleProjectDirForSessionFallsBackToProjectRoot(t *testing.T)
 		t.Fatalf("mkdir ntm dir: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(projectDir, ".ntm", "config.toml"), []byte(""), 0o644); err != nil {
-		t.Fatalf("write ntm config: %v", err)
+		t.Fatalf("write herdctl config: %v", err)
 	}
 	nestedDir := filepath.Join(projectDir, "nested")
 	if err := os.MkdirAll(nestedDir, 0755); err != nil {
@@ -1828,7 +1828,7 @@ func TestResolvePipelineProjectDirForSessionFallsBackToProjectRootFromNestedDir(
 		t.Fatalf("mkdir ntm root: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(projectDir, ".ntm", "config.toml"), []byte(""), 0644); err != nil {
-		t.Fatalf("write ntm config: %v", err)
+		t.Fatalf("write herdctl config: %v", err)
 	}
 	nestedDir := filepath.Join(projectDir, "nested")
 	if err := os.MkdirAll(nestedDir, 0755); err != nil {
@@ -5879,7 +5879,7 @@ func TestHasLegacyShellIntegration(t *testing.T) {
 export PATH="/usr/local/bin:$PATH"
 
 # NTM - Named Tmux Manager
-eval "$(ntm init bash)"
+eval "$(herdctl init bash)"
 `
 		if err := os.WriteFile(rcFile, []byte(content), 0644); err != nil {
 			t.Fatalf("Failed to write test file: %v", err)
@@ -5893,7 +5893,7 @@ eval "$(ntm init bash)"
 	t.Run("detects legacy ntm init zsh", func(t *testing.T) {
 		rcFile := filepath.Join(tempDir, ".zshrc")
 		content := `# Some config
-eval "$(ntm init zsh)"
+eval "$(herdctl init zsh)"
 `
 		if err := os.WriteFile(rcFile, []byte(content), 0644); err != nil {
 			t.Fatalf("Failed to write test file: %v", err)
@@ -5921,7 +5921,7 @@ ntm init fish | source
 	t.Run("does not detect current ntm shell", func(t *testing.T) {
 		rcFile := filepath.Join(tempDir, ".bashrc-current")
 		content := `# Some config
-eval "$(ntm shell bash)"
+eval "$(herdctl shell bash)"
 `
 		if err := os.WriteFile(rcFile, []byte(content), 0644); err != nil {
 			t.Fatalf("Failed to write test file: %v", err)
@@ -5953,7 +5953,7 @@ func TestUpgradeShellRCFile(t *testing.T) {
 export PATH="/usr/local/bin:$PATH"
 
 # NTM - Named Tmux Manager
-eval "$(ntm init bash)"
+eval "$(herdctl init bash)"
 `
 		if err := os.WriteFile(rcFile, []byte(originalContent), 0644); err != nil {
 			t.Fatalf("Failed to write test file: %v", err)
@@ -5988,7 +5988,7 @@ eval "$(ntm init bash)"
 
 	t.Run("upgrades ntm init to ntm shell for zsh", func(t *testing.T) {
 		rcFile := filepath.Join(tempDir, ".zshrc")
-		originalContent := `eval "$(ntm init zsh)"`
+		originalContent := `eval "$(herdctl init zsh)"`
 		if err := os.WriteFile(rcFile, []byte(originalContent), 0644); err != nil {
 			t.Fatalf("Failed to write test file: %v", err)
 		}

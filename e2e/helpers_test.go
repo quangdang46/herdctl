@@ -28,7 +28,7 @@ func SkipIfNoTmux(t *testing.T) {
 
 // SkipIfNoNTM skips the test if ntm is not available.
 func SkipIfNoNTM(t *testing.T) {
-	if _, err := exec.LookPath("ntm"); err != nil {
+	if _, err := lookPathCLI(); err != nil {
 		t.Skip("ntm not found, skipping E2E test")
 	}
 }

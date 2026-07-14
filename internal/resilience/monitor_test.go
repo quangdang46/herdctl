@@ -637,7 +637,7 @@ func TestHandleCrashSuggestsManualRespawnWhenAutoRestartDisabled(t *testing.T) {
 	if capturedSession != "test-session" {
 		t.Fatalf("expected session 'test-session', got %s", capturedSession)
 	}
-	if !strings.Contains(capturedMsg, "ntm respawn test-session --panes=1") {
+	if !strings.Contains(capturedMsg, "herdctl respawn test-session --panes=1") {
 		t.Fatalf("expected respawn hint in message, got %q", capturedMsg)
 	}
 }

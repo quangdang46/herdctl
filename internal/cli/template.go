@@ -55,9 +55,9 @@ Built-in variables:
   {{session}}  - Session name (when using with send)
   {{file}}     - File content (when using --file)
 
-Use with ntm send:
-  ntm send myproject --template=code_review --file=src/main.go
-  ntm send myproject -t refactor --var goal="simplify" --file=src/main.go`,
+Use with herdctl send:
+  herdctl send myproject --template=code_review --file=src/main.go
+  herdctl send myproject -t refactor --var goal="simplify" --file=src/main.go`,
 	}
 
 	cmd.AddCommand(

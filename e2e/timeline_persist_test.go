@@ -29,9 +29,9 @@ func NewTimelinePersistTestSuite(t *testing.T, scenario string) *TimelinePersist
 	logger := NewTestLogger(t, scenario)
 
 	// Find ntm binary
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
-		t.Skip("ntm binary not found in PATH")
+		t.Skip("herdctl/ntm binary not found in PATH")
 	}
 
 	return &TimelinePersistTestSuite{

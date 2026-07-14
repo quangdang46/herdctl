@@ -476,14 +476,14 @@ var canonicalErrorGoldens = []errorGoldenTest{
 		GoldenFile:      "error_session_not_found.golden.json",
 		Description:     "Session does not exist or has been terminated",
 		IsRetryable:     false,
-		RemediationHint: "Use 'ntm list' to see available sessions, or spawn a new session with 'ntm spawn'.",
+		RemediationHint: "Use 'herdctl list' to see available sessions, or spawn a new session with 'herdctl spawn'.",
 	},
 	{
 		Code:            ErrCodePaneNotFound,
 		GoldenFile:      "error_pane_not_found.golden.json",
 		Description:     "Pane does not exist within the session",
 		IsRetryable:     false,
-		RemediationHint: "Use 'ntm status' to see available panes in the session.",
+		RemediationHint: "Use 'herdctl status' to see available panes in the session.",
 	},
 	{
 		Code:            ErrCodeInvalidFlag,

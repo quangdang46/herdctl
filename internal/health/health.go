@@ -124,9 +124,21 @@ const (
 	processExitLookbackLines   = 12
 )
 
-// CheckSession performs health checks on all agents in a session
+// CheckSession performs health checks on all agents in a session.
+// Uses the default SessionObserver (tmux topology/capture). Prefer
+// CheckSessionWithObserver under dual-backend CLI/robot paths so herdr
+// does not fall through to tmux list-panes.
 func CheckSession(ctx context.Context, session string) (*SessionHealth, error) {
-	observation, err := status.NewSessionObserver(status.NewDetector()).Observe(ctx, session)
+	return CheckSessionWithObserver(ctx, session, status.NewSessionObserver(status.NewDetector()))
+}
+
+// CheckSessionWithObserver is like CheckSession but uses a preconfigured
+// observer (inject mux/herdr ListPanes + CapturePane under NTM_BACKEND=herdr).
+func CheckSessionWithObserver(ctx context.Context, session string, observer *status.SessionObserver) (*SessionHealth, error) {
+	if observer == nil {
+		observer = status.NewSessionObserver(status.NewDetector())
+	}
+	observation, err := observer.Observe(ctx, session)
 	if err != nil {
 		if isSessionMissing(err) {
 			return nil, &SessionNotFoundError{Session: session}
@@ -216,7 +228,11 @@ func isSessionMissing(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "can't find session") ||
 		strings.Contains(msg, "no server running") ||
-		strings.Contains(msg, "no sessions")
+		strings.Contains(msg, "no sessions") ||
+		strings.Contains(msg, "session not found") ||
+		strings.Contains(msg, "no herdr-backed sessions") ||
+		strings.Contains(msg, "workspace not found") ||
+		strings.Contains(msg, "not found in registry")
 }
 
 // checkAgent performs health checks on a single agent pane

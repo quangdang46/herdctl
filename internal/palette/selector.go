@@ -236,7 +236,7 @@ func (s SessionSelector) View() string {
 
 		hintStyle := lipgloss.NewStyle().Foreground(t.Subtext)
 		cmdStyle := lipgloss.NewStyle().Foreground(t.Blue).Bold(true)
-		b.WriteString("  " + hintStyle.Render("Create one with: ") + cmdStyle.Render("ntm spawn <name>") + "\n\n")
+		b.WriteString("  " + hintStyle.Render("Create one with: ") + cmdStyle.Render("herdctl spawn <name>") + "\n\n")
 	} else {
 		// Session list
 		for i, session := range s.sessions {

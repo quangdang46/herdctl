@@ -4465,7 +4465,7 @@ func (c *WSClient) handleAttentionSubscribe(msg WSMessage, topics []string) map[
 			"oldest_cursor":  earliest,
 			"newest_cursor":  stats.NewestCursor,
 			"resync_hint":    "Resync via --robot-snapshot, then resubscribe with since_cursor=-1",
-			"resync_command": "ntm --robot-snapshot",
+			"resync_command": "herdctl --robot-snapshot",
 		}
 	}
 

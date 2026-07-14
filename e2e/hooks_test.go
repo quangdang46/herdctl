@@ -61,7 +61,7 @@ type HooksTestSuite struct {
 func NewHooksTestSuite(t *testing.T, scenario string) *HooksTestSuite {
 	logger := NewTestLogger(t, scenario)
 
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm binary not found in PATH")
 	}

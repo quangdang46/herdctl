@@ -494,8 +494,8 @@ func TestGenerateZsh(t *testing.T) {
 		"alias cc=",
 		"alias cod=",
 		"alias gmi=",
-		"alias cnt='ntm create'",
-		"alias sat='ntm spawn'",
+		"alias cnt='herdctl create'",
+		"alias sat='herdctl spawn'",
 		"_ntm()",
 		"compdef _ntm ntm",
 		"ensemble:Manage reasoning ensembles",
@@ -526,7 +526,7 @@ func TestGenerateBash(t *testing.T) {
 		"alias cc=",
 		"alias cod=",
 		"alias gmi=",
-		"alias cnt='ntm create'",
+		"alias cnt='herdctl create'",
 		"_ntm_completions()",
 		"_ntm_list_ensemble_presets()",
 		"_ntm_list_mode_ids()",
@@ -673,7 +673,7 @@ func TestInstallGitHooks_NotGitRepo(t *testing.T) {
 
 // TestInstallGitHooks_GitRepo verifies hooks installation in a git repo
 func TestInstallGitHooks_GitRepo(t *testing.T) {
-	if _, err := exec.LookPath("ntm"); err != nil {
+	if _, err := exec.LookPath("herdctl"); err != nil {
 		t.Skip("ntm binary not on PATH; pre-commit hook generation cannot find ntm (e.g., fresh CI where go build places the binary in the repo root, not on PATH)")
 	}
 
@@ -712,7 +712,7 @@ func TestInstallGitHooks_GitRepo(t *testing.T) {
 
 // TestInstallGitHooks_Force verifies force flag behavior
 func TestInstallGitHooks_Force(t *testing.T) {
-	if _, err := exec.LookPath("ntm"); err != nil {
+	if _, err := exec.LookPath("herdctl"); err != nil {
 		t.Skip("ntm binary not on PATH; pre-commit hook generation cannot find ntm (e.g., fresh CI where go build places the binary in the repo root, not on PATH)")
 	}
 

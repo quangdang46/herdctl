@@ -78,9 +78,9 @@ func newEnsembleEstimateCmd() *cobra.Command {
 		Long: `Estimate token usage for an ensemble preset or explicit mode list.
 
 Examples:
-  ntm ensemble estimate project-diagnosis
-  ntm ensemble estimate --preset idea-forge --format=json
-  ntm ensemble estimate --modes=deductive,edge-case,root-cause --budget=12000`,
+  herdctl ensemble estimate project-diagnosis
+  herdctl ensemble estimate --preset idea-forge --format=json
+  herdctl ensemble estimate --modes=deductive,edge-case,root-cause --budget=12000`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if presetName == "" && len(args) > 0 {

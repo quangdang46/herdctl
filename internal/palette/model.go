@@ -1481,7 +1481,7 @@ func (m *Model) send() (tea.Model, tea.Cmd) {
 		}
 
 		if shouldSend {
-			// Use double-Enter submission protocol (same as `ntm send`) which handles
+			// Use double-Enter submission protocol (same as `herdctl send`) which handles
 			// Codex/Gemini multi-line quirks and reliably submits to all agent types
 			if err := tmux.SendKeysForAgentDoubleEnter(p.ID, prompt, p.Type); err != nil {
 				m.err = err

@@ -156,7 +156,7 @@ func (s *SafetyTestSuite) runSafetyStatus() (*SafetyStatusResponse, string, stri
 	args := []string{"safety", "status", "--json"}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 
@@ -190,7 +190,7 @@ func (s *SafetyTestSuite) runSafetyCheck(command string) (*SafetyCheckResponse, 
 	args := []string{"safety", "check", command, "--json"}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 
@@ -227,7 +227,7 @@ func (s *SafetyTestSuite) runSafetyInstall(force bool) (*SafetyInstallResponse, 
 	}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 
@@ -264,7 +264,7 @@ func (s *SafetyTestSuite) runPolicyShow(showAll bool) (*PolicyShowResponse, stri
 	}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 
@@ -301,7 +301,7 @@ func (s *SafetyTestSuite) runPolicyValidate(path string) (*PolicyValidateRespons
 	}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 
@@ -338,7 +338,7 @@ func (s *SafetyTestSuite) runPolicyReset(force bool) (*PolicyResetResponse, stri
 	}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 
@@ -378,7 +378,7 @@ func (s *SafetyTestSuite) runSafetyBlocked(hours, limit int) (*SafetyBlockedResp
 	}
 	s.logger.Log("[E2E-SAFETY] Running: ntm %s", strings.Join(args, " "))
 
-	cmd := exec.Command("ntm", args...)
+	cmd := exec.Command(mustE2EBin(), args...)
 	cmd.Env = append(os.Environ(), "HOME="+s.tempDir)
 	cmd.Dir = s.tempDir
 

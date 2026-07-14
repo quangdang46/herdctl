@@ -241,7 +241,7 @@ func TestBuildRateLimitRecommendation_FixCommandFormat(t *testing.T) {
 
 	// Should contain sleep and re-diagnosis command
 	if rec.Action == "wait" {
-		// Expect: sleep 60 && ntm --robot-diagnose=my-test-session --pane=3
+		// Expect: sleep 60 && herdctl --robot-diagnose=my-test-session --pane=3
 		if !contains(rec.FixCommand, "sleep 60") {
 			t.Errorf("FixCommand should contain 'sleep 60', got: %s", rec.FixCommand)
 		}
@@ -262,7 +262,7 @@ func TestDiagnoseRecommendation_JSONStructure(t *testing.T) {
 		Action:      "restart",
 		Reason:      "Process not running",
 		AutoFixable: true,
-		FixCommand:  "ntm --robot-restart-pane=session --panes=2",
+		FixCommand:  "herdctl --robot-restart-pane=session --panes=2",
 	}
 
 	data, err := json.Marshal(rec)
@@ -558,7 +558,7 @@ func TestRecommendationActions(t *testing.T) {
 				Status:      tt.status,
 				Action:      tt.action,
 				AutoFixable: tt.autoFixable,
-				FixCommand:  "ntm " + tt.fixCommandPattern + "=session",
+				FixCommand:  "herdctl " + tt.fixCommandPattern + "=session",
 				Reason:      "test reason",
 			}
 

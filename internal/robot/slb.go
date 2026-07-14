@@ -91,7 +91,7 @@ func GetSLBApprove(requestID string) (*SLBActionOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("missing request id"),
 			ErrCodeInvalidFlag,
-			"Provide a request ID: ntm --robot-slb-approve=req-123",
+			"Provide a request ID: herdctl --robot-slb-approve=req-123",
 		)
 		return output, nil
 	}
@@ -148,7 +148,7 @@ func GetSLBDeny(requestID, reason string) (*SLBActionOutput, error) {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("missing request id"),
 			ErrCodeInvalidFlag,
-			"Provide a request ID: ntm --robot-slb-deny=req-123 --reason='Too risky'",
+			"Provide a request ID: herdctl --robot-slb-deny=req-123 --reason='Too risky'",
 		)
 		return output, nil
 	}

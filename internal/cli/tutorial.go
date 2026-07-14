@@ -35,13 +35,13 @@ Navigation:
   r            Restart slide animation
   q            Quit tutorial`,
 		Example: `  # Start the tutorial
-  ntm tutorial
+  herdctl tutorial
 
   # Skip animations for faster navigation
-  ntm tutorial --skip-animations
+  herdctl tutorial --skip-animations
 
   # Start from a specific slide (1-9)
-  ntm tutorial --slide=5`,
+  herdctl tutorial --slide=5`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Build options
 			var opts []tutorial.Option
@@ -92,11 +92,11 @@ func printTutorialExitMessage() {
 		{"✨ Thanks for completing the NTM tutorial!", "#a6e3a1"},
 		{"", ""},
 		{"Quick reference:", "#89b4fa"},
-		{"  ntm quick myproject --template=go    Create project", "#cdd6f4"},
-		{"  ntm spawn myproject --cc=2           Spawn agents", "#cdd6f4"},
-		{"  ntm send myproject --all \"prompt\"    Send to all", "#cdd6f4"},
-		{"  ntm palette myproject                Open palette", "#cdd6f4"},
-		{"  ntm --help                           Full help", "#cdd6f4"},
+		{"  herdctl quick myproject --template=go    Create project", "#cdd6f4"},
+		{"  herdctl spawn myproject --cc=2           Spawn agents", "#cdd6f4"},
+		{"  herdctl send myproject --all \"prompt\"    Send to all", "#cdd6f4"},
+		{"  herdctl palette myproject                Open palette", "#cdd6f4"},
+		{"  herdctl --help                           Full help", "#cdd6f4"},
 		{"", ""},
 		{"Happy coding! 🚀", "#f5c2e7"},
 	}

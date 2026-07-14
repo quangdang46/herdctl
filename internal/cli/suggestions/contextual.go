@@ -29,9 +29,9 @@ func SuggestNextCommand(s State) *Suggestion {
 	// Case 1: No sessions running
 	if s.SessionCount == 0 {
 		return &Suggestion{
-			Command:     "ntm spawn",
+			Command:     "herdctl spawn",
 			Description: "Start a new session",
-			Example:     "ntm spawn myproject",
+			Example:     "herdctl spawn myproject",
 			Reason:      "No active sessions found",
 		}
 	}
@@ -46,7 +46,7 @@ func SuggestNextCommand(s State) *Suggestion {
 			return &Suggestion{
 				Command:     "ntm logs",
 				Description: "Check logs for errors",
-				Example:     fmt.Sprintf("ntm logs %s", session),
+				Example:     fmt.Sprintf("herdctl logs %s", session),
 				Reason:      "Recent command failed",
 			}
 		}
@@ -55,9 +55,9 @@ func SuggestNextCommand(s State) *Suggestion {
 	// Case 3: Many sessions running
 	if s.SessionCount > 3 {
 		return &Suggestion{
-			Command:     "ntm dashboard",
+			Command:     "herdctl dashboard",
 			Description: "View all sessions",
-			Example:     "ntm dashboard",
+			Example:     "herdctl dashboard",
 			Reason:      "Multiple active sessions",
 		}
 	}
@@ -67,9 +67,9 @@ func SuggestNextCommand(s State) *Suggestion {
 		// If all agents busy
 		if s.BusyAgents > 0 && s.IdleAgents == 0 {
 			return &Suggestion{
-				Command:     "ntm dashboard",
+				Command:     "herdctl dashboard",
 				Description: "Monitor progress",
-				Example:     fmt.Sprintf("ntm dashboard %s", s.CurrentSession),
+				Example:     fmt.Sprintf("herdctl dashboard %s", s.CurrentSession),
 				Reason:      "Agents are busy",
 			}
 		}
@@ -81,16 +81,16 @@ func SuggestNextCommand(s State) *Suggestion {
 				return &Suggestion{
 					Command:     "ntm assign",
 					Description: "Assign work",
-					Example:     fmt.Sprintf("ntm assign %s", s.CurrentSession),
+					Example:     fmt.Sprintf("herdctl assign %s", s.CurrentSession),
 					Reason:      "Agents idle and beads available",
 				}
 			}
 
 			// Just idle
 			return &Suggestion{
-				Command:     "ntm send",
+				Command:     "herdctl send",
 				Description: "Send prompt",
-				Example:     fmt.Sprintf("ntm send %s --msg='...'", s.CurrentSession),
+				Example:     fmt.Sprintf("herdctl send %s --msg='...'", s.CurrentSession),
 				Reason:      "Agents ready for work",
 			}
 		}
@@ -99,9 +99,9 @@ func SuggestNextCommand(s State) *Suggestion {
 	// Default fallback
 	if len(s.ActiveSessions) > 0 {
 		return &Suggestion{
-			Command:     "ntm attach",
+			Command:     "herdctl attach",
 			Description: "Connect to session",
-			Example:     fmt.Sprintf("ntm attach %s", s.ActiveSessions[0]),
+			Example:     fmt.Sprintf("herdctl attach %s", s.ActiveSessions[0]),
 			Reason:      "Session active",
 		}
 	}

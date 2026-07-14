@@ -102,8 +102,8 @@
       "properties": {
         "ntm.binaryPath": {
           "type": "string",
-          "default": "ntm",
-          "description": "Path to ntm executable"
+          "default": "herdctl",
+          "description": "Path to herdctl executable (ntm alias also works)"
         }
       }
     }

@@ -68,7 +68,7 @@ func parseEnsembleCLIJSON(t *testing.T, suite *TestSuite, label string, stdout [
 }
 
 func supportsNTMSubcommand(name string) bool {
-	cmd := exec.Command("ntm", name, "--help")
+	cmd := exec.Command(mustE2EBin(), name, "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false
@@ -350,7 +350,7 @@ func TestE2E_EnsembleCLI_Synthesize_JSON(t *testing.T) {
 }
 
 func ensembleSpawnIsExperimental() bool {
-	cmd := exec.Command("ntm", "ensemble", "spawn", "--help")
+	cmd := exec.Command(mustE2EBin(), "ensemble", "spawn", "--help")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return true

@@ -26,10 +26,10 @@ The policy system controls:
   - Automation settings (auto-push, auto-commit, force-release)
   - SLB (two-person approval) requirements
 
-Use 'ntm policy show' to see the current policy.
-Use 'ntm policy validate' to check policy file syntax.
-Use 'ntm policy reset' to reset to defaults.
-Use 'ntm policy edit' to open in your editor.`,
+Use 'herdctl policy show' to see the current policy.
+Use 'herdctl policy validate' to check policy file syntax.
+Use 'herdctl policy reset' to reset to defaults.
+Use 'herdctl policy edit' to open in your editor.`,
 	}
 
 	cmd.AddCommand(

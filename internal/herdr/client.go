@@ -670,8 +670,17 @@ func (c *Client) StartAgent(ctx context.Context, opts StartAgentOptions) (Pane, 
 	}
 	_ = c.renamePane(ctx, started.Agent.PaneID, title)
 
+	// Index must match GetPanes / herdrPanesToTmux (numeric suffix of
+	// "wN:pM"). spawnSessionLogic keys persona → pane maps by this value;
+	// leaving it 0 drops persona / persona_prompt_source from JSON output.
+	paneIndex := paneIndexFromID(started.Agent.PaneID)
+	if paneIndex <= 0 {
+		paneIndex = opts.Index
+	}
+
 	return Pane{
 		ID:          started.Agent.PaneID,
+		Index:       paneIndex,
 		NTMIndex:    opts.Index,
 		Title:       title,
 		Type:        opts.AgentType.Canonical(),
@@ -1398,6 +1407,21 @@ func (c *Client) renamePane(ctx context.Context, paneID, label string) error {
 	}
 	// Prefer pane rename; agent rename requires agent identity.
 	return c.runJSON(ctx, &okResult{}, "pane", "rename", paneID, label)
+}
+
+
+// paneIndexFromID parses a Herdr pane id ("w1:p2") into the numeric pane
+// index (2). Returns 0 when the id is empty or not in the expected form.
+func paneIndexFromID(paneID string) int {
+	if paneID == "" {
+		return 0
+	}
+	parts := strings.Split(paneID, ":p")
+	if len(parts) != 2 {
+		return 0
+	}
+	n, _ := strconv.Atoi(parts[1])
+	return n
 }
 
 func tabIndexFromID(tabID string) int {

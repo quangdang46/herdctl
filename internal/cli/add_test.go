@@ -103,7 +103,7 @@ func TestAddThreadsReasoningEffort(t *testing.T) {
 
 // TestAddThreadsCodexReasoningEffort is the ntm#208 regression guard. Issue
 // #208 reproduced against v1.18.3 (commit 6615dd7), which predates the ntm#195
-// `add` fix: `ntm add --cod=1:MODEL:EFFORT` parsed the third spec field but
+// `add` fix: `herdctl add --cod=1:MODEL:EFFORT` parsed the third spec field but
 // runAdd handed GenerateAgentCommand an empty ReasoningEffort, so the default
 // Codex template always emitted the fallback rather than the requested effort.
 // This drives the real

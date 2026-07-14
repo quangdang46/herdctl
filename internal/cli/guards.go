@@ -27,9 +27,9 @@ Pre-commit guards prevent accidental commits during agent operations:
 - Validate no conflicting agent work is in progress
 - Ensure coordination safety in multi-agent sessions
 
-Use 'ntm guards install' to install the guard in the current repository.
-Use 'ntm guards uninstall' to remove the guard.
-Use 'ntm guards status' to check installation status.`,
+Use 'herdctl guards install' to install the guard in the current repository.
+Use 'herdctl guards uninstall' to remove the guard.
+Use 'herdctl guards status' to check installation status.`,
 	}
 
 	cmd.AddCommand(
@@ -200,7 +200,7 @@ func installFallbackGuard(hookPath, projectKey, repoPath string) error {
 
 	script := fmt.Sprintf(`#!/bin/bash
 # ntm-precommit-guard
-# Installed by: ntm guards install
+# Installed by: herdctl guards install
 # Project: %s
 # Repository: %s
 
@@ -462,9 +462,9 @@ func runGuardsStatus(cmd *cobra.Command, args []string) error {
 	if !installed || !isNTMGuard {
 		fmt.Println()
 		if otherHook {
-			fmt.Printf("  %s\n", mutedStyle.Render("Use 'ntm guards install --force' to replace existing hook"))
+			fmt.Printf("  %s\n", mutedStyle.Render("Use 'herdctl guards install --force' to replace existing hook"))
 		} else {
-			fmt.Printf("  %s\n", mutedStyle.Render("Run 'ntm guards install' to install the guard"))
+			fmt.Printf("  %s\n", mutedStyle.Render("Run 'herdctl guards install' to install the guard"))
 		}
 	}
 

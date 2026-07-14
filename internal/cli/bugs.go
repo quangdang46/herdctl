@@ -361,7 +361,7 @@ Examples:
 						"message":   "no cached scan results, run 'ntm scan' or 'ntm bugs list' first",
 					})
 				}
-				fmt.Println("No cached scan results. Run 'ntm scan' or 'ntm bugs list' first.")
+				fmt.Println("No cached scan results. Run 'herdctl scan' or 'ntm bugs list' first.")
 				return nil
 			}
 

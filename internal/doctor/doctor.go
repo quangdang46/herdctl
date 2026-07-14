@@ -246,7 +246,7 @@ func checkSessions(sessions []SessionView) (CheckResult, []Finding) {
 				Check:       "session",
 				Severity:    SeverityWarning,
 				Summary:     "session has unresponsive panes",
-				Remediation: "inspect with `ntm --robot-tail=" + s.Name + "` and restart wedged agents",
+				Remediation: "inspect with `herdctl --robot-tail=" + s.Name + "` and restart wedged agents",
 				Evidence: []string{
 					"session=" + s.Name,
 					"unresponsive=" + intoa(s.UnresponsivePanes),

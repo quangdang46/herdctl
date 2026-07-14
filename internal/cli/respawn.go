@@ -37,12 +37,12 @@ By default, only agent panes are restarted (not the user pane at index 0).
 Use --all to include all panes, or --panes to target specific indices.
 
 Examples:
-  ntm respawn myproject              # Restart all agent panes (prompts for confirmation)
-  ntm respawn myproject --force      # No confirmation
-  ntm respawn myproject --panes=1,2  # Restart only panes 1 and 2
-  ntm respawn myproject --type=cc    # Restart only Claude agents
-  ntm respawn myproject --all        # Include user pane (index 0)
-  ntm respawn myproject --dry-run    # Preview which panes would be restarted`,
+  herdctl respawn myproject              # Restart all agent panes (prompts for confirmation)
+  herdctl respawn myproject --force      # No confirmation
+  herdctl respawn myproject --panes=1,2  # Restart only panes 1 and 2
+  herdctl respawn myproject --type=cc    # Restart only Claude agents
+  herdctl respawn myproject --all        # Include user pane (index 0)
+  herdctl respawn myproject --dry-run    # Preview which panes would be restarted`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runRespawn(args[0], force, panes, agentType, all, dryRun)

@@ -27,7 +27,7 @@ func TestE2E_UBSDiffWarningsSurfaceInJSON(t *testing.T) {
 	if _, err := exec.LookPath("ubs"); err != nil {
 		t.Skip("ubs not installed; skipping UBS diff warning test")
 	}
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm not found on PATH")
 	}

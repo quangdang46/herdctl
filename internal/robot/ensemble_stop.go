@@ -80,7 +80,7 @@ func GetEnsembleStop(session string, opts EnsembleStopOptions) (*EnsembleStopOut
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("session name is required"),
 			ErrCodeInvalidFlag,
-			"Provide a session name: ntm --robot-ensemble-stop=myproject",
+			"Provide a session name: herdctl --robot-ensemble-stop=myproject",
 		)
 		return output, nil
 	}

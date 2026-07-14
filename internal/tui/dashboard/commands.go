@@ -51,9 +51,9 @@ var dashboardRunAddAgents = func(ctx context.Context, projectDir, session string
 	trimmed := strings.TrimSpace(string(output))
 	if err != nil {
 		if trimmed != "" {
-			return trimmed, fmt.Errorf("ntm add failed (output: %s): %w", trimmed, err)
+			return trimmed, fmt.Errorf("herdctl add failed (output: %s): %w", trimmed, err)
 		}
-		return "", fmt.Errorf("ntm add failed: %w", err)
+		return "", fmt.Errorf("herdctl add failed: %w", err)
 	}
 	return trimmed, nil
 }

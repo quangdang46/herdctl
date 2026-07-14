@@ -14,7 +14,7 @@ import (
 // pane_work_token.go implements the DISPATCH-TIME stamping half of the opt-in
 // semantic-progress signal (#199).
 //
-// When (and only when) `[robot.semantic].stamp = true`, `ntm send` / `ntm
+// When (and only when) `[robot.semantic].stamp = true`, `herdctl send` / `ntm
 // assign` inject a per-pane `NTM-Pane: <session>/<window>.<pane>` commit-trailer
 // INSTRUCTION into the dispatched marching orders. This is deliberately a
 // marching-orders instruction, NOT a git hook or a git-config mutation: hooks /
@@ -62,7 +62,7 @@ func stampMarchingOrders(prompt, session string, window, pane int) string {
 //
 // Callers should invoke it AFTER the prompt has been delivered so bead I/O is
 // never on the critical path of getting work to the agent. It is only wired in
-// where a bead id is cleanly known (assign paths); the plain `ntm send` path has
+// where a bead id is cleanly known (assign paths); the plain `herdctl send` path has
 // no associated bead and therefore only gets the commit-trailer instruction.
 func bestEffortStampBeadLabel(beadID, session string, window, pane int) {
 	if !semanticStampEnabled() {

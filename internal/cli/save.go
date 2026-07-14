@@ -35,10 +35,10 @@ Creates timestamped files for each pane in the output directory.
 Files are named: {session}_{pane-title}_{timestamp}.txt
 
 Examples:
-  ntm save myproject                    # Save all panes to ./outputs/
-  ntm save myproject -o ~/logs          # Custom output directory
-  ntm save myproject --cc               # Save Claude panes only
-  ntm save myproject -l 5000            # Save last 5000 lines`,
+  herdctl save myproject                    # Save all panes to ./outputs/
+  herdctl save myproject -o ~/logs          # Custom output directory
+  herdctl save myproject --cc               # Save Claude panes only
+  herdctl save myproject -l 5000            # Save last 5000 lines`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string

@@ -45,7 +45,7 @@ func TestToonVsJSONTokenEfficiency(t *testing.T) {
 		},
 		{
 			name:    "Error response",
-			payload: NewErrorResponse(fmt.Errorf("session not found"), ErrCodeSessionNotFound, "Use 'ntm list' to see sessions"),
+			payload: NewErrorResponse(fmt.Errorf("session not found"), ErrCodeSessionNotFound, "Use 'herdctl list' to see sessions"),
 		},
 	}
 
@@ -201,13 +201,13 @@ func createSamplePlanActions() []map[string]any {
 	return []map[string]any{
 		{
 			"priority":    1,
-			"command":     "ntm send myproject --type=claude --msg='Continue work on auth refactor'",
+			"command":     "herdctl send myproject --type=claude --msg='Continue work on auth refactor'",
 			"description": "Resume work on high-priority task",
 			"args":        []string{"--type=claude", "--msg='...'"},
 		},
 		{
 			"priority":    2,
-			"command":     "ntm spawn backend --cc=2",
+			"command":     "herdctl spawn backend --cc=2",
 			"description": "Add capacity for backend work",
 			"args":        []string{"--cc=2"},
 		},

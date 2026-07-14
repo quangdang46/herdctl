@@ -37,8 +37,8 @@ type SwitchAccountOptions struct {
 // This function returns the data struct directly, enabling CLI/REST parity.
 // Usage:
 //
-//	ntm --robot-switch-account claude         # Switch to next Claude account
-//	ntm --robot-switch-account openai:acc123  # Switch to specific account
+//	herdctl --robot-switch-account claude         # Switch to next Claude account
+//	herdctl --robot-switch-account openai:acc123  # Switch to specific account
 func GetSwitchAccount(opts SwitchAccountOptions) (*SwitchAccountOutput, error) {
 	canonicalProvider := canonicalRobotProvider(opts.Provider)
 	if canonicalProvider == "" {

@@ -135,12 +135,12 @@ func init() {
 			{
 				Name:        "list",
 				Description: "List all sessions",
-				Command:     "ntm list",
+				Command:     "herdctl list",
 			},
 			{
 				Name:        "list-with-tag",
 				Description: "List sessions filtered by tag",
-				Command:     "ntm list --tag=frontend",
+				Command:     "herdctl list --tag=frontend",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -179,12 +179,12 @@ func init() {
 			{
 				Name:        "status",
 				Description: "Show session status",
-				Command:     "ntm status myproject",
+				Command:     "herdctl status myproject",
 			},
 			{
 				Name:        "status-assignments",
 				Description: "Show session status with assignments",
-				Command:     "ntm status myproject --assignments",
+				Command:     "herdctl status myproject --assignments",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -238,7 +238,7 @@ func init() {
 			{
 				Name:        "attach",
 				Description: "Attach to session",
-				Command:     "ntm attach myproject",
+				Command:     "herdctl attach myproject",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -303,8 +303,8 @@ shell out to tmux attach.
 If the session doesn't exist, shows available sessions.
 
 Examples:
-  ntm attach myproject
-  NTM_BACKEND=herdr ntm attach myproject`,
+  herdctl attach myproject
+  NTM_BACKEND=herdr herdctl attach myproject`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
@@ -471,22 +471,22 @@ func printHerdrUISubstitute(surface, session string) error {
 	fmt.Println("Herdr substitutes:")
 	fmt.Println("  herdr                         # open herdr TUI (sidebar = status cockpit)")
 	if session != "" {
-		fmt.Printf("  ntm attach %s             # herdr workspace focus guidance\n", session)
-		fmt.Printf("  ntm status %s             # pane/agent status (CLI)\n", session)
-		fmt.Printf("  ntm status %s --watch     # live status refresh\n", session)
-		fmt.Printf("  ntm agent list            # agents across herdr workspaces\n")
-		fmt.Printf("  ntm send %s --all \"...\"   # dispatch prompts without palette TUI\n", session)
+		fmt.Printf("  herdctl attach %s             # herdr workspace focus guidance\n", session)
+		fmt.Printf("  herdctl status %s             # pane/agent status (CLI)\n", session)
+		fmt.Printf("  herdctl status %s --watch     # live status refresh\n", session)
+		fmt.Printf("  herdctl agent list            # agents across herdr workspaces\n")
+		fmt.Printf("  herdctl send %s --all \"...\"   # dispatch prompts without palette TUI\n", session)
 	} else {
-		fmt.Println("  ntm attach <session>         # herdr workspace focus guidance")
-		fmt.Println("  ntm status <session>         # pane/agent status (CLI)")
-		fmt.Println("  ntm status <session> --watch # live status refresh")
-		fmt.Println("  ntm agent list               # agents across herdr workspaces")
-		fmt.Println("  ntm send <session> --all \"...\"  # dispatch without palette TUI")
+		fmt.Println("  herdctl attach <session>         # herdr workspace focus guidance")
+		fmt.Println("  herdctl status <session>         # pane/agent status (CLI)")
+		fmt.Println("  herdctl status <session> --watch # live status refresh")
+		fmt.Println("  herdctl agent list               # agents across herdr workspaces")
+		fmt.Println("  herdctl send <session> --all \"...\"  # dispatch without palette TUI")
 	}
 	fmt.Println("  ntm plugins list             # agent/command plugins (file-based)")
-	fmt.Println("  ntm tutorial                 # interactive NTM tutorial (backend-agnostic)")
+	fmt.Println("  herdctl tutorial                 # interactive NTM tutorial (backend-agnostic)")
 	fmt.Println()
-	fmt.Println("Keybindings: configure inside the herdr TUI; ntm bind only writes ~/.tmux.conf.")
+	fmt.Println("Keybindings: configure inside the herdr TUI; herdctl bind only writes ~/.tmux.conf.")
 	if session != "" {
 		return printHerdrAttachGuidance(session)
 	}
@@ -1166,14 +1166,14 @@ Assignment Filtering (requires --assignments):
   --summary          Show aggregated statistics only
 
 Examples:
-  ntm status myproject
-  ntm status myproject --tag=frontend
-  ntm status myproject --assignments
-  ntm status myproject --assignments --status=working
-  ntm status myproject --assignments --agent=claude
-  ntm status myproject --assignments --status=failed --agent=codex
-  ntm status myproject --assignments --summary
-  ntm status myproject --watch`,
+  herdctl status myproject
+  herdctl status myproject --tag=frontend
+  herdctl status myproject --assignments
+  herdctl status myproject --assignments --status=working
+  herdctl status myproject --assignments --agent=claude
+  herdctl status myproject --assignments --status=failed --agent=codex
+  herdctl status myproject --assignments --summary
+  herdctl status myproject --watch`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := statusOptions{
@@ -1778,7 +1778,7 @@ func runStatusOnce(w io.Writer, session string, opts statusOptions) error {
 
 	// Quick actions hint
 	fmt.Fprintf(w, "  %sQuick actions:%s\n", overlay, reset)
-	fmt.Fprintf(w, "    %sntm send %s --all \"prompt\"%s  %s# Broadcast to all agents%s\n",
+	fmt.Fprintf(w, "    %sherdctl send %s --all \"prompt\"%s  %s# Broadcast to all agents%s\n",
 		subtext, session, reset, overlay, reset)
 	fmt.Fprintf(w, "    %sntm view %s%s                 %s# Tile all panes%s\n",
 		subtext, session, reset, overlay, reset)
@@ -1950,7 +1950,7 @@ func updateSessionActivity(sessionName string) {
 	_ = client.UpdateSessionActivity(ctx, sessionName, projectKey)
 }
 
-// fetchAgentMailStatus retrieves Agent Mail status for display in ntm status.
+// fetchAgentMailStatus retrieves Agent Mail status for display in herdctl status.
 // Returns nil if Agent Mail is unavailable (graceful degradation).
 func fetchAgentMailStatus(projectKey string) *output.AgentMailStatus {
 	client := newAgentMailClient(projectKey)

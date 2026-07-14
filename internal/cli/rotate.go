@@ -34,10 +34,10 @@ By default, uses the restart strategy (quit session, switch browser account, sta
 Use --preserve-context to re-authenticate the existing session instead.
 
 Examples:
-  ntm rotate myproject --pane=0
-  ntm rotate myproject --all-limited       # Rotate all rate-limited panes
-  ntm rotate myproject --pane=0 --preserve-context
-  ntm rotate myproject --pane=0 --account=backup1@gmail.com`,
+  herdctl rotate myproject --pane=0
+  herdctl rotate myproject --all-limited       # Rotate all rate-limited panes
+  herdctl rotate myproject --pane=0 --preserve-context
+  herdctl rotate myproject --pane=0 --account=backup1@gmail.com`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := muxEnsureInstalled(); err != nil {
@@ -165,7 +165,7 @@ to rotate away from it on a usage-limit hit. The pin is persisted to
 provider may be an agent type (cc, cod, gmi) or a caam provider (claude, openai, google).
 
 Example:
-  ntm rotate lock cod acctB    # never auto-rotate Codex away from acctB`,
+  herdctl rotate lock cod acctB    # never auto-rotate Codex away from acctB`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dir, err := rotatePinDataDir(dataDir)
@@ -180,7 +180,7 @@ Example:
 			if err := rotator.SavePins(dir); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Pinned %s to %q; automatic rotation will refuse to switch away (use --force-global-auth-clobber or 'ntm rotate unlock' to override).\n", args[0], args[1])
+			fmt.Fprintf(cmd.OutOrStdout(), "Pinned %s to %q; automatic rotation will refuse to switch away (use --force-global-auth-clobber or 'herdctl rotate unlock' to override).\n", args[0], args[1])
 			return nil
 		},
 	}

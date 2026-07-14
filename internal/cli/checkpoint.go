@@ -82,13 +82,13 @@ Checkpoints capture the complete state of a tmux session including:
 - Git repository state (branch, commit, uncommitted changes)
 
 Examples:
-  ntm checkpoint save myproject           # Create a checkpoint
-  ntm checkpoint save myproject -m "Pre-refactor snapshot"
-  ntm checkpoint list                     # List all checkpoints
-  ntm checkpoint list myproject           # List checkpoints for session
-  ntm checkpoint show myproject <id>      # Show checkpoint details
-  ntm checkpoint restore myproject        # Restore the latest checkpoint
-  ntm checkpoint delete myproject <id>    # Delete a checkpoint`,
+  herdctl checkpoint save myproject           # Create a checkpoint
+  herdctl checkpoint save myproject -m "Pre-refactor snapshot"
+  herdctl checkpoint list                     # List all checkpoints
+  herdctl checkpoint list myproject           # List checkpoints for session
+  herdctl checkpoint show myproject <id>      # Show checkpoint details
+  herdctl checkpoint restore myproject        # Restore the latest checkpoint
+  herdctl checkpoint delete myproject <id>    # Delete a checkpoint`,
 	}
 
 	cmd.AddCommand(newCheckpointSaveCmd())
@@ -120,10 +120,10 @@ The checkpoint includes:
 - Diff patch of uncommitted changes (optional)
 
 Examples:
-  ntm checkpoint save myproject
-  ntm checkpoint save myproject -m "Before major refactor"
-  ntm checkpoint save myproject --scrollback=500
-  ntm checkpoint save myproject --no-git`,
+  herdctl checkpoint save myproject
+  herdctl checkpoint save myproject -m "Before major refactor"
+  herdctl checkpoint save myproject --scrollback=500
+  herdctl checkpoint save myproject --no-git`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session, err := resolveCheckpointLiveSessionArg(args[0], cmd.OutOrStdout())
@@ -210,8 +210,8 @@ func newCheckpointListCmd() *cobra.Command {
 		Long: `List all checkpoints, optionally filtered by session.
 
 Examples:
-  ntm checkpoint list              # List all checkpoints
-  ntm checkpoint list myproject    # List checkpoints for session`,
+  herdctl checkpoint list              # List all checkpoints
+  herdctl checkpoint list myproject    # List checkpoints for session`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			storage := checkpoint.NewStorage()
@@ -428,7 +428,7 @@ func newCheckpointShowCmd() *cobra.Command {
 		Long: `Show detailed information about a checkpoint.
 
 Examples:
-  ntm checkpoint show myproject 20251210-143052`,
+  herdctl checkpoint show myproject 20251210-143052`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session, err := resolveCheckpointStorageSessionArg(args[0])
@@ -520,8 +520,8 @@ func newCheckpointDeleteCmd() *cobra.Command {
 		Long: `Delete a checkpoint from storage.
 
 Examples:
-  ntm checkpoint delete myproject 20251210-143052
-  ntm checkpoint delete myproject 20251210-143052 --force`,
+  herdctl checkpoint delete myproject 20251210-143052
+  herdctl checkpoint delete myproject 20251210-143052 --force`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session, err := resolveCheckpointStorageSessionArg(args[0])
@@ -609,11 +609,11 @@ The checkpoint-id can be:
 - "last", "latest", "~1", or "~N" for historical selection
 
 Examples:
-  ntm checkpoint restore myproject
-  ntm checkpoint restore myproject 20251210-143052
-  ntm checkpoint restore myproject ~2 --dry-run
-  ntm checkpoint restore myproject --inject-context
-  ntm checkpoint restore myproject last --force`,
+  herdctl checkpoint restore myproject
+  herdctl checkpoint restore myproject 20251210-143052
+  herdctl checkpoint restore myproject ~2 --dry-run
+  herdctl checkpoint restore myproject --inject-context
+  herdctl checkpoint restore myproject last --force`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if jsonOutput && attach {
@@ -834,8 +834,8 @@ Performs the following checks:
 - Consistency checks (pane count, valid indices)
 
 Examples:
-  ntm checkpoint verify myproject 20251210-143052  # Verify single checkpoint
-  ntm checkpoint verify myproject --all            # Verify all checkpoints for session`,
+  herdctl checkpoint verify myproject 20251210-143052  # Verify single checkpoint
+  herdctl checkpoint verify myproject --all            # Verify all checkpoints for session`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session, err := resolveCheckpointStorageSessionArg(args[0])
@@ -1031,10 +1031,10 @@ Use --redact-secrets to remove sensitive data (API keys, tokens) from
 scrollback files before sharing.
 
 Examples:
-  ntm checkpoint export myproject 20251210-143052
-  ntm checkpoint export myproject 20251210-143052 --output=backup.tar.gz
-  ntm checkpoint export myproject 20251210-143052 --format=zip
-  ntm checkpoint export myproject 20251210-143052 --redact-secrets`,
+  herdctl checkpoint export myproject 20251210-143052
+  herdctl checkpoint export myproject 20251210-143052 --output=backup.tar.gz
+  herdctl checkpoint export myproject 20251210-143052 --format=zip
+  herdctl checkpoint export myproject 20251210-143052 --redact-secrets`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			session, err := resolveCheckpointStorageSessionArg(args[0])
@@ -1132,10 +1132,10 @@ Use --session to import into a different session name.
 Use --target-dir to override the working directory path.
 
 Examples:
-  ntm checkpoint import backup.tar.gz
-  ntm checkpoint import backup.zip --session=restored-session
-  ntm checkpoint import backup.tar.gz --target-dir=/new/path/to/project
-  ntm checkpoint import backup.tar.gz --skip-verify`,
+  herdctl checkpoint import backup.tar.gz
+  herdctl checkpoint import backup.zip --session=restored-session
+  herdctl checkpoint import backup.tar.gz --target-dir=/new/path/to/project
+  herdctl checkpoint import backup.tar.gz --skip-verify`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			archivePath := args[0]

@@ -258,11 +258,11 @@ func (r *SessionsListResult) Text(w io.Writer) error {
 	if r.Count == 0 {
 		if r.Archived {
 			fmt.Fprintf(w, "%sNo archived sessions found%s\n", colorize(t.Warning), colorize(t.Text))
-			fmt.Fprintf(w, "Use 'ntm sessions archive <name>' to archive a session.\n")
+			fmt.Fprintf(w, "Use 'herdctl sessions archive <name>' to archive a session.\n")
 			return nil
 		}
 		fmt.Fprintf(w, "%sNo saved sessions found%s\n", colorize(t.Warning), colorize(t.Text))
-		fmt.Fprintf(w, "Use 'ntm sessions save' to save a session.\n")
+		fmt.Fprintf(w, "Use 'herdctl sessions save' to save a session.\n")
 		return nil
 	}
 
@@ -898,7 +898,7 @@ func applyResumeTheme(name string) {
 
 // sendResumePrompt injects an initial prompt into each agent pane after a
 // resume/restore relaunch (ntm-boi0 --prompt passthrough). Best-effort: the
-// agents may still be starting, so this mirrors `ntm resume --inject` and a
+// agents may still be starting, so this mirrors `herdctl resume --inject` and a
 // short settle delay precedes delivery. User panes are skipped.
 func sendResumePrompt(sessionName, prompt string) (sent, failed int) {
 	if prompt = strings.TrimSpace(prompt); prompt == "" {
@@ -994,7 +994,7 @@ func newSessionsArchiveCmd() *cobra.Command {
 		Long: `Move a saved session into the archive.
 
 Archived sessions no longer appear in 'ntm sessions list' but remain fully
-restorable via 'ntm sessions unarchive <name>'. Use 'ntm sessions list
+restorable via 'ntm sessions unarchive <name>'. Use 'herdctl sessions list
 --archived' to view them.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

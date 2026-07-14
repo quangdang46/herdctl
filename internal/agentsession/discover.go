@@ -72,7 +72,7 @@ const (
 
 // Info describes a discovered agent CLI session for a pane.
 type Info struct {
-	// AgentType is the canonical ntm agent type ("cc", "cod", "gmi", "agy").
+	// AgentType is the canonical herdctl agent type ("cc", "cod", "gmi", "agy").
 	AgentType string `json:"agent_type"`
 	// SessionID is the provider session id (e.g. the Claude Code UUID).
 	SessionID string `json:"session_id"`
@@ -102,7 +102,7 @@ type BindingObservation struct {
 	SourcePath      string           `json:"-"`
 }
 
-// ResumeProvider maps an ntm agent type to the casr/provider name used by
+// ResumeProvider maps an herdctl agent type to the casr/provider name used by
 // `casr <provider> resume` and `casr -<flag>`. Returns "" for agent types that
 // have no provider-session resume path (user panes, editor agents, etc.).
 //

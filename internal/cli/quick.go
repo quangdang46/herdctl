@@ -35,10 +35,10 @@ func newQuickCmd() *cobra.Command {
 	- Creates basic .gitignore
 
 Examples:
-  ntm quick myproject           # Full setup
-  ntm quick myproject --no-git  # Skip git init
-  ntm quick api --template=go   # Use Go template
-  ntm quick myproject --label frontend  # Labeled session`,
+  herdctl quick myproject           # Full setup
+  herdctl quick myproject --no-git  # Skip git init
+  herdctl quick api --template=go   # Use Go template
+  herdctl quick myproject --label frontend  # Labeled session`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]

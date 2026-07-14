@@ -44,7 +44,7 @@ func init() {
 			{
 				Name:        "view",
 				Description: "Apply tiled layout to a session",
-				Command:     "ntm view myproject",
+				Command:     "herdctl view myproject",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -82,10 +82,10 @@ If no session is specified:
 - Otherwise, shows a session selector
 
 Examples:
-  ntm view myproject
-  ntm view                 # Select session or use current
+  herdctl view myproject
+  herdctl view                 # Select session or use current
   ntm tile myproject       # Alias
-  NTM_BACKEND=herdr ntm view myproject`,
+  NTM_BACKEND=herdr herdctl view myproject`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var session string

@@ -415,7 +415,7 @@ func (m *TimelinePanel) View() string {
 			Icon:        components.IconWaiting,
 			Title:       "No agent activity",
 			Description: "Timeline will populate as agents change state",
-			Action:      "Spawn agents with 'ntm spawn'",
+			Action:      "Spawn agents with 'herdctl spawn'",
 			Width:       w - 4,
 			Centered:    true,
 		}))

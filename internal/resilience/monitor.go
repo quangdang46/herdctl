@@ -5,31 +5,125 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agent"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/events"
 	"github.com/Dicklesworthstone/ntm/internal/health"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/notify"
 	"github.com/Dicklesworthstone/ntm/internal/process"
 	"github.com/Dicklesworthstone/ntm/internal/ratelimit"
+	"github.com/Dicklesworthstone/ntm/internal/status"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
 // Overridable hooks for tests.
 // Protected by hooksMu for concurrent access from spawned goroutines.
+// Defaults are backend-aware (tmux or herdr via NTM_BACKEND/HERDCTL_BACKEND).
 var (
 	hooksMu          sync.RWMutex
-	sendKeysFn       = tmux.SendKeys
-	buildPaneCmdFn   = tmux.BuildPaneCommand
+	sendKeysFn       = backendSendKeys
+	buildPaneCmdFn   = tmux.BuildPaneCommand // pure shell argv builder; backend-agnostic
 	sleepFn          = time.Sleep
-	checkSessionFn   = health.CheckSession
-	displayMessageFn = tmux.DisplayMessage
+	checkSessionFn   = backendCheckSession
+	displayMessageFn = backendDisplayMessage
 	isChildAliveFn   = process.IsChildAlive
 )
+
+// backendSendKeys routes key delivery through the active multiplexer.
+func backendSendKeys(target, keys string, enter bool) error {
+	if backend.IsHerdr() {
+		return herdr.SendKeys(target, keys, enter)
+	}
+	return tmux.SendKeys(target, keys, enter)
+}
+
+// backendDisplayMessage shows a transient status line in the session UI.
+// Herdr has a DisplayMessage helper; tmux uses display-message.
+func backendDisplayMessage(session, msg string, durationMs int) error {
+	if backend.IsHerdr() {
+		return herdr.DisplayMessage(session, msg, durationMs)
+	}
+	return tmux.DisplayMessage(session, msg, durationMs)
+}
+
+// backendGetPanesWithActivity lists panes for health observation.
+// Under herdr, LastActivity is zero (no native activity clock).
+func backendGetPanesWithActivity(ctx context.Context, session string) ([]tmux.PaneActivity, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetPanesWithActivityContext(ctx, session)
+	}
+	panes, err := herdr.GetPanesContext(ctx, session)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tmux.PaneActivity, 0, len(panes))
+	for i, p := range panes {
+		win, paneIdx := herdrPaneNumericWinPane(p.ID)
+		if win == 0 && paneIdx == 0 {
+			win, paneIdx = p.WindowIndex, i
+		}
+		out = append(out, tmux.PaneActivity{
+			Pane: tmux.Pane{
+				ID:          p.ID,
+				Index:       paneIdx,
+				WindowIndex: win,
+				NTMIndex:    p.NTMIndex,
+				Title:       p.Title,
+				Type:        tmux.AgentType(p.Type),
+				Variant:     p.Variant,
+				Tags:        append([]string{}, p.Tags...),
+				Command:     p.Command,
+				Width:       p.Width,
+				Height:      p.Height,
+				Active:      p.Active,
+				PID:         p.PID,
+			},
+		})
+	}
+	return out, nil
+}
+
+func herdrPaneNumericWinPane(herdrID string) (win, pane int) {
+	if strings.Count(herdrID, ":") != 1 {
+		return 0, 0
+	}
+	left, right, ok := strings.Cut(herdrID, ":")
+	if !ok {
+		return 0, 0
+	}
+	win, _ = strconv.Atoi(strings.TrimLeft(left, "wW"))
+	pane, _ = strconv.Atoi(strings.TrimLeft(right, "pP"))
+	return win, pane
+}
+
+func backendCapturePane(ctx context.Context, target string, lines int) (string, error) {
+	if backend.IsHerdr() {
+		return herdr.CapturePaneOutputContext(ctx, target, lines)
+	}
+	return tmux.CapturePaneOutputContext(ctx, target, lines)
+}
+
+// backendCheckSession runs health.CheckSession with a mux-aware observer so
+// the session monitor works under NTM_BACKEND=herdr (no raw tmux list-panes).
+func backendCheckSession(ctx context.Context, session string) (*health.SessionHealth, error) {
+	detector := status.NewDetector()
+	observer := status.NewSessionObserverWithDependencies(
+		detector,
+		status.DefaultSessionObserverConfig(detector.Config()),
+		status.SessionObserverDependencies{
+			ListPanes:   backendGetPanesWithActivity,
+			CapturePane: backendCapturePane,
+		},
+	)
+	return health.CheckSessionWithObserver(ctx, session, observer)
+}
 
 // AgentState tracks the state of an individual agent for restart purposes
 type AgentState struct {
@@ -120,9 +214,25 @@ func (m *Monitor) RegisterAgent(paneID string, paneIndex int, shellPID int, agen
 	}
 }
 
-// ScanAndRegisterAgents discovers agents from existing tmux panes
+// backendGetPanes lists panes for the active multiplexer (tmux or herdr).
+func backendGetPanes(session string) ([]tmux.Pane, error) {
+	if !backend.IsHerdr() {
+		return tmux.GetPanes(session)
+	}
+	activities, err := backendGetPanesWithActivity(context.Background(), session)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tmux.Pane, 0, len(activities))
+	for _, a := range activities {
+		out = append(out, a.Pane)
+	}
+	return out, nil
+}
+
+// ScanAndRegisterAgents discovers agents from existing session panes.
 func (m *Monitor) ScanAndRegisterAgents() error {
-	panes, err := tmux.GetPanes(m.session)
+	panes, err := backendGetPanes(m.session)
 	if err != nil {
 		return err
 	}
@@ -611,7 +721,7 @@ func (m *Monitor) recordRateLimitSuccess(agentType string) {
 
 // triggerRotationAssistance sends a notification with rotation command or auto-initiates rotation
 func (m *Monitor) triggerRotationAssistance(session string, paneIndex int, agentType string, rotateConfig config.RotationConfig) {
-	rotateCmd := fmt.Sprintf("ntm rotate %s --pane=%d", session, paneIndex)
+	rotateCmd := fmt.Sprintf("herdctl rotate %s --pane=%d", session, paneIndex)
 
 	log.Printf("[resilience] Suggesting rotation: %s", rotateCmd)
 
@@ -772,7 +882,7 @@ func (m *Monitor) suggestManualRespawn(agent *AgentState) {
 	if m.session == "" {
 		return
 	}
-	respawnCmd := fmt.Sprintf("ntm respawn %s --panes=%d", m.session, agent.PaneIndex)
+	respawnCmd := fmt.Sprintf("herdctl respawn %s --panes=%d", m.session, agent.PaneIndex)
 	log.Printf("[resilience] Suggest manual respawn for %s: %s", agent.PaneID, respawnCmd)
 	displayTmuxMessage(m.session, fmt.Sprintf("⚠️ Agent crashed (pane %d). Run: %s", agent.PaneIndex, respawnCmd))
 }

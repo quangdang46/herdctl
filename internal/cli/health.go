@@ -17,6 +17,7 @@ import (
 	"github.com/Dicklesworthstone/ntm/internal/health"
 	"github.com/Dicklesworthstone/ntm/internal/kernel"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
+	"github.com/Dicklesworthstone/ntm/internal/status"
 )
 
 var (
@@ -64,12 +65,12 @@ func init() {
 			{
 				Name:        "health",
 				Description: "Check session health",
-				Command:     "ntm health myproject",
+				Command:     "herdctl health myproject",
 			},
 			{
 				Name:        "health-filtered",
 				Description: "Check session health for a specific pane",
-				Command:     "ntm health myproject --pane 1",
+				Command:     "herdctl health myproject --pane 1",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -105,15 +106,15 @@ Reports:
   - Detected issues (rate limits, crashes, errors)
 
 Examples:
-  ntm health myproject                          # Check health of all agents
-  ntm health myproject --json                   # Output as JSON
-  ntm health myproject --watch                  # Auto-refresh every 5s
-  ntm health myproject --watch -i 2             # Auto-refresh every 2s
-  ntm health myproject --verbose                # Show full error details
-  ntm health myproject --pane 1                 # Filter to specific pane
-  ntm health myproject --status ok              # Filter by status (ok/warning/error)
-  ntm health myproject --auto-restart-stuck     # Detect and restart stuck agents
-  ntm health myproject --auto-restart-stuck --threshold 10m --dry-run`,
+  herdctl health myproject                          # Check health of all agents
+  herdctl health myproject --json                   # Output as JSON
+  herdctl health myproject --watch                  # Auto-refresh every 5s
+  herdctl health myproject --watch -i 2             # Auto-refresh every 2s
+  herdctl health myproject --verbose                # Show full error details
+  herdctl health myproject --pane 1                 # Filter to specific pane
+  herdctl health myproject --status ok              # Filter by status (ok/warning/error)
+  herdctl health myproject --auto-restart-stuck     # Detect and restart stuck agents
+  herdctl health myproject --auto-restart-stuck --threshold 10m --dry-run`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runHealth,
 	}
@@ -222,6 +223,26 @@ func runAutoRestartStuck(session string) error {
 }
 
 // runHealthOnce performs a single health check and outputs the result
+
+// newMuxSessionObserver builds a status observer that routes pane list/capture
+// through the active backend (tmux or herdr). Required for health under
+// NTM_BACKEND=herdr — the default observer always calls tmux.
+func newMuxSessionObserver() *status.SessionObserver {
+	detector := status.NewDetector()
+	return status.NewSessionObserverWithDependencies(
+		detector,
+		status.DefaultSessionObserverConfig(detector.Config()),
+		status.SessionObserverDependencies{
+			ListPanes:   muxGetPanesWithActivityContext,
+			CapturePane: muxCapturePaneOutputContext,
+		},
+	)
+}
+
+func checkSessionHealth(ctx context.Context, session string) (*health.SessionHealth, error) {
+	return health.CheckSessionWithObserver(ctx, session, newMuxSessionObserver())
+}
+
 func runHealthOnce(session string) error {
 	if jsonOutput {
 		var pane *int
@@ -323,7 +344,7 @@ func runHealthOnce(session string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	result, err := health.CheckSession(ctx, session)
+	result, err := checkSessionHealth(ctx, session)
 	if err != nil {
 		if _, ok := err.(*health.SessionNotFoundError); ok {
 			return fmt.Errorf("session '%s' not found", session)
@@ -503,7 +524,7 @@ func coerceHealthOutput(result any) (HealthOutput, error) {
 }
 
 func buildHealthOutput(ctx context.Context, input SessionHealthInput) (HealthOutput, error) {
-	result, err := health.CheckSession(ctx, input.Session)
+	result, err := checkSessionHealth(ctx, input.Session)
 	if err != nil {
 		if _, ok := err.(*health.SessionNotFoundError); ok {
 			return HealthOutput{

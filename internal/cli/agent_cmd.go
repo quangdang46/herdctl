@@ -19,16 +19,16 @@ import (
 // newAgentCmd is the parent for live agent operations that map onto herdr
 // agent.* (and tmux pane equivalents where applicable):
 //
-//	ntm agent list [--session NAME]
-//	ntm agent get <target>
-//	ntm agent read <target> [--lines N] [--source recent|visible]
-//	ntm agent send <target> <text>
-//	ntm agent rename <target> <name>|--clear
-//	ntm agent focus <target>
-//	ntm agent wait <target> --status idle|working|blocked|done|unknown [--timeout MS]
-//	ntm agent explain <target>
+//	herdctl agent list [--session NAME]
+//	herdctl agent get <target>
+//	herdctl agent read <target> [--lines N] [--source recent|visible]
+//	herdctl agent send <target> <text>
+//	herdctl agent rename <target> <name>|--clear
+//	herdctl agent focus <target>
+//	herdctl agent wait <target> --status idle|working|blocked|done|unknown [--timeout MS]
+//	herdctl agent explain <target>
 //
-// Distinct from `ntm agents` (capability profiles — file/config based, backend-agnostic).
+// Distinct from `herdctl agents` (capability profiles — file/config based, backend-agnostic).
 func newAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
@@ -48,17 +48,17 @@ Subcommands:
 Targets accept agent names (e.g. demo-cc_1), pane ids (wN:pM / %N), or titles.
 
 Examples:
-  ntm agent list
-  ntm agent list --session demo
-  ntm agent get demo-cc_1
-  ntm agent read demo-cc_1 --lines 30
-  ntm agent send demo-cc_1 "summarize blockers"
-  ntm agent rename demo-cc_1 lead-cc
-  ntm agent focus demo-cc_1
-  ntm agent wait demo-cc_1 --status idle --timeout 30000
-  NTM_BACKEND=herdr ntm agent explain demo-cc_1
+  herdctl agent list
+  herdctl agent list --session demo
+  herdctl agent get demo-cc_1
+  herdctl agent read demo-cc_1 --lines 30
+  herdctl agent send demo-cc_1 "summarize blockers"
+  herdctl agent rename demo-cc_1 lead-cc
+  herdctl agent focus demo-cc_1
+  herdctl agent wait demo-cc_1 --status idle --timeout 30000
+  NTM_BACKEND=herdr herdctl agent explain demo-cc_1
 
-See also: ntm agents (capability profiles).`,
+See also: herdctl agents (capability profiles).`,
 	}
 	cmd.AddCommand(newAgentListCmd())
 	cmd.AddCommand(newAgentGetCmd())
@@ -83,9 +83,9 @@ herdr: herdr agent list (optionally filtered by --session via workspace/name).
 tmux:  synthesizes rows from pane titles in --session (required).
 
 Examples:
-  ntm agent list
-  ntm agent list --session demo
-  ntm agent list --json`,
+  herdctl agent list
+  herdctl agent list --session demo
+  herdctl agent list --json`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentList(cmd.OutOrStdout(), session)
 		},
@@ -101,9 +101,9 @@ func newAgentGetCmd() *cobra.Command {
 		Long: `Show details for one agent by name, pane id, or title.
 
 Examples:
-  ntm agent get demo-cc_1
-  ntm agent get wM:p2
-  ntm agent get demo-cc_1 --json`,
+  herdctl agent get demo-cc_1
+  herdctl agent get wM:p2
+  herdctl agent get demo-cc_1 --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentGet(cmd.OutOrStdout(), args[0])
@@ -126,9 +126,9 @@ Sources:
   recent-unwrapped   herdr-only unwrapped recent lines
 
 Examples:
-  ntm agent read demo-cc_1
-  ntm agent read demo-cc_1 --lines 80
-  ntm agent read demo-cc_1 --source visible`,
+  herdctl agent read demo-cc_1
+  herdctl agent read demo-cc_1 --lines 80
+  herdctl agent read demo-cc_1 --source visible`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentRead(cmd.OutOrStdout(), args[0], lines, source)
@@ -149,8 +149,8 @@ herdr: uses herdr agent send (literal text; no automatic Enter).
 tmux:  uses send-keys with Enter.
 
 Examples:
-  ntm agent send demo-cc_1 "status update"
-  ntm agent send wM:p2 "continue"`,
+  herdctl agent send demo-cc_1 "status update"
+  herdctl agent send wM:p2 "continue"`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentSend(cmd.OutOrStdout(), args[0], args[1])
@@ -170,8 +170,8 @@ herdr: herdr agent rename <target> <name>|--clear
 tmux:  sets the pane title
 
 Examples:
-  ntm agent rename demo-cc_1 lead-cc
-  ntm agent rename demo-cc_1 --clear`,
+  herdctl agent rename demo-cc_1 lead-cc
+  herdctl agent rename demo-cc_1 --clear`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := ""
@@ -198,8 +198,8 @@ herdr: herdr agent focus
 tmux:  select-pane -t <id>
 
 Examples:
-  ntm agent focus demo-cc_1
-  ntm agent focus wM:p2`,
+  herdctl agent focus demo-cc_1
+  herdctl agent focus wM:p2`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentFocus(cmd.OutOrStdout(), args[0])
@@ -222,8 +222,8 @@ herdr: herdr agent wait (native).
 tmux:  polls capture/classification via muxGetAgentStatus fallback.
 
 Examples:
-  ntm agent wait demo-cc_1 --status idle
-  ntm agent wait demo-cc_1 --status working --timeout 60000`,
+  herdctl agent wait demo-cc_1 --status idle
+  herdctl agent wait demo-cc_1 --status working --timeout 60000`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentWait(cmd.OutOrStdout(), args[0], status, timeoutMS)
@@ -244,8 +244,8 @@ This is herdr-only (detection manifests live in herdr). On tmux the command
 returns a clear error.
 
 Examples:
-  NTM_BACKEND=herdr ntm agent explain demo-cc_1
-  NTM_BACKEND=herdr ntm agent explain demo-cc_1 --json`,
+  NTM_BACKEND=herdr herdctl agent explain demo-cc_1
+  NTM_BACKEND=herdr herdctl agent explain demo-cc_1 --json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAgentExplain(cmd.OutOrStdout(), args[0])
@@ -473,8 +473,8 @@ func runAgentWait(w io.Writer, target, status string, timeoutMS int) error {
 		// tmux poll fallback via capture status is not native; use short poll
 		// of muxGetAgentStatus (always empty on tmux) → fail with guidance.
 		if err := muxWaitAgentStatus(target, status, timeoutMS); err != nil {
-			// Fall back to ntm wait-style guidance.
-			return fmt.Errorf("%w; use `ntm wait <session> --until=%s` for tmux polling", err, status)
+			// Fall back to herdctl wait-style guidance.
+			return fmt.Errorf("%w; use `herdctl wait <session> --until=%s` for tmux polling", err, status)
 		}
 	}
 	elapsed := time.Since(start)

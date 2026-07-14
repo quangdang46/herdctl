@@ -46,12 +46,12 @@ func init() {
 			{
 				Name:        "create",
 				Description: "Create a session with defaults",
-				Command:     "ntm create myproject",
+				Command:     "herdctl create myproject",
 			},
 			{
 				Name:        "create-panes",
 				Description: "Create a session with 6 panes",
-				Command:     "ntm create myproject --panes=6",
+				Command:     "herdctl create myproject --panes=6",
 			},
 		},
 		SafetyLevel: kernel.SafetySafe,
@@ -107,10 +107,10 @@ On NTM_BACKEND=herdr this creates a herdr workspace (no agents) via
 workspace create + registry bind; pane splits use herdr pane split.
 
 Example:
-  ntm create myproject           # Create with default panes
-  ntm create myproject --panes=6 # Create with 6 panes
-  ntm create myproject --label frontend  # Labeled session
-  NTM_BACKEND=herdr ntm create myproject`,
+  herdctl create myproject           # Create with default panes
+  herdctl create myproject --panes=6 # Create with 6 panes
+  herdctl create myproject --label frontend  # Labeled session
+  NTM_BACKEND=herdr herdctl create myproject`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			sessionName := args[0]

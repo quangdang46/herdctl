@@ -285,7 +285,7 @@ func TestAttentionJournal_CursorExpired(t *testing.T) {
 	if details.RequestedCursor != 3 {
 		t.Errorf("details.RequestedCursor = %d, want 3", details.RequestedCursor)
 	}
-	if details.ResyncCommand != "ntm --robot-snapshot" {
+	if details.ResyncCommand != "herdctl --robot-snapshot" {
 		t.Errorf("unexpected ResyncCommand: %s", details.ResyncCommand)
 	}
 }
@@ -3444,7 +3444,7 @@ func TestCursorExpiredDetails_JSONSerialization(t *testing.T) {
 		RequestedCursor: 42,
 		EarliestCursor:  100,
 		RetentionPeriod: "1h",
-		ResyncCommand:   "ntm --robot-snapshot",
+		ResyncCommand:   "herdctl --robot-snapshot",
 	}
 
 	data, err := json.Marshal(details)
@@ -3460,8 +3460,8 @@ func TestCursorExpiredDetails_JSONSerialization(t *testing.T) {
 	if decoded.RequestedCursor != 42 {
 		t.Errorf("RequestedCursor = %d, want 42", decoded.RequestedCursor)
 	}
-	if decoded.ResyncCommand != "ntm --robot-snapshot" {
-		t.Errorf("ResyncCommand = %q, want %q", decoded.ResyncCommand, "ntm --robot-snapshot")
+	if decoded.ResyncCommand != "herdctl --robot-snapshot" {
+		t.Errorf("ResyncCommand = %q, want %q", decoded.ResyncCommand, "herdctl --robot-snapshot")
 	}
 }
 
@@ -4298,7 +4298,7 @@ func TestAttentionResponse_Fields(t *testing.T) {
 			StartCursor:  10,
 			EndCursor:    42,
 			OldestCursor: 1,
-			NextCommand:  "ntm --robot-attention --attention-cursor=42",
+			NextCommand:  "herdctl --robot-attention --attention-cursor=42",
 		},
 	}
 
@@ -4325,7 +4325,7 @@ func TestAttentionCursorInfo_NextCommand(t *testing.T) {
 		StartCursor:  10,
 		EndCursor:    50,
 		OldestCursor: 1,
-		NextCommand:  "ntm --robot-attention --attention-cursor=50 --attention-session=proj",
+		NextCommand:  "herdctl --robot-attention --attention-cursor=50 --attention-session=proj",
 	}
 
 	if info.NextCommand == "" {
@@ -4367,14 +4367,14 @@ func TestAttentionResponse_CursorExpired(t *testing.T) {
 		RobotResponse: NewErrorResponse(
 			&CursorExpiredError{RequestedCursor: 5, EarliestCursor: 100},
 			ErrCodeCursorExpired,
-			"ntm --robot-snapshot",
+			"herdctl --robot-snapshot",
 		),
 		WakeReason: "cursor_expired",
 		Digest:     &AttentionDigest{},
 		CursorInfo: AttentionCursorInfo{
 			StartCursor:  5,
 			OldestCursor: 100,
-			NextCommand:  "ntm --robot-snapshot",
+			NextCommand:  "herdctl --robot-snapshot",
 		},
 	}
 

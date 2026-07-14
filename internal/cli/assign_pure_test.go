@@ -284,7 +284,7 @@ func TestBuildAssignWatchOverlayHint(t *testing.T) {
 func TestBuildAssignWatchOverlayWarning(t *testing.T) {
 
 	got := buildAssignWatchOverlayWarning("F12", errors.New("boom"))
-	want := "Warning: Could not auto-set up the F12 overlay binding (boom); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut."
+	want := "Warning: Could not auto-set up the F12 overlay binding (boom); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut."
 	if got != want {
 		t.Fatalf("buildAssignWatchOverlayWarning() = %q, want %q", got, want)
 	}
@@ -420,7 +420,7 @@ func TestPrepareAssignWatchOverlay_ReportsBindingSetupFailure(t *testing.T) {
 	if prep.Hint != "" {
 		t.Fatalf("unexpected hint: %q", prep.Hint)
 	}
-	want := "Warning: Could not auto-set up the F12 overlay binding (boom); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut."
+	want := "Warning: Could not auto-set up the F12 overlay binding (boom); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut."
 	if prep.Warning != want {
 		t.Fatalf("warning = %q, want %q", prep.Warning, want)
 	}
@@ -487,10 +487,10 @@ func TestAnnounceAssignWatchOverlay_LogsPreparedHintAndWarning(t *testing.T) {
 		{
 			name: "warning only",
 			prep: assignWatchOverlayPreparation{
-				Warning: "Warning: Could not auto-set up the F12 overlay binding (boom); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
+				Warning: "Warning: Could not auto-set up the F12 overlay binding (boom); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
 			},
 			want: []string{
-				"Warning: Could not auto-set up the F12 overlay binding (boom); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
+				"Warning: Could not auto-set up the F12 overlay binding (boom); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
 			},
 		},
 		{
@@ -568,7 +568,7 @@ func TestAnnounceAssignWatchOverlay_WithPreparedScenarios(t *testing.T) {
 				})
 			},
 			wantLog: []string{
-				"Warning: Could not auto-set up the F12 overlay binding (boom); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
+				"Warning: Could not auto-set up the F12 overlay binding (boom); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
 			},
 		},
 	}
@@ -667,7 +667,7 @@ func TestPrepareAndAnnounceAssignWatchOverlay(t *testing.T) {
 				return errors.New("boom")
 			},
 			wantLogs: []string{
-				"Warning: Could not auto-set up the F12 overlay binding (boom); run 'ntm bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
+				"Warning: Could not auto-set up the F12 overlay binding (boom); run 'herdctl bind --overlay' if you want the attention-aware dashboard overlay shortcut.",
 			},
 			wantIsBoundCalls: 1,
 			wantEnsureCalls:  1,

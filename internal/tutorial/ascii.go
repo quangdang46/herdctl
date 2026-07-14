@@ -59,7 +59,7 @@ var OrderDiagram = []string{
 	"  |              Session: myproject                       |",
 	"  +-----------------+-----------------+-------------------+",
 	"  |   You (shell)   |   Claude #1     |   Claude #2       |",
-	"  |   $ ntm send    |   [Working...]  |   [Ready]         |",
+	"  |   $ herdctl send    |   [Working...]  |   [Ready]         |",
 	"  +-----------------+-----------------+-------------------+",
 	"  |   Codex #1      |   Codex #2      |   Antigravity #1  |",
 	"  |   [Testing...]  |   [Complete]    |   [Analyzing]     |",
@@ -114,7 +114,7 @@ var PaneLayoutDiagram = []string{
 var CommandFlowDiagram = []string{
 	"",
 	"                    +-------------+",
-	"                    |  ntm send   |",
+	"                    |  herdctl send   |",
 	"                    |   --all     |",
 	"                    +------+------+",
 	"                           |",
@@ -176,15 +176,15 @@ var CelebrationBanner = []string{
 // Quick start commands
 var QuickStartCommands = []string{
 	"# Create a new project with agents",
-	"$ ntm quick myproject --template=go",
-	"$ ntm spawn myproject --cc=3 --cod=2 --agy=1",
+	"$ herdctl quick myproject --template=go",
+	"$ herdctl spawn myproject --cc=3 --cod=2 --agy=1",
 	"",
 	"# Send prompts to your agents",
-	"$ ntm send myproject --all \"Build a REST API\"",
+	"$ herdctl send myproject --all \"Build a REST API\"",
 	"",
 	"# Check status and manage",
-	"$ ntm status myproject",
-	"$ ntm view myproject",
+	"$ herdctl status myproject",
+	"$ herdctl view myproject",
 }
 
 // Tips content
@@ -193,7 +193,7 @@ var TipsContent = [][]string{
 		"[Tip #1] Start Small",
 		"",
 		"Begin with 1-2 agents per type.",
-		"Scale up as needed with `ntm add`.",
+		"Scale up as needed with `herdctl add`.",
 	},
 	{
 		"[Tip #2] Divide & Conquer",
@@ -211,7 +211,7 @@ var TipsContent = [][]string{
 	{
 		"[Tip #4] Save Your Work",
 		"",
-		"`ntm save myproject -o ~/logs`",
+		"`herdctl save myproject -o ~/logs`",
 		"captures all agent outputs.",
 	},
 }
@@ -368,7 +368,7 @@ func RenderCommandFlowDiagram(tick int, step int, width int) string {
 			} else {
 				line = styles.GradientText(line, "#a6e3a1", "#89b4fa")
 			}
-		} else if strings.Contains(line, "ntm send") {
+		} else if strings.Contains(line, "herdctl send") {
 			line = styles.Shimmer(line, tick, "#89b4fa", "#cba6f7")
 		} else if strings.Contains(line, "Claude") {
 			line = styles.GradientText(line, "#cba6f7", "#b4befe")

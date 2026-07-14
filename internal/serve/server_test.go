@@ -3133,8 +3133,8 @@ func TestAttentionEventsCursorExpiredUsesResyncCommand(t *testing.T) {
 	if got := resp["error_code"]; got != robot.ErrCodeCursorExpired {
 		t.Fatalf("error_code = %v, want %q", got, robot.ErrCodeCursorExpired)
 	}
-	if got := resp["resync_command"]; got != "ntm --robot-snapshot" {
-		t.Fatalf("resync_command = %v, want %q", got, "ntm --robot-snapshot")
+	if got := resp["resync_command"]; got != "herdctl --robot-snapshot" {
+		t.Fatalf("resync_command = %v, want %q", got, "herdctl --robot-snapshot")
 	}
 	if _, ok := resp["resync_hint"]; ok {
 		t.Fatalf("unexpected legacy resync_hint field in response: %#v", resp)
@@ -3165,8 +3165,8 @@ func TestAttentionDigestCursorExpiredUsesResyncCommand(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if got := resp["resync_command"]; got != "ntm --robot-snapshot" {
-		t.Fatalf("resync_command = %v, want %q", got, "ntm --robot-snapshot")
+	if got := resp["resync_command"]; got != "herdctl --robot-snapshot" {
+		t.Fatalf("resync_command = %v, want %q", got, "herdctl --robot-snapshot")
 	}
 	if _, ok := resp["resync_hint"]; ok {
 		t.Fatalf("unexpected legacy resync_hint field in response: %#v", resp)
@@ -3197,7 +3197,7 @@ func TestAttentionStreamCursorExpiredUsesResyncCommand(t *testing.T) {
 	if !strings.Contains(body, `"error_code":"CURSOR_EXPIRED"`) {
 		t.Fatalf("stream body missing cursor-expired error: %s", body)
 	}
-	if !strings.Contains(body, `"resync_command":"ntm --robot-snapshot"`) {
+	if !strings.Contains(body, `"resync_command":"herdctl --robot-snapshot"`) {
 		t.Fatalf("stream body missing resync_command: %s", body)
 	}
 	if strings.Contains(body, `"resync_hint"`) {

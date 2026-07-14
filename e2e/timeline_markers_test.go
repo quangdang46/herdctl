@@ -40,7 +40,7 @@ func NewTimelineMarkersTestSuite(t *testing.T, scenario string) *TimelineMarkers
 	logger := NewTestLogger(t, scenario)
 
 	// Find ntm binary
-	ntmPath, err := exec.LookPath("ntm")
+	ntmPath, err := lookPathCLI()
 	if err != nil {
 		t.Skip("ntm binary not found in PATH")
 	}

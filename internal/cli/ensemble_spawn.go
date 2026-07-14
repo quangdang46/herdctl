@@ -68,9 +68,9 @@ func newEnsembleSpawnCmd() *cobra.Command {
 		Long: `Spawn a reasoning ensemble session.
 
 For the primary shorthand UX, prefer:
-  ntm ensemble <ensemble-name> "<question>"`,
-		Example: `  ntm ensemble spawn mysession --preset project-diagnosis --question "What are the main issues?"
-  ntm ensemble spawn mysession --modes deductive,bayesian --question "Review this spec"`,
+  herdctl ensemble <ensemble-name> "<question>"`,
+		Example: `  herdctl ensemble spawn mysession --preset project-diagnosis --question "What are the main issues?"
+  herdctl ensemble spawn mysession --modes deductive,bayesian --question "Review this spec"`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.Session = args[0]
