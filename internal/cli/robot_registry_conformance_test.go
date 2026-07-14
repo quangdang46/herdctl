@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
+
 	"github.com/Dicklesworthstone/ntm/internal/pipeline"
 	"github.com/Dicklesworthstone/ntm/internal/robot"
-	"github.com/spf13/pflag"
 )
 
 func TestRobotRegistryMatchesLiveCobraAndSchemaContracts(t *testing.T) {
