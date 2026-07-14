@@ -1138,7 +1138,7 @@ func TestRenderCommandCode(t *testing.T) {
 	if !strings.Contains(stripped, "Create project") {
 		t.Errorf("should contain comment text, got %q", stripped)
 	}
-	if !strings.Contains(stripped, "ntm") {
+	if !strings.Contains(stripped, "herdctl") {
 		t.Errorf("should contain command text, got %q", stripped)
 	}
 
@@ -1152,7 +1152,7 @@ func TestRenderCommandCode(t *testing.T) {
 	// Typewriter mode at high tick: everything visible
 	gotTwHigh := RenderCommandCode(commands, 1000, true)
 	strippedHigh := stripANSI(gotTwHigh)
-	if !strings.Contains(strippedHigh, "ntm") {
+	if !strings.Contains(strippedHigh, "herdctl") {
 		t.Errorf("typewriter at high tick should show all content, got %q", strippedHigh)
 	}
 }
