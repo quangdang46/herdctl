@@ -1887,6 +1887,18 @@ func TestResolvePipelineSessionRejectsInvalidSessionName(t *testing.T) {
 	}
 }
 
+func sameFilePath(a, b string) bool {
+	if a == b {
+		return true
+	}
+	aa, errA := filepath.EvalSymlinks(a)
+	bb, errB := filepath.EvalSymlinks(b)
+	if errA != nil || errB != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return filepath.Clean(aa) == filepath.Clean(bb)
+}
+
 func TestResolveResumeScopeUsesSessionProjectDir(t *testing.T) {
 	projectsBase := t.TempDir()
 	projectDir := filepath.Join(projectsBase, "mysession")
@@ -1967,7 +1979,7 @@ func TestResolveResumeScopeUsesCurrentWorkspaceOnlyForStoredHandoff(t *testing.T
 	if session != "mysession" {
 		t.Fatalf("session = %q, want mysession", session)
 	}
-	if gotDir != workspace {
+	if !sameFilePath(gotDir, workspace) {
 		t.Fatalf("project dir = %q, want %q", gotDir, workspace)
 	}
 }
@@ -1998,7 +2010,7 @@ func TestResolveResumeScopeUsesProjectRootStoredHandoffFromNestedDirectory(t *te
 	if session != "mysession--frontend" {
 		t.Fatalf("session = %q, want mysession--frontend", session)
 	}
-	if gotDir != root {
+	if !sameFilePath(gotDir, root) {
 		t.Fatalf("project dir = %q, want %q", gotDir, root)
 	}
 }

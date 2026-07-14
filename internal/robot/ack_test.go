@@ -65,7 +65,8 @@ func TestRobotSendSingularPaneRealTmux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(captured, "dispatch-smoke") {
+	flat := strings.ReplaceAll(strings.ReplaceAll(captured, "\n", ""), "\r", "")
+	if !strings.Contains(captured, "dispatch-smoke") && !strings.Contains(flat, "dispatch-smoke") {
 		t.Fatalf("target pane did not receive staged message: %q", captured)
 	}
 
