@@ -74,7 +74,7 @@ jobs:
 
       - name: OpenAPI drift check (Go Kernel)
         run: |
-          # Build ntm and generate kernel-based OpenAPI spec
+          # Build herdctl and generate kernel-based OpenAPI spec
           go build -o herdctl ./cmd/herdctl
           ./herdctl openapi generate -o /tmp/openapi-kernel-new.json
 
@@ -87,7 +87,7 @@ jobs:
               echo "  ERROR: OpenAPI kernel spec drift detected!"
               echo ""
               echo "  The generated OpenAPI spec differs from the checked-in version."
-              echo "  Run: ntm openapi generate -o docs/openapi-kernel.json"
+              echo "  Run: herdctl openapi generate -o docs/openapi-kernel.json"
               echo "  Then commit the updated spec."
               echo "========================================================================"
               exit 1

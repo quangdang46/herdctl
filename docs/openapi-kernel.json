@@ -269,8 +269,8 @@
         "tags": [
           "sessions"
         ],
-        "summary": "Create a tmux session",
-        "description": "Create a tmux session\n\n**Safety Level:** safe",
+        "summary": "Create a session (tmux or herdr)",
+        "description": "Create a session (tmux or herdr)\n\n**Safety Level:** safe",
         "operationId": "sessions_create",
         "requestBody": {
           "required": true,
@@ -566,8 +566,8 @@
         "tags": [
           "sessions"
         ],
-        "summary": "Apply tiled layout to a session",
-        "description": "Apply tiled layout to a session\n\n**Safety Level:** safe\n\n**Idempotent:** Yes - safe to retry",
+        "summary": "View all panes (tmux: tile; herdr: unzoom + TUI guidance)",
+        "description": "View all panes (tmux: tile; herdr: unzoom + TUI guidance)\n\n**Safety Level:** safe\n\n**Idempotent:** Yes - safe to retry",
         "operationId": "sessions_view",
         "parameters": [
           {
@@ -600,7 +600,7 @@
                 },
                 "examples": {
                   "view": {
-                    "summary": "Apply tiled layout to a session",
+                    "summary": "View all panes (tmux: tile; herdr: unzoom + TUI guidance)",
                     "value": ""
                   }
                 }
