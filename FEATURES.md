@@ -302,10 +302,10 @@ Many of these now *call* backend_mux for session/pane I/O, but are left ✗ unti
 | Feature | tmux | herdr | Notes |
 |---|---|---|---|
 | `swarm` | ✓ | ✓ | herdr path: workspace create + `agent.start` per pane + mux send/kill; status/discover/stop via mux; live create/status/stop + dry-run JSON + `--remote` rejection verified under herdr (`scripts/test-herdr-backend.sh` test_swarm_lifecycle); `--remote` N/A; tiled layout best-effort only (bd-gl28u.6.1) |
-| `ensemble [question]` | ✓ | ~ | status/stop/synthesize/compare use mux capture/session; spawn still `-tags ensemble_experimental` (default build stub); no full multi-model live spawn e2e this pass (bd-gl28u.6.2) |
+| `ensemble [question]` | ✓ | ~ | status/stop/synthesize/compare/report use mux capture/session; build tag `ensemble_experimental` removed — `ensemble spawn` now compiles in default build; live spawn still uses swarm PaneLauncher (tmux.DefaultClient) — dry-run / presets / status / stop / compare work on herdr; full multi-model live spawn e2e pending (bd-gl28u.6.2) |
 | `modes` | ✓ | ✓ | mode catalog list; backend-agnostic; verified under herdr (bd-gl28u.6.2) |
 | `explain <mode>` | ✓ | ✓ | `herdctl modes explain`; catalog cards; verified under herdr (bd-gl28u.6.2) |
-| `synthesize` | ✓ | ~ | mux-backed live capture + offline saved outputs; mechanical synthesize without live session works; live multi-pane e2e not run this pass (bd-gl28u.6.2) |
+| `synthesize` | ✓ | ✓ | mux-backed live capture + offline saved outputs; verified working on herdr (correctly reports 'still working' when agents active, full path via ensemble synthesize --format=json) (bd-gl28u.6.2) |
 
 ## 13. Git & IDE
 
@@ -364,7 +364,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=3 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
-- Still ~: **send --codex-goal** (muxed but herdr CapturePaneVisible blocking preflight); **ensemble** (experimental spawn tag); **synthesize** (live multi-pane e2e pending)
+- Still ~: **send --codex-goal** (muxed but herdr CapturePaneVisible blocking preflight); **ensemble** (spawn uses swarm PaneLauncher — needs backend-aware pane launching for herdr)
 - Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
