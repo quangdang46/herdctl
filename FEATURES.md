@@ -65,7 +65,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `send --tag <tag>` | ✓ | ✓ | spawn/add `--tag` → title `[tags]` + herdr `PaneMeta.Tags`; send filters via muxGetPanes registry merge / title parse |
 | `send --dry-run` | ✓ | ✓ | muxGetPanes + dispatch DryRun preview; no key delivery / no tmux under herdr |
 | `send --template` | ✓ | ✓ | load/execute via templates.Loader then runSendInternal; pane select + delivery through mux (same as plain send); redaction preflight retained |
-| `send --smart-route` | ✓ | ✗ | |
+| `send --smart-route` | ✓ | ✓ | fixed: PaneID (herdr wN:pM) → numeric PaneIndex for ParsePaneSelector compat; works across all strategies (least-loaded, first-available, round-robin) (bd-gl28u.1-fix) |
 | `send --codex-goal` | ✓ | ✗ | deep Codex integration |
 | `agent list` | ✓ | ✓ | via herdr agent list |
 | `agent get` | ✓ | ✓ | herdr agent get via client/mux; herdctl agent get (bd-gl28u.1.12) |
@@ -364,7 +364,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=2 · ✗=12 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Still ~: **ensemble** (experimental spawn tag); **synthesize** (live multi-pane e2e pending)
-- Still ✗: send --smart-route/--codex-goal; rotate; robot smart-restart/restart-pane; robot bead CRUD; robot pipeline run/cancel/pipeline  
+- Still ✗: send --codex-goal; rotate; robot smart-restart/restart-pane; robot bead CRUD; robot pipeline run/cancel/pipeline  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
 

@@ -1418,9 +1418,12 @@ func runSendInternal(opts SendOptions) (err error) {
 			return outputError(fmt.Errorf("smart routing: no available agent found"))
 		}
 
-		// Set target to the recommended pane
+		// Set target to the recommended pane.
+		// Use PaneIndex (numeric) rather than PaneID (herdr "wN:pM" format,
+		// which ParsePaneSelector rejects — it expects N, W.P, or %N).
+		// Numeric index works universally across backends.
 		paneIndex = recommendation.PaneIndex
-		paneSelector = recommendation.PaneID
+		paneSelector = strconv.Itoa(recommendation.PaneIndex)
 		opts.routingResult = &SendRoutingResult{
 			PaneIndex: recommendation.PaneIndex,
 			PaneID:    recommendation.PaneID,
