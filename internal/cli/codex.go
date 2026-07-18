@@ -74,14 +74,14 @@ func resolveCodexPane(session string, pane, lines int) (*tmux.Pane, string, erro
 			"Pass a non-negative pane index, e.g. --pane 1",
 		)
 	}
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return nil, "", robot.RobotError(
 			fmt.Errorf("session '%s' not found", session),
 			robot.ErrCodeSessionNotFound,
 			"Use 'herdctl list' to see available sessions",
 		)
 	}
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, "", robot.RobotError(err, robot.ErrCodeInternalError, "Could not enumerate panes for the session")
 	}
@@ -101,9 +101,9 @@ func resolveCodexPane(session string, pane, lines int) (*tmux.Pane, string, erro
 	}
 	var content string
 	if lines <= 0 || lines >= tmux.LinesFullContext {
-		content, err = tmux.CapturePaneVisible(target.ID)
+		content, err = muxCapturePaneVisible(target.ID)
 	} else {
-		content, err = tmux.CapturePaneOutput(target.ID, lines)
+		content, err = muxCapturePaneOutput(target.ID, lines)
 	}
 	if err != nil {
 		return nil, "", robot.RobotError(err, robot.ErrCodeInternalError, "Failed to capture pane content")
@@ -128,14 +128,14 @@ func resolveCodexPaneSelector(session, selector string, lines int) (*tmux.Pane, 
 			"Pass one pane as N, W.P, or %N",
 		)
 	}
-	if !tmux.SessionExists(session) {
+	if !muxSessionExists(session) {
 		return nil, "", robot.RobotError(
 			fmt.Errorf("session '%s' not found", session),
 			robot.ErrCodeSessionNotFound,
 			"Use 'herdctl list' to see available sessions",
 		)
 	}
-	panes, err := tmux.GetPanes(session)
+	panes, err := muxGetPanes(session)
 	if err != nil {
 		return nil, "", robot.RobotError(err, robot.ErrCodeInternalError, "Could not enumerate panes for the session")
 	}
@@ -146,9 +146,9 @@ func resolveCodexPaneSelector(session, selector string, lines int) (*tmux.Pane, 
 	target := &selected[0]
 	var content string
 	if lines <= 0 || lines >= tmux.LinesFullContext {
-		content, err = tmux.CapturePaneVisible(target.ID)
+		content, err = muxCapturePaneVisible(target.ID)
 	} else {
-		content, err = tmux.CapturePaneOutput(target.ID, lines)
+		content, err = muxCapturePaneOutput(target.ID, lines)
 	}
 	if err != nil {
 		return nil, "", robot.RobotError(err, robot.ErrCodeInternalError, "Failed to capture pane content")
@@ -233,7 +233,7 @@ Examples:
   ntm codex preflight myproject --pane 1 --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 
@@ -396,7 +396,7 @@ Examples:
   ntm codex palette-state --session myproject --pane 1 --json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 
@@ -417,7 +417,7 @@ Examples:
 				)
 			}
 
-			if !tmux.SessionExists(session) {
+			if !muxSessionExists(session) {
 				return robot.RobotError(
 					fmt.Errorf("session '%s' not found", session),
 					robot.ErrCodeSessionNotFound,
@@ -425,7 +425,7 @@ Examples:
 				)
 			}
 
-			panes, err := tmux.GetPanes(session)
+			panes, err := muxGetPanes(session)
 			if err != nil {
 				return robot.RobotError(err, robot.ErrCodeInternalError, "Could not enumerate panes for the session")
 			}
@@ -445,7 +445,7 @@ Examples:
 				)
 			}
 
-			content, err := tmux.CapturePaneOutput(target.ID, lines)
+			content, err := muxCapturePaneOutput(target.ID, lines)
 			if err != nil {
 				return robot.RobotError(err, robot.ErrCodeInternalError, "Failed to capture pane content")
 			}
@@ -568,7 +568,7 @@ Examples:
   ntm codex replace-goal myproject --pane 1 --select cancel --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 			emitJSON := jsonOutput || IsJSONOutput()
@@ -662,7 +662,7 @@ Examples:
 
 			if sel == codex.ReplaceGoalCancel {
 				// Cancel == keep the current goal == Esc (sent as a key, not literal).
-				if err := tmux.SendNamedKey(target.ID, "Escape"); err != nil {
+				if err := muxSendNamedKey(target.ID, "Escape"); err != nil {
 					res.RefusalReason = fmt.Sprintf("failed to send Escape: %v", err)
 					return emit(err, robot.ErrCodePromptSendFailed, "tmux send-keys Escape failed")
 				}
@@ -684,12 +684,12 @@ Examples:
 
 			// Option 1 is the default highlighted choice; Enter confirms Replace.
 			// Send "1" to be explicit about the selection, then Enter to confirm.
-			if err := tmux.SendKeys(target.ID, "1", false); err != nil {
+			if err := muxSendKeys(target.ID, "1", false); err != nil {
 				res.RefusalReason = fmt.Sprintf("failed to select option 1: %v", err)
 				return emit(err, robot.ErrCodePromptSendFailed, "tmux send-keys '1' failed")
 			}
 			time.Sleep(tmux.DefaultEnterDelay)
-			if err := tmux.SendKeys(target.ID, "", true); err != nil {
+			if err := muxSendKeys(target.ID, "", true); err != nil {
 				res.RefusalReason = fmt.Sprintf("failed to confirm Replace: %v", err)
 				return emit(err, robot.ErrCodePromptSendFailed, "tmux send-keys Enter (confirm) failed")
 			}
@@ -724,7 +724,7 @@ func replaceDialogStateLabel(d codex.ReplaceGoalDialog) string {
 // returning the content (or empty string on error). Used to populate dialog_after.
 func recapturePane(paneID string, _ int) string {
 	time.Sleep(500 * time.Millisecond)
-	content, err := tmux.CapturePaneVisible(paneID)
+	content, err := muxCapturePaneVisible(paneID)
 	if err != nil {
 		return ""
 	}
@@ -794,7 +794,7 @@ Examples:
   ntm codex wait-goal-engaged myproject --pane 1 --timeout 15 --counter-delta --json`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := tmux.EnsureInstalled(); err != nil {
+			if err := muxEnsureInstalled(); err != nil {
 				return err
 			}
 			emitJSON := jsonOutput || IsJSONOutput()
@@ -834,7 +834,7 @@ Examples:
 			terminal := record(firstContent)
 			for !terminal && time.Now().Before(deadline) {
 				time.Sleep(interval)
-				content, capErr := tmux.CapturePaneVisible(target.ID)
+				content, capErr := muxCapturePaneVisible(target.ID)
 				if capErr != nil {
 					continue
 				}

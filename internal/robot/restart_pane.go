@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/process"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
@@ -73,6 +74,9 @@ type restartPromptTarget struct {
 // GetRestartPane restarts panes (respawn-pane -k) and returns the result.
 // This function returns the data struct directly, enabling CLI/REST parity.
 func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
+	if backend.IsHerdr() {
+		return nil, fmt.Errorf("--robot-restart-pane not supported on NTM_BACKEND=herdr: use `herdctl respawn`")
+	}
 	output := &RestartPaneOutput{
 		RobotResponse: NewRobotResponse(true),
 		Session:       opts.Session,

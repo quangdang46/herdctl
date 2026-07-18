@@ -197,6 +197,14 @@ func muxSendKeysForAgent(target, keys string, enter bool, agentType tmux.AgentTy
 	return tmux.SendKeysForAgent(target, keys, enter, agentType)
 }
 
+func muxSendNamedKey(target, key string) error {
+	if backend.IsHerdr() {
+		// herdr has no named-key equivalent; send as literal text
+		return herdr.SendKeys(target, key, false)
+	}
+	return tmux.SendNamedKey(target, key)
+}
+
 func muxSendInterrupt(target string) error {
 	if backend.IsHerdr() {
 		return herdr.SendInterrupt(target)

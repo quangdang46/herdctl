@@ -66,7 +66,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `send --dry-run` | ✓ | ✓ | muxGetPanes + dispatch DryRun preview; no key delivery / no tmux under herdr |
 | `send --template` | ✓ | ✓ | load/execute via templates.Loader then runSendInternal; pane select + delivery through mux (same as plain send); redaction preflight retained |
 | `send --smart-route` | ✓ | ✓ | fixed: PaneID (herdr wN:pM) → numeric PaneIndex for ParsePaneSelector compat; works across all strategies (least-loaded, first-available, round-robin) (bd-gl28u.1-fix) |
-| `send --codex-goal` | ✓ | ✗ | deep Codex integration |
+| `send --codex-goal` | ✓ | ~ | muxed: resolveCodexPaneSelector, runCodexGoalSend and all codex.go tmux calls → mux* wrappers; codex preflight still blocked on herdr CapturePaneVisible — works when pane is Codex-live and herdr visible-capture resolves (bd-gl28u.1-fix) |
 | `agent list` | ✓ | ✓ | via herdr agent list |
 | `agent get` | ✓ | ✓ | herdr agent get via client/mux; herdctl agent get (bd-gl28u.1.12) |
 | `agent read` | ✓ | ✓ | herdr agent read (+ pane read fallback); herdctl agent read (bd-gl28u.1.12) |
@@ -265,8 +265,8 @@ Inventory: 143 `--robot-*` flags in `internal/cli/root.go`. Dual-backend session
 | `--robot-interrupt` | ✓ | ✓ | backend_mux send-interrupt + activity poll no-op under herdr (p1-robot-tilde-batch) |
 | `--robot-probe` | ✓ | ✓ | prefers pane.ID target (herdr wN:pM); verified herdr (p1-robot-tilde-batch) |
 | `--robot-agent-health` | ✓ | ✓ | capture muxed; verified herdr `--no-caut` (p1-robot-tilde-batch) |
-| `--robot-smart-restart` | ✓ | ✗ | respawn path still largely tmux-shaped |
-| `--robot-restart-pane` | ✓ | ✗ | tmux respawn-pane semantics |
+| `--robot-smart-restart` | ✓ | ✗ (guarded) | herdr guard added: clean error with alternative hint (use `herdctl scale`/`herdctl respawn`) (bd-gl28u.1-fix) |
+| `--robot-restart-pane` | ✓ | ✗ (guarded) | herdr guard added: clean error with alternative hint (use `herdctl respawn`) (bd-gl28u.1-fix) |
 | `--robot-bulk-assign` | ✓ | ✓ | backend GetPanes/Send/Dispatch; dry-run verified herdr (p1-robot-tilde-batch) |
 | `--robot-history` | ✓ | ✓ | history store + session filter; verified herdr (robot-misc-verify) |
 | `--robot-metrics` | ✓ | ✓ | session metrics via backend panes; verified herdr (robot-misc-verify) |
@@ -364,7 +364,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=2 · ✗=12 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Still ~: **ensemble** (experimental spawn tag); **synthesize** (live multi-pane e2e pending)
-- Still ✗: send --codex-goal; rotate; robot smart-restart/restart-pane; robot bead CRUD  
+- Still ✗: rotate; robot bead CRUD  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
 
