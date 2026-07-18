@@ -549,6 +549,14 @@ func PrintPipelineCancel(runID string) int {
 
 	exec := getPipeline(runID)
 	if exec == nil {
+		// Fallback: try disk-persisted state for cross-invocation cancel.
+		if root := persistedStateRootFn(); root != "" {
+			if state, err := LoadState(root, runID); err == nil {
+				exec = snapshotFromPersistedState(state)
+			}
+		}
+	}
+	if exec == nil {
 		output.RobotResponse = NewErrorResponse(
 			fmt.Errorf("pipeline not found: %s", runID),
 			ErrCodeSessionNotFound,
@@ -568,7 +576,7 @@ func PrintPipelineCancel(runID string) int {
 		return 0
 	}
 
-	// Cancel the execution
+	// Cancel the execution (in-memory only when same process)
 	if exec.cancelFn != nil {
 		exec.cancelFn()
 	}
@@ -576,12 +584,20 @@ func PrintPipelineCancel(runID string) int {
 		exec.executor.Cancel()
 	}
 
-	// Update status
+	// Update status in-memory
 	pipelineMu.Lock()
 	exec.Status = "cancelled"
 	now := time.Now()
 	exec.FinishedAt = &now
 	pipelineMu.Unlock()
+	// Persist cancellation to disk for cross-invocation visibility
+	if root := persistedStateRootFn(); root != "" {
+		if state, err := LoadState(root, runID); err == nil {
+			state.Status = StatusCancelled
+			state.FinishedAt = now
+			_ = SaveState(root, state)
+		}
+	}
 
 	output.RobotResponse = NewRobotResponse(true)
 	output.RunID = runID
@@ -908,24 +924,37 @@ func GetAllPipelineSnapshots() []*PipelineExecution {
 // CancelPipeline cancels a running pipeline by run ID (exported for REST API)
 func CancelPipeline(runID string) {
 	exec := getPipeline(runID)
-	if exec == nil {
+	if exec != nil {
+		// Cancel the execution
+		if exec.cancelFn != nil {
+			exec.cancelFn()
+		}
+		if exec.executor != nil {
+			exec.executor.Cancel()
+		}
+
+		// Update status
+		pipelineMu.Lock()
+		exec.Status = "cancelled"
+		now := time.Now()
+		exec.FinishedAt = &now
+		pipelineMu.Unlock()
 		return
 	}
 
-	// Cancel the execution
-	if exec.cancelFn != nil {
-		exec.cancelFn()
+	// Fallback: mark cancelled on disk (cross-invocation cancel).
+	root := persistedStateRootFn()
+	if root == "" {
+		return
 	}
-	if exec.executor != nil {
-		exec.executor.Cancel()
+	state, err := LoadState(root, runID)
+	if err != nil {
+		return
 	}
-
-	// Update status
-	pipelineMu.Lock()
-	exec.Status = "cancelled"
+	state.Status = StatusCancelled
 	now := time.Now()
-	exec.FinishedAt = &now
-	pipelineMu.Unlock()
+	state.FinishedAt = now
+	_ = SaveState(root, state)
 }
 
 func updatePipelineFromState(runID string, state *ExecutionState) {

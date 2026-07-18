@@ -3567,6 +3567,16 @@ func (e *Executor) persistState() {
 	if err := SaveState(projectDir, snapshot); err != nil && e.config.Verbose {
 		log.Printf("pipeline: state persistence failed: %v", err)
 	}
+
+	// Also persist to the current working directory so cancel/lookup from
+	// outside the session project dir finds state via findPersistedStateRoot.
+	if cwd, cwdErr := os.Getwd(); cwdErr == nil {
+		if cwdDir := filepath.Clean(cwd); cwdDir != "" && cwdDir != projectDir {
+			if err := SaveState(cwdDir, snapshot); err != nil && e.config.Verbose {
+				log.Printf("pipeline: cwd state persistence failed: %v", err)
+			}
+		}
+	}
 }
 
 // markFireAndForgetCancelled flags a WaitNone (fire-and-forget) command's

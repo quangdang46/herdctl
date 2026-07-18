@@ -288,7 +288,7 @@ Inventory: 143 `--robot-*` flags in `internal/cli/root.go`. Dual-backend session
 | `--robot-bead-close` | ✓ | ✓ | verified herdr e2e (`test_robot_bead_pipeline`) |
 | `--robot-pipeline-list` | ✓ | ✓ | storage-only (verified herdr) |
 | `--robot-pipeline-run` | ✓ | ✓ | dry-run command workflow success JSON verified herdr e2e (`test_robot_bead_pipeline`) |
-| `--robot-pipeline-cancel` | ✓ | ✗ | in-process registry only; not durable across CLI invocations — left unverified |
+| `--robot-pipeline-cancel` | ✓ | ✓ | fixed: CancelPipeline fallback to disk-persisted state; persistState also saves to cwd for cross-invocation findability; verified cancel running + completed pipelines under NTM_BACKEND=herdr (bd-gl28u.1-fix) |
 | `--robot-pipeline` | ✓ | ✓ | status of completed dry-run via `.ntm/pipelines/<run_id>.json` verified herdr e2e |
 
 ### Remaining robot flags (still ✗ / not verified on herdr this pass)
@@ -364,7 +364,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=2 · ✗=12 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Still ~: **ensemble** (experimental spawn tag); **synthesize** (live multi-pane e2e pending)
-- Still ✗: send --codex-goal; rotate; robot smart-restart/restart-pane; robot bead CRUD; robot pipeline run/cancel/pipeline  
+- Still ✗: send --codex-goal; rotate; robot smart-restart/restart-pane; robot bead CRUD  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
 
