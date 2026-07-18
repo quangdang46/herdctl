@@ -66,7 +66,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `send --dry-run` | ✓ | ✓ | muxGetPanes + dispatch DryRun preview; no key delivery / no tmux under herdr |
 | `send --template` | ✓ | ✓ | load/execute via templates.Loader then runSendInternal; pane select + delivery through mux (same as plain send); redaction preflight retained |
 | `send --smart-route` | ✓ | ✓ | fixed: PaneID (herdr wN:pM) → numeric PaneIndex for ParsePaneSelector compat; works across all strategies (least-loaded, first-available, round-robin) (bd-gl28u.1-fix) |
-| `send --codex-goal` | ✓ | ~ | muxed: resolveCodexPaneSelector, runCodexGoalSend and all codex.go tmux calls → mux* wrappers; herdr CapturePaneVisible fixed (now uses --source recent instead of --source visible) — codex preflight returns JSON on herdr (bd-gl28u.1-fix) |
+| `send --codex-goal` | ✓ | ✓ | muxed: all codex.go tmux calls → mux*; CapturePaneVisible fixed (--source recent); verified: codex preflight returns JSON, send --codex-goal reaches preflight correctly on herdr (bd-gl28u.1-fix) |
 | `agent list` | ✓ | ✓ | via herdr agent list |
 | `agent get` | ✓ | ✓ | herdr agent get via client/mux; herdctl agent get (bd-gl28u.1.12) |
 | `agent read` | ✓ | ✓ | herdr agent read (+ pane read fallback); herdctl agent read (bd-gl28u.1.12) |
@@ -302,7 +302,7 @@ Many of these now *call* backend_mux for session/pane I/O, but are left ✗ unti
 | Feature | tmux | herdr | Notes |
 |---|---|---|---|
 | `swarm` | ✓ | ✓ | herdr path: workspace create + `agent.start` per pane + mux send/kill; status/discover/stop via mux; live create/status/stop + dry-run JSON + `--remote` rejection verified under herdr (`scripts/test-herdr-backend.sh` test_swarm_lifecycle); `--remote` N/A; tiled layout best-effort only (bd-gl28u.6.1) |
-| `ensemble [question]` | ✓ | ~ | status/stop/synthesize/compare/report use mux capture/session; build tag `ensemble_experimental` removed — `ensemble spawn` now compiles in default build; live spawn still uses swarm PaneLauncher (tmux.DefaultClient) — dry-run / presets / status / stop / compare work on herdr; full multi-model live spawn e2e pending (bd-gl28u.6.2) |
+| `ensemble [question]` | ✓ | ~ | status/stop/synthesize/compare/report all verified on herdr; build tag removed; swarm PaneLauncher muxed (herdrSend), orchestrator CreateSessions herdr-aware; live spawn still blocked by swarm tmux session creation — use `herdctl spawn` per agent then `herdctl ensemble synthesize` on herdr (bd-gl28u.6.2) |
 | `modes` | ✓ | ✓ | mode catalog list; backend-agnostic; verified under herdr (bd-gl28u.6.2) |
 | `explain <mode>` | ✓ | ✓ | `herdctl modes explain`; catalog cards; verified under herdr (bd-gl28u.6.2) |
 | `synthesize` | ✓ | ✓ | mux-backed live capture + offline saved outputs; verified working on herdr (correctly reports 'still working' when agents active, full path via ensemble synthesize --format=json) (bd-gl28u.6.2) |
@@ -364,7 +364,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=3 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
-- Still ~: **send --codex-goal** (muxed + CapturePaneVisible fixed); **ensemble** (spawn blocked by swarm PaneLauncher tmux session creation — dry-run/presets/status/stop/compare/synthesize all work on herdr)
+- Still ~: **ensemble spawn live** (swarm tmux session creation; use `herdctl spawn` then `ensemble synthesize` on herdr)
 - Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
