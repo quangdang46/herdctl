@@ -132,3 +132,4 @@ storage.sqlite3-wal.corrupt-*
 
 # Agent scratch/debug test files (machine-local, never tracked)
 **/zz_live_debug_test.go
+herdctl_new
