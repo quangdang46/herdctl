@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
 
@@ -102,6 +103,26 @@ func (o *SessionOrchestrator) CreateSessions(plan *SwarmPlan) (*OrchestrationRes
 
 	if len(plan.Sessions) == 0 {
 		return &OrchestrationResult{}, nil
+	}
+
+	// Under herdr, sessions are created via the CLI's muxCreateSession/herdr workspace
+	// API, not through raw tmux. The caller is responsible for session creation.
+	// Return success with session info so downstream launch logic proceeds.
+	if backend.IsHerdr() {
+		result := &OrchestrationResult{
+			Sessions: make([]CreateSessionResult, 0, len(plan.Sessions)),
+		}
+		for _, spec := range plan.Sessions {
+			result.Sessions = append(result.Sessions, CreateSessionResult{
+				SessionSpec: spec,
+				SessionName: spec.Name,
+				PaneIDs:     make([]string, spec.PaneCount),
+				Error:       nil,
+			})
+			result.TotalPanes += spec.PaneCount
+			result.SuccessfulPanes += spec.PaneCount
+		}
+		return result, nil
 	}
 
 	result := &OrchestrationResult{

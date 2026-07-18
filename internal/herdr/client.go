@@ -1101,13 +1101,12 @@ func CapturePaneOutputContext(ctx context.Context, target string, lines int) (st
 	return DefaultClient.CapturePaneOutputContext(ctx, target, lines)
 }
 
-// CapturePaneVisible reads the visible viewport.
+// CapturePaneVisible reads pane content. Under herdr, --source visible returns
+// raw terminal output (non-JSON) for TUI panes; use --source recent instead,
+// which returns parseable JSON scrollback. This matches CapturePaneOutput's
+// approach and unblocks herdr codex preflight / palette-state commands.
 func (c *Client) CapturePaneVisible(target string) (string, error) {
-	var out paneReadResult
-	if err := c.runJSON(context.Background(), &out, "pane", "read", target, "--source", "visible"); err != nil {
-		return "", err
-	}
-	return out.Read.Text, nil
+	return c.CapturePaneOutput(target, 50)
 }
 
 // CapturePaneVisible is the package-level helper.

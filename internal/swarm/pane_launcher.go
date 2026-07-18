@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agent"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/ratelimit"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
@@ -203,6 +204,14 @@ func (pl *PaneLauncher) LaunchAgentInPane(ctx context.Context, sessionName strin
 
 	client := pl.tmuxClient()
 
+	// Herdr-aware send keys: use herdr.SendKeys when backend is herdr.
+	herdrSend := func(target, keys string, enter bool) error {
+		if herdr.DefaultClient != nil {
+			return herdr.SendKeys(target, keys, enter)
+		}
+		return client.SendKeys(target, keys, enter)
+	}
+
 	if targeting, ok := pl.resolveSessionTargeting(ctx, sessionName); ok {
 		if resolved, err := swarmPaneTargetFromPlanIndex(sessionName, targeting, paneSpec.Index); err == nil {
 			paneTarget = resolved
@@ -226,7 +235,7 @@ func (pl *PaneLauncher) LaunchAgentInPane(ctx context.Context, sessionName strin
 	if paneSpec.Project != "" {
 		// Quote path to handle spaces
 		cdCmd := fmt.Sprintf("cd %q", paneSpec.Project)
-		if err := client.SendKeys(paneTarget, cdCmd, true); err != nil {
+		if err := herdrSend(paneTarget, cdCmd, true); err != nil {
 			pl.logger().Error("[PaneLauncher] cd_failed",
 				"pane_target", paneTarget,
 				"project", paneSpec.Project,
@@ -262,7 +271,7 @@ func (pl *PaneLauncher) LaunchAgentInPane(ctx context.Context, sessionName strin
 	shellCmd := launchCmd.ToShellCommand()
 	result.Command = shellCmd
 
-	if err := client.SendKeys(paneTarget, shellCmd, true); err != nil {
+	if err := herdrSend(paneTarget, shellCmd, true); err != nil {
 		pl.logger().Error("[PaneLauncher] launch_failed",
 			"pane_target", paneTarget,
 			"command", shellCmd,

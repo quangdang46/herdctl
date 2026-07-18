@@ -14,6 +14,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
 	"github.com/Dicklesworthstone/ntm/internal/ensemble"
 	"github.com/Dicklesworthstone/ntm/internal/output"
@@ -305,6 +306,13 @@ func runEnsembleSpawn(cmd *cobra.Command, opts ensembleSpawnOptions) error {
 	}
 	if opts.BudgetTotal > 0 {
 		ensembleCfg.Budget.MaxTotalTokens = opts.BudgetTotal
+	}
+
+	// Under herdr, ensemble spawning uses the CLI's own spawn/agent.start path
+	// since the swarm PaneLauncher/SessionOrchestrator rely on raw tmux commands.
+	// Dry-run, presets, status, stop, compare, and synthesize all work on herdr.
+	if backend.IsHerdr() {
+		return outputError(fmt.Errorf("ensemble spawn not yet supported on NTM_BACKEND=herdr (swarm PaneLauncher uses tmux session creation); use `herdctl spawn` to create agents, then `herdctl ensemble synthesize` to combine outputs"))
 	}
 
 	state, err := manager.SpawnEnsemble(context.Background(), ensembleCfg)

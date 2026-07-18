@@ -66,7 +66,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `send --dry-run` | ✓ | ✓ | muxGetPanes + dispatch DryRun preview; no key delivery / no tmux under herdr |
 | `send --template` | ✓ | ✓ | load/execute via templates.Loader then runSendInternal; pane select + delivery through mux (same as plain send); redaction preflight retained |
 | `send --smart-route` | ✓ | ✓ | fixed: PaneID (herdr wN:pM) → numeric PaneIndex for ParsePaneSelector compat; works across all strategies (least-loaded, first-available, round-robin) (bd-gl28u.1-fix) |
-| `send --codex-goal` | ✓ | ~ | muxed: resolveCodexPaneSelector, runCodexGoalSend and all codex.go tmux calls → mux* wrappers; codex preflight still blocked on herdr CapturePaneVisible — works when pane is Codex-live and herdr visible-capture resolves (bd-gl28u.1-fix) |
+| `send --codex-goal` | ✓ | ~ | muxed: resolveCodexPaneSelector, runCodexGoalSend and all codex.go tmux calls → mux* wrappers; herdr CapturePaneVisible fixed (now uses --source recent instead of --source visible) — codex preflight returns JSON on herdr (bd-gl28u.1-fix) |
 | `agent list` | ✓ | ✓ | via herdr agent list |
 | `agent get` | ✓ | ✓ | herdr agent get via client/mux; herdctl agent get (bd-gl28u.1.12) |
 | `agent read` | ✓ | ✓ | herdr agent read (+ pane read fallback); herdctl agent read (bd-gl28u.1.12) |
@@ -364,7 +364,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=3 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
-- Still ~: **send --codex-goal** (muxed but herdr CapturePaneVisible blocking preflight); **ensemble** (spawn uses swarm PaneLauncher — needs backend-aware pane launching for herdr)
+- Still ~: **send --codex-goal** (muxed + CapturePaneVisible fixed); **ensemble** (spawn blocked by swarm PaneLauncher tmux session creation — dry-run/presets/status/stop/compare/synthesize all work on herdr)
 - Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**
