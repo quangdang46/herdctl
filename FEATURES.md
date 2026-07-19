@@ -302,7 +302,7 @@ Many of these now *call* backend_mux for session/pane I/O, but are left ✗ unti
 | Feature | tmux | herdr | Notes |
 |---|---|---|---|
 | `swarm` | ✓ | ✓ | herdr path: workspace create + `agent.start` per pane + mux send/kill; status/discover/stop via mux; live create/status/stop + dry-run JSON + `--remote` rejection verified under herdr (`scripts/test-herdr-backend.sh` test_swarm_lifecycle); `--remote` N/A; tiled layout best-effort only (bd-gl28u.6.1) |
-| `ensemble [question]` | ✓ | ~ | status/stop/synthesize/compare/report all verified on herdr; build tag removed; swarm PaneLauncher muxed (herdrSend), orchestrator CreateSessions herdr-aware; live spawn still blocked by swarm tmux session creation — use `herdctl spawn` per agent then `herdctl ensemble synthesize` on herdr (bd-gl28u.6.2) |
+| `ensemble [question]` | ✓ | ✓ | build tag removed; swarm PaneLauncher muxed; orchestrator CreateSessions herdr-aware; live spawn uses CLI session create + herdrLaunchAgent per mode; status/stop/synthesize/compare/report all verified on herdr — end-to-end live spawn+status+synthesize working (bd-gl28u.6.2) |
 | `modes` | ✓ | ✓ | mode catalog list; backend-agnostic; verified under herdr (bd-gl28u.6.2) |
 | `explain <mode>` | ✓ | ✓ | `herdctl modes explain`; catalog cards; verified under herdr (bd-gl28u.6.2) |
 | `synthesize` | ✓ | ✓ | mux-backed live capture + offline saved outputs; verified working on herdr (correctly reports 'still working' when agents active, full path via ensemble synthesize --format=json) (bd-gl28u.6.2) |
@@ -364,7 +364,6 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 - **✓=195 · ~=3 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
-- Still ~: **ensemble spawn live** (swarm tmux session creation; use `herdctl spawn` then `ensemble synthesize` on herdr)
 - Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
 - Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
 - **Keep ✗ until verified.**

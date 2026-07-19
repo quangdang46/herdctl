@@ -171,10 +171,17 @@ func (m *EnsembleManager) SpawnEnsemble(ctx context.Context, cfg *EnsembleConfig
 
 	panes, err := m.tmuxClient().GetPanes(cfg.SessionName)
 	if err != nil {
-		state.Status = EnsembleError
-		state.Error = fmt.Sprintf("get panes: %v", err)
-		_ = SaveSession(cfg.SessionName, state)
-		return state, err
+		// Under herdr, tmux panes don't exist — create synthetic panes for
+		// assignModes based on the pane specs (agent type + index).
+		panes = make([]tmux.Pane, len(paneSpecs))
+		for i, ps := range paneSpecs {
+			panes[i] = tmux.Pane{
+				Index:       i,
+				WindowIndex: 0,
+				ID:          fmt.Sprintf("herdr-%s-p%d", cfg.SessionName, i),
+				Type:        tmux.AgentType(ps.AgentType),
+			}
+		}
 	}
 
 	assignments, err := assignModes(cfg.Assignment, modeIDs, explicitSpecs, panes, catalog)

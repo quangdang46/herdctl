@@ -308,14 +308,12 @@ func runEnsembleSpawn(cmd *cobra.Command, opts ensembleSpawnOptions) error {
 		ensembleCfg.Budget.MaxTotalTokens = opts.BudgetTotal
 	}
 
-	// Under herdr, ensemble spawning uses the CLI's own spawn/agent.start path
-	// since the swarm PaneLauncher/SessionOrchestrator rely on raw tmux commands.
-	// Dry-run, presets, status, stop, compare, and synthesize all work on herdr.
+	var state *ensemble.EnsembleSession
 	if backend.IsHerdr() {
-		return outputError(fmt.Errorf("ensemble spawn not yet supported on NTM_BACKEND=herdr (swarm PaneLauncher uses tmux session creation); use `herdctl spawn` to create agents, then `herdctl ensemble synthesize` to combine outputs"))
+		state, err = runEnsembleSpawnHerdr(cmd, opts, manager, ensembleCfg, projectDir)
+	} else {
+		state, err = manager.SpawnEnsemble(context.Background(), ensembleCfg)
 	}
-
-	state, err := manager.SpawnEnsemble(context.Background(), ensembleCfg)
 	if err != nil && state == nil {
 		return outputError(err)
 	}
@@ -347,6 +345,62 @@ func runEnsembleSpawn(cmd *cobra.Command, opts ensembleSpawnOptions) error {
 		return err
 	}
 	return nil
+}
+
+// runEnsembleSpawnHerdr spawns an ensemble session under NTM_BACKEND=herdr.
+// Uses CLI's own session creation + herdrLaunchAgent instead of swarm tmux.
+func runEnsembleSpawnHerdr(cmd *cobra.Command, opts ensembleSpawnOptions, manager *ensemble.EnsembleManager, cfg *ensemble.EnsembleConfig, projectDir string) (*ensemble.EnsembleSession, error) {
+	dryRunOpts := ensemble.DryRunOptions{}
+	plan, err := manager.DryRunEnsemble(cmd.Context(), cfg, dryRunOpts)
+	if err != nil {
+		return nil, fmt.Errorf("ensemble plan: %w", err)
+	}
+	if !plan.Validation.Valid {
+		return nil, fmt.Errorf("ensemble validation failed: %v", plan.Validation.Errors)
+	}
+
+	if err := muxCreateSessionWithHistoryLimit(cfg.SessionName, projectDir, 2000); err != nil {
+		return nil, fmt.Errorf("create session: %w", err)
+	}
+
+	for i, assignment := range plan.Assignments {
+		agentType := assignment.AgentType
+		if agentType == "" {
+			agentType = "cc"
+		}
+		argv := buildEnsembleAgentArgv(agentType)
+		agent := FlatAgent{
+			Type:  AgentType(agentType),
+			Index: i + 1,
+		}
+		if _, launchErr := herdrLaunchAgent(cfg.SessionName, projectDir, agent, argv, ""); launchErr != nil {
+			continue // best-effort
+		}
+	}
+
+	state := &ensemble.EnsembleSession{
+		SessionName:       cfg.SessionName,
+		Question:          cfg.Question,
+		PresetUsed:        cfg.Ensemble,
+		Status:            ensemble.EnsembleActive,
+		SynthesisStrategy: ensemble.SynthesisStrategy(plan.Synthesis.Strategy),
+		CreatedAt:         time.Now().UTC(),
+	}
+	_ = ensemble.SaveSession(cfg.SessionName, state)
+	return state, nil
+}
+
+func buildEnsembleAgentArgv(agentType string) []string {
+	switch agentType {
+	case "cc", "claude":
+		return []string{"cc"}
+	case "cod", "codex":
+		return []string{"cod"}
+	case "gmi", "gemini":
+		return []string{"gmi"}
+	default:
+		return []string{"cc"}
+	}
 }
 
 func buildEnsembleManager(projectDir string) (*ensemble.EnsembleManager, error) {
