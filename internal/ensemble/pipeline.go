@@ -170,9 +170,7 @@ func (m *EnsembleManager) Run(ctx context.Context, cfg *EnsembleConfig, runCfg R
 
 // RunStage1 executes the Intake stage: generates or retrieves a context pack.
 func (m *EnsembleManager) RunStage1(ctx context.Context, cfg *EnsembleConfig) (*ContextPack, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	_ = ctx // context reserved for future use
 	if cfg == nil {
 		return nil, errors.New("config is nil")
 	}
@@ -287,9 +285,7 @@ func (m *EnsembleManager) RunStage2(ctx context.Context, cfg *EnsembleConfig, co
 // RunStage3 executes the Synthesis stage: combines mode outputs into a unified report.
 // Note: Full synthesis implementation is in a separate task (bd-2qwm8).
 func (m *EnsembleManager) RunStage3(ctx context.Context, cfg *EnsembleConfig, outputs []ModeOutput) (*Stage3Result, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
+	_ = ctx // context reserved for future use
 	if cfg == nil {
 		return nil, errors.New("config is nil")
 	}
