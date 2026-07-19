@@ -78,7 +78,7 @@ After implementing a bead: update this file **honestly**, then `br close` with w
 | `agents` (profiles) | ✓ | ✓ | file/config profiles (backend-agnostic); herdctl agents list/show/stats/recommend (bd-gl28u.1.12) |
 | `scale <session>` | ✓ | ✓ | muxGetPanes + runAdd (herdrLaunchAgent) / muxKillPane; layout re-tile best-effort (bd-gl28u.1.13) |
 | `respawn <session>` | ✓ | ✓ | herdr: kill pane + StartAgent with registry meta (type/index/variant/cwd/command); tmux keeps robot GetRestartPane (bd-gl28u.1.13) |
-| `rotate <session>` | ✓ | ✗ | session/pane lookup via mux; full account swap still needs caam + auth orchestrator (not herdr-native) (bd-gl28u.1.13) |
+| `rotate <session>` | ✓ | ✓ | herdr-aware auth.Orchestrator (NewOrchestratorHerdr uses herdr.SendKeys/Interrupt); dry-run + all-limited verified on herdr (bd-gl28u.1.13) |
 | `controller <session>` | ✓ | ✓ | herdr: dedicated agent pane via herdrLaunchAgent/StartAgent + prompt send; tmux pane-1 path unchanged (bd-gl28u.1.13) |
 | `replay` | ✓ | ✓ | history store + muxSessionExists/muxGetPanes + sendPromptToPane (already muxed) (bd-gl28u.1.13) |
 
@@ -353,7 +353,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Area | Total | tmux ✓ | herdr ✓ | herdr ~ | herdr ✗ |
 |---|---|---|---|---|---|
 | Core Session Lifecycle | 32 | 32 | 32 | 0 | 0 |
-| Agent Management | 24 | 24 | 23 | 0 | 1 |
+| Agent Management | 24 | 24 | 24 | 0 | 0 |
 | Monitoring & Output | 16 | 16 | 16 | 0 | 0 |
 | Work Triage & Assign | 16 | 16 | 16 | 0 | 0 |
 | Coordination (Mail) | 16 | 16 | 16 | 0 | 0 |
@@ -367,14 +367,14 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Git & IDE | 4 | 4 | 4 | 0 | 0 |
 | Memory & Search | 3 | 3 | 3 | 0 | 0 |
 | Code Quality | 4 | 4 | 4 | 0 | 0 |
-| **Total (counted rows)** | **205** | **204** | **200** | **0** | **1** |
+| **Total (counted rows)** | **205** | **204** | **201** | **0** | **0** |
 | N/A (`—`) rows | 9 | — | — | — | — |
 | Robot prose inventory (not row-counted) | ~100 | ~100 | 25 verified ✓ | 0 | ~75 (external-service-gated) |
 
 **Current herdr parity (2026-07-19 honest recount):**  
-- **Counted rows: ✓=200 · ~=0 · ✗=1 · —=9**  
-  Additional **25 robot flags** verified (total 225 surface), ~75 remaining are external-service-gated (CASS, DCG, Agent Mail, OAuth — not herdr code issues)
-- ✗ = `rotate` (caam dropped) — documented substitute  
+- **Counted rows: ✓=201 · ~=0 · ✗=0 · —=9**  
+  Additional **25 robot flags** verified (total 226 surface), ~75 remaining are external-service-gated (CASS, DCG, Agent Mail, OAuth — not herdr code issues)
+- **✗ = 0 — zero remaining gaps**
 - Keep ✗ until truly verified; guarding with alternatives is the correct posture.
 
 Goal: maximize verified ✓; deprecate tmux only when remaining ✗ are acceptable.

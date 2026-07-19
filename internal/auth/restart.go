@@ -11,7 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/config"
+	"github.com/Dicklesworthstone/ntm/internal/herdr"
 	"github.com/Dicklesworthstone/ntm/internal/rotation"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
@@ -54,7 +56,42 @@ func NewOrchestrator(cfg *config.Config) *Orchestrator {
 	}
 }
 
-// RegisterAuthFlow registers a flow for a provider
+// NewOrchestratorHerdr creates an Orchestrator that uses backend-agnostic
+// helpers (herdr socket / tmux) instead of raw tmux functions.
+func NewOrchestratorHerdr(cfg *config.Config) *Orchestrator {
+	sendKeys := func(target, keys string, enter bool) error {
+		if backend.IsHerdr() {
+			return herdr.SendKeys(target, keys, enter)
+		}
+		return tmux.SendKeys(target, keys, enter)
+	}
+	sendInterrupt := func(target string) error {
+		if backend.IsHerdr() {
+			return herdr.SendInterrupt(target)
+		}
+		return tmux.SendInterrupt(target)
+	}
+	sendKeysForAgent := func(target, keys string, enter bool, agentType tmux.AgentType) error {
+		if backend.IsHerdr() {
+			return herdr.SendKeys(target, keys, enter)
+		}
+		return tmux.SendKeysForAgent(target, keys, enter, agentType)
+	}
+	return &Orchestrator{
+		cfg:                 cfg,
+		authFlows:           make(map[string]AuthFlow),
+		captureOutput:       herdr.CapturePaneOutput,
+		sendKeys:            sendKeys,
+		sendKeysForAgent:    sendKeysForAgent,
+		sendInterrupt:       sendInterrupt,
+		buildPaneCommand:    func(session, agentType string) (string, error) { return agentType, nil },
+		sanitizePaneCommand: func(s string) (string, error) { return s, nil },
+		promptBrowserAuth: func(email string) error {
+			return promptBrowserAuth(os.Stdin, os.Stdout, email)
+		},
+		sleep: time.Sleep,
+	}
+}// RegisterAuthFlow registers a flow for a provider
 func (o *Orchestrator) RegisterAuthFlow(provider string, flow AuthFlow) {
 	o.authFlows[provider] = flow
 }

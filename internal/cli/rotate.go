@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/Dicklesworthstone/ntm/internal/auth"
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/quota"
 	"github.com/Dicklesworthstone/ntm/internal/rotation"
 	"github.com/Dicklesworthstone/ntm/internal/swarm"
@@ -355,7 +356,12 @@ func rotateAllLimited(session, targetAccount string, dryRun bool, inferred bool)
 	}
 
 	// Batch Rotation Flow
-	orchestrator := auth.NewOrchestrator(cfg)
+	var orchestrator *auth.Orchestrator
+	if backend.IsHerdr() {
+		orchestrator = auth.NewOrchestratorHerdr(cfg)
+	} else {
+		orchestrator = auth.NewOrchestrator(cfg)
+	}
 	projectDir, err := resolveRotationProjectDir(session, inferred)
 	if err != nil {
 		return err
@@ -426,7 +432,12 @@ func resolveRotationProjectDir(session string, inferred bool) (string, error) {
 
 func executeRestartRotation(session string, paneIdx int, paneID, provider, agentType, targetAccount, modelAlias string, inferred bool) error {
 	// Initialize Orchestrator
-	orchestrator := auth.NewOrchestrator(cfg)
+	var orchestrator *auth.Orchestrator
+	if backend.IsHerdr() {
+		orchestrator = auth.NewOrchestratorHerdr(cfg)
+	} else {
+		orchestrator = auth.NewOrchestrator(cfg)
+	}
 	projectDir, err := resolveRotationProjectDir(session, inferred)
 	if err != nil {
 		return err
