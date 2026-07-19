@@ -3,10 +3,13 @@
 package robot
 
 import (
+	"context"
+	"fmt"
 	"os/exec"
 	"strconv"
 	"time"
 
+	"github.com/Dicklesworthstone/ntm/internal/backend"
 	"github.com/Dicklesworthstone/ntm/internal/process"
 	"github.com/Dicklesworthstone/ntm/internal/tmux"
 )
@@ -37,13 +40,40 @@ func exitAgent(session string, win, pane int, agentType string, seq *RestartSequ
 	}
 }
 
+// resolvePaneID resolves a session:win.pane address to a backend pane ID
+// suitable for backendSendKeys / backendSendInterrupt.
+func resolvePaneID(session string, win, pane int) (string, error) {
+	if backend.IsHerdr() {
+		// Under herdr, find the pane by index from the session's pane list.
+		panes, err := backendGetPanesContext(context.Background(), session)
+		if err != nil {
+			return "", fmt.Errorf("get panes: %w", err)
+		}
+		for _, p := range panes {
+			if p.Index == pane {
+				if p.ID != "" {
+					return p.ID, nil
+				}
+			}
+		}
+		return "", fmt.Errorf("pane %d not found in session %s", pane, session)
+	}
+	// Under tmux, use the session:win.pane format.
+	return formatTargetWin(session, win, pane), nil
+}
+
 // exitClaudeCode exits Claude Code with double Ctrl+C.
 // CRITICAL: The 0.1s timing between Ctrl+Cs is essential!
 func exitClaudeCode(session string, win, pane int, seq *RestartSequence) error {
 	seq.ExitMethod = "double_ctrl_c"
 
+	target, err := resolvePaneID(session, win, pane)
+	if err != nil {
+		return wrapError("resolve pane", err)
+	}
+
 	// First Ctrl+C
-	if err := sendCtrlC(session, win, pane); err != nil {
+	if err := backendSendInterrupt(target); err != nil {
 		return wrapError("first ctrl-c failed", err)
 	}
 
@@ -51,7 +81,7 @@ func exitClaudeCode(session string, win, pane int, seq *RestartSequence) error {
 	time.Sleep(100 * time.Millisecond)
 
 	// Second Ctrl+C
-	if err := sendCtrlC(session, win, pane); err != nil {
+	if err := backendSendInterrupt(target); err != nil {
 		return wrapError("second ctrl-c failed", err)
 	}
 
@@ -62,7 +92,12 @@ func exitClaudeCode(session string, win, pane int, seq *RestartSequence) error {
 func exitCodex(session string, win, pane int, seq *RestartSequence) error {
 	seq.ExitMethod = "exit_command"
 
-	if err := sendKeys(session, win, pane, "/exit\n"); err != nil {
+	target, err := resolvePaneID(session, win, pane)
+	if err != nil {
+		return wrapError("resolve pane", err)
+	}
+
+	if err := backendSendKeys(target, "/exit\n", true); err != nil {
 		return wrapError("exit command failed", err)
 	}
 
@@ -73,8 +108,13 @@ func exitCodex(session string, win, pane int, seq *RestartSequence) error {
 func exitGemini(session string, win, pane int, seq *RestartSequence) error {
 	seq.ExitMethod = "escape_then_exit"
 
+	target, err := resolvePaneID(session, win, pane)
+	if err != nil {
+		return wrapError("resolve pane", err)
+	}
+
 	// Send Escape to exit shell mode if active
-	if err := sendEscape(session, win, pane); err != nil {
+	if err := backendSendKeys(target, "\x1b", false); err != nil {
 		return wrapError("escape failed", err)
 	}
 
@@ -82,7 +122,7 @@ func exitGemini(session string, win, pane int, seq *RestartSequence) error {
 	time.Sleep(100 * time.Millisecond)
 
 	// Send /exit command
-	if err := sendKeys(session, win, pane, "/exit\n"); err != nil {
+	if err := backendSendKeys(target, "/exit\n", true); err != nil {
 		return wrapError("exit failed", err)
 	}
 
@@ -93,26 +133,98 @@ func exitGemini(session string, win, pane int, seq *RestartSequence) error {
 func exitUnknown(session string, win, pane int, seq *RestartSequence) error {
 	seq.ExitMethod = "ctrl_c_fallback"
 
-	if err := sendCtrlC(session, win, pane); err != nil {
+	target, err := resolvePaneID(session, win, pane)
+	if err != nil {
+		return wrapError("resolve pane", err)
+	}
+
+	if err := backendSendInterrupt(target); err != nil {
 		return wrapError("ctrl-c failed", err)
 	}
 
 	return nil
 }
 
-// sendCtrlC sends Ctrl+C to a tmux pane.
-func sendCtrlC(session string, win, pane int) error {
-	return runTmuxCommand("send-keys", "-t", formatTargetWin(session, win, pane), "C-c")
+// =============================================================================
+// Hard Kill Fallback (bd-bh74z)
+// =============================================================================
+
+// HardKillResult contains information about the hard kill operation.
+type HardKillResult struct {
+	ShellPID   int    `json:"shell_pid,omitempty"`
+	ChildPID   int    `json:"child_pid,omitempty"`
+	KillMethod string `json:"kill_method"`
+	Success    bool   `json:"success"`
 }
 
-// sendEscape sends Escape key to a tmux pane.
-func sendEscape(session string, win, pane int) error {
-	return runTmuxCommand("send-keys", "-t", formatTargetWin(session, win, pane), "Escape")
+// hardKillAgent performs a forceful kill -9 on the agent process.
+// Under herdr, falls back to backendSendInterrupt since PID isn't available.
+func hardKillAgent(session string, win, pane int, seq *RestartSequence) (*HardKillResult, error) {
+	result := &HardKillResult{
+		KillMethod: "backend_interrupt",
+	}
+
+	if backend.IsHerdr() {
+		target, err := resolvePaneID(session, win, pane)
+		if err != nil {
+			return result, wrapError("resolve pane", err)
+		}
+		// Ctrl+C is the best we can do through the herdr socket API.
+		if err := backendSendInterrupt(target); err != nil {
+			return result, wrapError("herdr interrupt failed", err)
+		}
+		result.Success = true
+		return result, nil
+	}
+
+	result.KillMethod = "kill_9"
+
+	// Step 1: Get shell PID from tmux
+	shellPID, err := getShellPID(session, win, pane)
+	if err != nil {
+		return result, wrapError("failed to get shell PID", err)
+	}
+	result.ShellPID = shellPID
+
+	// Step 2: Get child PID via pgrep
+	childPID := process.GetChildPID(shellPID)
+	if childPID <= 0 {
+		result.KillMethod = "no_child_process"
+		result.Success = true
+		return result, nil
+	}
+	result.ChildPID = childPID
+
+	// Step 3: kill -9 the child process
+	if err := killProcess(childPID); err != nil {
+		return result, wrapError("kill -9 failed", err)
+	}
+
+	seq.ExitMethod = "hard_kill"
+	result.Success = true
+	return result, nil
 }
 
-// sendKeys sends literal keys to a tmux pane.
-func sendKeys(session string, win, pane int, keys string) error {
-	return runTmuxCommand("send-keys", "-t", formatTargetWin(session, win, pane), "-l", keys)
+// killProcess sends SIGKILL (kill -9) to a process.
+func killProcess(pid int) error {
+	cmd := exec.Command("kill", "-9", strconv.Itoa(pid))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if len(output) > 0 {
+			return wrapError(trimSpace(string(output)), err)
+		}
+		return err
+	}
+	return nil
+}
+
+// backendSendKeysToPane resolves a session:win.pane address and sends keys.
+func backendSendKeysToPane(session string, win, pane int, keys string) error {
+	target, err := resolvePaneID(session, win, pane)
+	if err != nil {
+		return err
+	}
+	return backendSendKeys(target, keys, true)
 }
 
 // formatTarget creates a tmux target string for a session and pane, assuming
@@ -129,72 +241,13 @@ func formatTargetWin(session string, win, pane int) string {
 	return session + ":" + strconv.Itoa(win) + "." + strconv.Itoa(pane)
 }
 
-// runTmuxCommand executes a tmux command.
-func runTmuxCommand(args ...string) error {
-	cmd := exec.Command(tmux.BinaryPath(), args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if len(output) > 0 {
-			return wrapError(string(output), err)
-		}
-		return err
-	}
-	return nil
-}
-
-// =============================================================================
-// Hard Kill Fallback (bd-bh74z)
-// =============================================================================
-// When soft exit fails, we need to forcefully kill the agent process.
-// This uses kill -9 to terminate the child process of the pane's shell.
-
-// HardKillResult contains information about the hard kill operation.
-type HardKillResult struct {
-	ShellPID   int    `json:"shell_pid,omitempty"`
-	ChildPID   int    `json:"child_pid,omitempty"`
-	KillMethod string `json:"kill_method"`
-	Success    bool   `json:"success"`
-}
-
-// hardKillAgent performs a forceful kill -9 on the agent process.
-// It should be called when soft exit methods fail.
-func hardKillAgent(session string, win, pane int, seq *RestartSequence) (*HardKillResult, error) {
-	result := &HardKillResult{
-		KillMethod: "kill_9",
-	}
-
-	// Step 1: Get shell PID from tmux
-	shellPID, err := getShellPID(session, win, pane)
-	if err != nil {
-		return result, wrapError("failed to get shell PID", err)
-	}
-	result.ShellPID = shellPID
-
-	// Step 2: Get child PID via pgrep
-	childPID := process.GetChildPID(shellPID)
-	if childPID <= 0 {
-		// No child process might mean agent already exited
-		result.KillMethod = "no_child_process"
-		result.Success = true
-		return result, nil
-	}
-	result.ChildPID = childPID
-
-	// Step 3: kill -9 the child process
-	if err := killProcess(childPID); err != nil {
-		return result, wrapError("kill -9 failed", err)
-	}
-
-	// Update sequence info
-	seq.ExitMethod = "hard_kill"
-	result.Success = true
-	return result, nil
-}
-
 // getShellPID retrieves the PID of the shell process in a tmux pane.
-// Uses: tmux list-panes -t session:window -F '#{pane_index} #{pane_pid}'
+// Under herdr, returns 0 (PID not accessible through socket API).
 // win is the pane's exact tmux window index (#172).
 func getShellPID(session string, win, pane int) (int, error) {
+	if backend.IsHerdr() {
+		return 0, nil
+	}
 	target := session + ":" + strconv.Itoa(win)
 	cmd := exec.Command(tmux.BinaryPath(), "list-panes", "-t", target, "-F", "#{pane_index} #{pane_pid}")
 	output, err := cmd.Output()
@@ -222,21 +275,6 @@ func getShellPID(session string, win, pane int) (int, error) {
 	}
 
 	return 0, newError("pane not found")
-}
-
-// Note: getChildPID is now in the shared process package (internal/process)
-
-// killProcess sends SIGKILL (kill -9) to a process.
-func killProcess(pid int) error {
-	cmd := exec.Command("kill", "-9", strconv.Itoa(pid))
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		if len(output) > 0 {
-			return wrapError(trimSpace(string(output)), err)
-		}
-		return err
-	}
-	return nil
 }
 
 // splitBySpace splits a string by whitespace, handling multiple spaces.

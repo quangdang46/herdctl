@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/Dicklesworthstone/ntm/internal/agent"
-	"github.com/Dicklesworthstone/ntm/internal/backend"
 	dispatchsvc "github.com/Dicklesworthstone/ntm/internal/dispatch"
 	"github.com/Dicklesworthstone/ntm/internal/process"
 	"github.com/Dicklesworthstone/ntm/internal/redaction"
@@ -113,7 +112,7 @@ func (liveSmartRestartExecutor) hardKillAgent(session string, win, pane int, seq
 }
 
 func (liveSmartRestartExecutor) sendKeys(session string, win, pane int, keys string) error {
-	return sendKeys(session, win, pane, keys)
+	return backendSendKeysToPane(session, win, pane, keys)
 }
 
 func (liveSmartRestartExecutor) getShellPID(session string, win, pane int) (int, error) {
@@ -255,9 +254,6 @@ func PrintSmartRestart(opts SmartRestartOptions) error {
 // GetSmartRestart performs intelligent agent restart with safety checks.
 // This function returns the data struct directly, enabling CLI/REST parity.
 func GetSmartRestart(opts SmartRestartOptions) (*SmartRestartOutput, error) {
-	if backend.IsHerdr() {
-		return nil, fmt.Errorf("--robot-smart-restart not supported on NTM_BACKEND=herdr: use `herdctl scale` or `herdctl respawn`")
-	}
 	output := &SmartRestartOutput{
 		RobotResponse: NewRobotResponse(true),
 		Session:       opts.Session,
