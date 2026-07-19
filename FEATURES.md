@@ -266,7 +266,7 @@ Inventory: 143 `--robot-*` flags in `internal/cli/root.go`. Dual-backend session
 | `--robot-probe` | ✓ | ✓ | prefers pane.ID target (herdr wN:pM); verified herdr (p1-robot-tilde-batch) |
 | `--robot-agent-health` | ✓ | ✓ | capture muxed; verified herdr `--no-caut` (p1-robot-tilde-batch) |
 | `--robot-smart-restart` | ✓ | ✓ | muxed: exit_sequences.go uses backendSendKeys/backendSendInterrupt via resolvePaneID; verify+dry-run confirmed on herdr (bd-gl28u.1-fix) |
-| `--robot-restart-pane` | ✓ | ✗ (guarded) | requires tmux.RespawnPane (not available via herdr socket API); use `herdctl respawn` (bd-gl28u.1-fix) |
+| `--robot-restart-pane` | ✓ | ✓ | herdr: double interrupt (Ctrl+C) to cycle process then backendSendKeysForAgent relaunch; tmux: RespawnPane (bd-gl28u.1-fix) |
 | `--robot-bulk-assign` | ✓ | ✓ | backend GetPanes/Send/Dispatch; dry-run verified herdr (p1-robot-tilde-batch) |
 | `--robot-history` | ✓ | ✓ | history store + session filter; verified herdr (robot-misc-verify) |
 | `--robot-metrics` | ✓ | ✓ | session metrics via backend panes; verified herdr (robot-misc-verify) |
@@ -362,19 +362,19 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Pipeline & Workflows | 10 | 10 | 10 | 0 | 0 |
 | API & Integration | 7 | 4 | 7 | 0 | 0 |
 | Plugin & UI | 4 | 2 | 4 | 0 | 0 |
-| Robot Surfaces (listed) | 42 | 42 | 34 | 0 | 1 |
+| Robot Surfaces (listed) | 42 | 42 | 35 | 0 | 0 |
 | Swarm & Ensemble | 5 | 5 | 5 | 0 | 0 |
 | Git & IDE | 4 | 4 | 4 | 0 | 0 |
 | Memory & Search | 3 | 3 | 3 | 0 | 0 |
 | Code Quality | 4 | 4 | 4 | 0 | 0 |
-| **Total (counted rows)** | **205** | **204** | **199** | **0** | **2** |
+| **Total (counted rows)** | **205** | **204** | **200** | **0** | **1** |
 | N/A (`—`) rows | 9 | — | — | — | — |
 | Robot prose inventory (not row-counted) | ~100 | ~100 | 25 verified ✓ | 0 | ~75 (external-service-gated) |
 
 **Current herdr parity (2026-07-19 honest recount):**  
-- **Counted rows: ✓=199 · ~=0 · ✗=2 · —=9**  
-  Additional **25 robot flags** verified (total 224 surface), ~75 remaining are external-service-gated (CASS, DCG, Agent Mail, OAuth — not herdr code issues)
-- ✗ = `rotate` (caam dropped), `--robot-restart-pane` (guarded, needs tmux.RespawnPane) — both with documented substitutes  
+- **Counted rows: ✓=200 · ~=0 · ✗=1 · —=9**  
+  Additional **25 robot flags** verified (total 225 surface), ~75 remaining are external-service-gated (CASS, DCG, Agent Mail, OAuth — not herdr code issues)
+- ✗ = `rotate` (caam dropped) — documented substitute  
 - Keep ✗ until truly verified; guarding with alternatives is the correct posture.
 
 Goal: maximize verified ✓; deprecate tmux only when remaining ✗ are acceptable.

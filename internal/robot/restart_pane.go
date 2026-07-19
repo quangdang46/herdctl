@@ -74,9 +74,6 @@ type restartPromptTarget struct {
 // GetRestartPane restarts panes (respawn-pane -k) and returns the result.
 // This function returns the data struct directly, enabling CLI/REST parity.
 func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
-	if backend.IsHerdr() {
-		return nil, fmt.Errorf("--robot-restart-pane not supported on NTM_BACKEND=herdr: use `herdctl respawn`")
-	}
 	output := &RestartPaneOutput{
 		RobotResponse: NewRobotResponse(true),
 		Session:       opts.Session,
@@ -164,12 +161,22 @@ func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
 	for _, pane := range targetPanes {
 		paneKey := paneTargetKey(pane, multiWindow)
 
-		// Always use kill=true for restart to ensure process is cycled
-		err := tmux.RespawnPane(pane.ID, true)
+		// Restart agent: under herdr, send interrupt to cycle the process
+		// Under tmux, use RespawnPane.
+		var restartErr error
+		if backend.IsHerdr() {
+			restartErr = backendSendInterrupt(pane.ID)
+			if restartErr == nil {
+				time.Sleep(100 * time.Millisecond)
+				restartErr = backendSendInterrupt(pane.ID)
+			}
+		} else {
+			restartErr = tmux.RespawnPane(pane.ID, true)
+		}
 		if err != nil {
 			output.Failed = append(output.Failed, RestartError{
 				Pane:   paneKey,
-				Reason: fmt.Sprintf("failed to respawn: %v", err),
+				Reason: fmt.Sprintf("failed to restart: %v", restartErr),
 			})
 		} else {
 			output.Restarted = append(output.Restarted, paneKey)
