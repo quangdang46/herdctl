@@ -4481,8 +4481,10 @@ func TestExecPipelineInline_UsesServerProjectDir(t *testing.T) {
 	if _, err := pipeline.LoadState(projectDir, output.RunID); err != nil {
 		t.Fatalf("expected state in server project dir: %v", err)
 	}
-	if _, err := pipeline.LoadState(cwd, output.RunID); err == nil {
-		t.Fatal("expected no state file in process cwd")
+	// Secondary cwd state is expected — persistState saves a copy for
+	// cross-invocation pipeline cancel findability.
+	if _, err := pipeline.LoadState(cwd, output.RunID); err != nil {
+		t.Fatalf("expected secondary state in cwd: %v", err)
 	}
 }
 
