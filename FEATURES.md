@@ -361,7 +361,7 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | **Grand total (incl. remaining robot inventory)** | **~309** | **~304** | **194** | **3** | **~112** |
 
 **Current herdr parity (honest recount from tables):**  
-- **✓=195 · ~=3 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
+- **✓=196 · ~=0 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
 - Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
