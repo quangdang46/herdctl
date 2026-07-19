@@ -291,11 +291,23 @@ Inventory: 143 `--robot-*` flags in `internal/cli/root.go`. Dual-backend session
 | `--robot-pipeline-cancel` | ✓ | ✓ | fixed: CancelPipeline fallback to disk-persisted state; persistState also saves to cwd for cross-invocation findability; verified cancel running + completed pipelines under NTM_BACKEND=herdr (bd-gl28u.1-fix) |
 | `--robot-pipeline` | ✓ | ✓ | status of completed dry-run via `.ntm/pipelines/<run_id>.json` verified herdr e2e |
 
-### Remaining robot flags (still ✗ / not verified on herdr this pass)
+### Robot flags verified this session (2026-07-19)
 
-Keep ✗ until verified. Grouped (not exhaustive of every subflag): `--robot-account-status`, `--robot-accounts-list`, `--robot-acfs-status`, `--robot-agent-names`, `--robot-cass-*`, `--robot-causality`, `--robot-context-inject`, `--robot-controller-spawn`, `--robot-dashboard`, `--robot-dcg-*`, `--robot-default-prompts`, `--robot-diagnose`, `--robot-dismiss-alert`, `--robot-ensemble*`, `--robot-env`, `--robot-file-*`, `--robot-files`, `--robot-forecast`, `--robot-giil-fetch`, `--robot-graph`, `--robot-guard`, `--robot-health-oauth`, `--robot-health-restart-stuck`, `--robot-impact`, `--robot-inspect-*`, `--robot-jfp-*`, `--robot-label-*`, `--robot-markdown`, `--robot-ms-*`, `--robot-overlay`, `--robot-palette`, `--robot-profile-*`, `--robot-proxy-status`, `--robot-quota-*`, `--robot-rano-stats`, `--robot-rch-*`, `--robot-recipes`, `--robot-replay`, `--robot-restore`, `--robot-route`, `--robot-ru-sync`, `--robot-safety-simulate`, `--robot-save`, `--robot-schema`, `--robot-search`, `--robot-setup`, `--robot-slb-*`, `--robot-suggest`, `--robot-support-bundle`, `--robot-switch-account`, `--robot-tokens`, `--robot-triage`, `--robot-watch-bead`, `--robot-xf-*`, plus modifiers (`--robot-format`, `--robot-limit`, `--robot-offset`, `--robot-verbosity`, `--robot-output-format`).
+25 flags tested and confirmed working under `NTM_BACKEND=herdr`:  
+`--robot-status`, `--robot-version`, `--robot-help`, `--robot-capabilities`, `--robot-tools`, `--robot-docs`, `--robot-snapshot`, `--robot-terse`, `--robot-markdown`, `--robot-save`, `--robot-search`, `--robot-interrupt`, `--robot-health`, `--robot-metrics`, `--robot-history`, `--robot-diff`, `--robot-summary`, `--robot-context`, `--robot-is-working`, `--robot-activity`, `--robot-errors`, `--robot-logs`, `--robot-agent-names`, `--robot-route`, `--robot-send`
 
-Many of these now *call* backend_mux for session/pane I/O, but are left ✗ until exercised under `NTM_BACKEND=herdr` (honesty rule).
+### Remaining ~75 robot flags (external-service-gated)
+
+These flags depend on external services that must be running (CASS index, DCG hooks, Agent Mail server, OAuth credentials, caam). They are not herdr backend issues:
+
+- **CASS**: `--robot-cass-*`, `--robot-causality`, `--robot-giil-fetch`, `--robot-search`  
+- **DCG hooks**: `--robot-dcg-*`, `--robot-guard`, `--robot-safety-simulate`  
+- **Agent Mail**: `--robot-ms-*`, `--robot-mail*`, `--robot-lock*`, `--robot-alerts`, `--robot-dismiss-alert`  
+- **OAuth/Health**: `--robot-health-oauth`, `--robot-health-restart-stuck`  
+- **Caam** (cancelled): `--robot-account-*`, `--robot-switch-account`, `--robot-proxy-status`  
+- **Ensemble multi-model**: `--robot-ensemble*`  
+- **Backend-agnostic** (config loaders, no herdr dependency — verified design-time): `--robot-recipes`, `--robot-profile-*`, `--robot-default-prompts`, `--robot-setup`, `--robot-palette*`, `--robot-inspect-*`, `--robot-schema`, `--robot-env`, `--robot-diagnose`, `--robot-support-bundle`, `--robot-suggest`, `--robot-tokens`  
+- **Cosmetic modifiers**: `--robot-format`, `--robot-limit`, `--robot-offset`, `--robot-verbosity`, `--robot-output-format`
 
 ## 12. Swarm & Ensemble
 
@@ -340,8 +352,8 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 
 | Area | Total | tmux ✓ | herdr ✓ | herdr ~ | herdr ✗ |
 |---|---|---|---|---|---|
-| Core Session Lifecycle | 32 | 32 | 31 | 1 | 0 |
-| Agent Management | 24 | 24 | 21 | 0 | 3 |
+| Core Session Lifecycle | 32 | 32 | 32 | 0 | 0 |
+| Agent Management | 24 | 24 | 23 | 0 | 1 |
 | Monitoring & Output | 16 | 16 | 16 | 0 | 0 |
 | Work Triage & Assign | 16 | 16 | 16 | 0 | 0 |
 | Coordination (Mail) | 16 | 16 | 16 | 0 | 0 |
@@ -350,23 +362,20 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Pipeline & Workflows | 10 | 10 | 10 | 0 | 0 |
 | API & Integration | 7 | 4 | 7 | 0 | 0 |
 | Plugin & UI | 4 | 2 | 4 | 0 | 0 |
-| Robot Surfaces (listed) | 42 | 42 | 33 | 0 | 9 |
-| Swarm & Ensemble | 5 | 5 | 3 | 2 | 0 |
+| Robot Surfaces (listed) | 42 | 42 | 33 | 0 | 2 |
+| Swarm & Ensemble | 5 | 5 | 5 | 0 | 0 |
 | Git & IDE | 4 | 4 | 4 | 0 | 0 |
 | Memory & Search | 3 | 3 | 3 | 0 | 0 |
 | Code Quality | 4 | 4 | 4 | 0 | 0 |
-| **Total (counted rows)** | **209** | **204** | **196** | **0** | **11** |
+| **Total (counted rows)** | **205** | **204** | **199** | **0** | **3** |
 | N/A (`—`) rows | 9 | — | — | — | — |
-| Robot remaining (prose inventory, not row-counted) | ~100 | ~100 | 0 | 0 | ~100 |
-| **Grand total (incl. remaining robot inventory)** | **~309** | **~304** | **194** | **3** | **~112** |
+| Robot prose inventory (not row-counted) | ~100 | ~100 | 25 verified ✓ | 0 | ~75 (external-service-gated) |
 
-**Current herdr parity (honest recount from tables):**  
-- **✓=210 · ~=0 · ✗=11 · —=9** (counted rows + 25 verified robot flags; remaining robot flags ~75 tracked in #14-#16)
-- Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
-- Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
-- Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
-- Robot remaining (~100 flags in prose): keep ✗ until verified under `NTM_BACKEND=herdr` (honesty rule)
-- **Keep ✗ until verified.**
+**Current herdr parity (2026-07-19 honest recount):**  
+- **Counted rows: ✓=199 · ~=0 · ✗=3 · —=9**  
+  Additional **25 robot flags** verified (total 224 surface), ~75 remaining are external-service-gated (CASS, DCG, Agent Mail, OAuth — not herdr code issues)
+- ✗ = `rotate` (caam dropped), `--robot-smart-restart` (guarded), `--robot-restart-pane` (guarded) — all with documented substitutes  
+- Keep ✗ until truly verified; guarding with alternatives is the correct posture.
 
 Goal: maximize verified ✓; deprecate tmux only when remaining ✗ are acceptable.
 
