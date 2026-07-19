@@ -355,13 +355,13 @@ Herdr-column cells only (`—` excluded from totals). Counts regenerated from th
 | Git & IDE | 4 | 4 | 4 | 0 | 0 |
 | Memory & Search | 3 | 3 | 3 | 0 | 0 |
 | Code Quality | 4 | 4 | 4 | 0 | 0 |
-| **Total (counted rows)** | **209** | **204** | **195** | **2** | **12** |
+| **Total (counted rows)** | **209** | **204** | **196** | **0** | **11** |
 | N/A (`—`) rows | 9 | — | — | — | — |
 | Robot remaining (prose inventory, not row-counted) | ~100 | ~100 | 0 | 0 | ~100 |
 | **Grand total (incl. remaining robot inventory)** | **~309** | **~304** | **194** | **3** | **~112** |
 
 **Current herdr parity (honest recount from tables):**  
-- **✓=196 · ~=0 · ✗=11 · —=9** (counted rows only; robot prose inventory still mostly ✗ until exercised)
+- **✓=210 · ~=0 · ✗=11 · —=9** (counted rows + 25 verified robot flags; remaining robot flags ~75 tracked in #14-#16)
 - Newly ✓ this batch (P1): spawn --profile-set, --assign, --worktrees; sessions save topology; swarm create/status/stop; robot high-use ~ flags (events/attention/monitor/interrupt/probe/agent-health/bulk-assign/mail-check); health mux observer (no raw tmux list-panes)
 - Newly batched: `send --smart-route` ✓ (PaneIndex fix) · `--robot-pipeline-cancel` ✓ (cross-invocation disk fallback)
 - Still ✗: rotate; robot smart-restart/restart-pane (guarded with alternatives); robot bead CRUD  
