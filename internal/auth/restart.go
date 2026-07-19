@@ -91,7 +91,9 @@ func NewOrchestratorHerdr(cfg *config.Config) *Orchestrator {
 		},
 		sleep: time.Sleep,
 	}
-}// RegisterAuthFlow registers a flow for a provider
+}
+
+// RegisterAuthFlow registers a flow for a provider
 func (o *Orchestrator) RegisterAuthFlow(provider string, flow AuthFlow) {
 	o.authFlows[provider] = flow
 }

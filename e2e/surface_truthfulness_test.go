@@ -227,15 +227,13 @@ func TestSurfaceTruthfulness_DiffNoSideBySide(t *testing.T) {
 // --------------------------------------------------------------------------
 
 func TestSurfaceTruthfulness_EnsembleSpawnDefaultBuild(t *testing.T) {
+	// Build tag removed in bd-gl28u.7 — ensemble spawn now compiles in default build.
+	// The command should NOT fail with the experimental gate error.
 	bin := ntmBinary(t, "")
-
-	out, err := runNTM(t, bin, "ensemble", "spawn")
-	if err == nil {
-		t.Fatal("expected 'ensemble spawn' to fail in default build, but it succeeded")
-	}
+	out, _ := runNTM(t, bin, "ensemble", "spawn", "test-session", "--dry-run", "--preset=project-diagnosis", "--question=test")
 	lower := strings.ToLower(out)
-	if !strings.Contains(lower, "experimental") {
-		t.Errorf("expected 'ensemble spawn' error to mention 'experimental', got: %s", out)
+	if strings.Contains(lower, "rebuild with -tags ensemble_experimental") {
+		t.Error("ensemble spawn shows stale build-tag gate after removal")
 	}
 }
 
