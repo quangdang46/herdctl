@@ -173,7 +173,7 @@ func GetRestartPane(opts RestartPaneOptions) (*RestartPaneOutput, error) {
 		} else {
 			restartErr = tmux.RespawnPane(pane.ID, true)
 		}
-		if err != nil {
+		if restartErr != nil {
 			output.Failed = append(output.Failed, RestartError{
 				Pane:   paneKey,
 				Reason: fmt.Sprintf("failed to restart: %v", restartErr),
